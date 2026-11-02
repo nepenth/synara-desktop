@@ -15,7 +15,7 @@ const openSurfaces = async (page: Page) => {
     route.fulfill({ status: 200, contentType: 'image/png', body: PNG })
   );
   await page.goto('/e2e/native-timeline-harness/index.html?surface=rich-text');
-  await expect(page.getByRole('region', { name: 'Inbox message' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Activity message' })).toBeVisible();
   return requests;
 };
 
@@ -26,7 +26,7 @@ test('inbox text renders mentions, permalinks and custom emoji without row conte
   page,
 }) => {
   const requests = await openSurfaces(page);
-  const inbox = page.getByRole('region', { name: 'Inbox message' });
+  const inbox = page.getByRole('region', { name: 'Activity message' });
 
   await expect(inbox.locator('strong')).toHaveText('bold');
   const mention = inbox.getByRole('link', { name: 'Reader Zero' });
@@ -50,7 +50,7 @@ test('inbox text renders mentions, permalinks and custom emoji without row conte
 
 test('surface text keeps the native sanitizer: no remote images, no scripts', async ({ page }) => {
   const requests = await openSurfaces(page);
-  const inbox = page.getByRole('region', { name: 'Inbox message' });
+  const inbox = page.getByRole('region', { name: 'Activity message' });
   // A remote image keeps only its alt text, on an inert span.
   await expect(inbox.locator('span', { hasText: /^tracker$/ })).toBeVisible();
   await expect(inbox.locator('img:not([data-mx-emoticon])')).toHaveCount(0);

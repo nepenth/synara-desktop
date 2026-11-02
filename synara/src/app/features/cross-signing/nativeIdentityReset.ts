@@ -13,7 +13,7 @@ import { NATIVE_CROSS_SIGNING_CHANGED } from './nativeCrossSigning';
  * argument. iOS shows the same copy (synara-ios `IdentityResetCopy`).
  */
 export const IDENTITY_RESET_COPY = {
-  title: 'Reset Identity',
+  title: 'Reset identity',
   settingsDescription:
     'If you have lost your recovery key and all your other devices, start over with a new identity.',
   warningIntro:
@@ -27,7 +27,7 @@ export const IDENTITY_RESET_COPY = {
   password: 'Enter your account password to confirm the reset.',
   approval:
     'Your homeserver asks you to approve the reset on your account page. Approve it in your browser, then select Continue.',
-  openAccountPage: 'Open Account Page',
+  openAccountPage: 'Open account page',
   recovery: 'Your identity was reset. Set up recovery now to get a new recovery key.',
   cancelled:
     'Reset cancelled. Your key backup and recovery key were removed when it started. Set up recovery in Settings once this device is verified, or reset your identity to finish.',
@@ -36,10 +36,11 @@ export const IDENTITY_RESET_COPY = {
 } as const;
 
 export const VERIFY_DEVICE_PROMPT_COPY = {
-  title: 'Verify This Device',
+  title: 'Verify this device',
+  verifyWithDevice: 'Verify from another device',
   description:
     'Your account already has a cross-signing identity. Verify this device to read your encrypted messages and so others can trust it.',
-  recoveryKey: 'Use Recovery Key',
+  recoveryKey: 'Use recovery key',
   noRecovery:
     'This account has no recovery key set up. Verify from another device or reset your identity.',
   cantVerify: 'Lost your recovery key and all your other devices?',

@@ -76,12 +76,13 @@ test('settings left nav stacks categories with a gap on the reading plane', () =
 test('native Appearance hides Message Layout and does not name other clients', () => {
   const messages = appearance.slice(
     appearance.indexOf('function MessageDisplay'),
-    appearance.indexOf('title="Legacy Username Color"')
+    appearance.indexOf('title="Legacy username color"')
   );
   assert.match(messages, /!isNativeMatrixSession\(\)/);
   assert.match(messages, /<SelectMessageLayout \/>/);
-  assert.match(messages, /Message Spacing/);
-  assert.doesNotMatch(messages, /title="Message layout"/);
+  assert.match(messages, /Message spacing/);
+  // Title Case is gone from the Appearance rows.
+  assert.doesNotMatch(messages, /title="Message Layout"/);
   assert.doesNotMatch(messages, /Other layouts are not available yet/);
   assert.doesNotMatch(appearance, /Element-like/);
   assert.doesNotMatch(appearance, /\bElement\b/);
@@ -98,24 +99,34 @@ test('Appearance is its own Settings page and General no longer hosts theme or l
   assert.equal(general.includes('useTheme'), false);
   assert.equal(general.includes('Message Layout'), false);
   assert.equal(general.includes('legacyUsernameColor'), false);
-  assert.match(appearance, /Message Layout/);
-  assert.match(appearance, /Legacy Username Color/);
+  assert.match(appearance, /Message layout/);
+  assert.match(appearance, /Legacy username color/);
 });
 
 test('maintenance actions live once, under General > Storage, not duplicated in About', () => {
   assert.match(general, /<SettingsSection title="Storage">/);
-  assert.match(general, /Reload Application/);
-  assert.match(general, /isDesktopPlatform\(\) && <SecretStoreTile \/>/);
+  assert.match(general, /Reload application/);
+  // The session store is diagnostics content, so it lives on Diagnostics (once).
+  const integration = readFileSync(
+    join(process.cwd(), 'src/app/features/settings/diagnostics/DesktopIntegration.tsx'),
+    'utf8'
+  );
+  assert.match(integration, /Native session store/);
+  assert.equal(general.includes('SecretStoreTile'), false);
   assert.equal(about.includes('Clear Cache'), false);
   assert.equal(about.includes('UpdateSettingsTile'), false);
   assert.equal(about.includes('Options'), false);
-  // Update checking has exactly one home: General > Software Updates.
-  assert.match(general, /Software Updates/);
+  // Update checking has exactly one home: General > Updates, first on the page.
+  assert.match(general, /<SettingsSection title="Updates">/);
   assert.match(general, /<UpdateSettingsTile \/>/);
+  assert.match(
+    general,
+    /<SettingsPage title="General" requestClose=\{requestClose\}>\s*<SoftwareUpdatesSection \/>/
+  );
 });
 
 test('General settings use positive phrasing for media loading', () => {
-  assert.match(general, /title="Load Media Automatically"/);
+  assert.match(general, /title="Load media automatically"/);
   assert.equal(general.includes('Disable Media Auto Load'), false);
 });
 
@@ -143,12 +154,14 @@ const developerTools = readFileSync(
 );
 
 test('General hosts the first-class Widgets card and Developer Tools does not duplicate it', () => {
-  assert.match(general, /<SettingsSection title="Widgets">/);
+  // Widgets are experimental: last on the page, with a Beta badge.
+  assert.match(general, /<SettingsSection\s+title="Widgets"/);
+  assert.match(general, /<WidgetsSection \/>\s*<\/SettingsPage>/);
   assert.match(general, /experimentalWidgetsEnabled/);
   assert.match(general, /agentWidgetEntries/);
   assert.match(general, /widgetsSettingsDescription/);
   assert.match(general, /Add agent widget/);
-  assert.match(developerTools, /Widgets are configured under General/);
+  assert.equal(developerTools.includes('Widgets are configured under General'), false);
   assert.equal(developerTools.includes('Add agent widget'), false);
   assert.equal(developerTools.includes('setAgentWidgetEntries'), false);
   assert.equal(developerTools.includes('setExperimentalWidgetsEnabled'), false);
@@ -161,7 +174,7 @@ test('General hosts a Calls card with honest MatrixRTC transport status', () => 
   assert.equal(general.includes('set_call'), false);
 });
 
-test('X.509 identity settings live on Devices, not Developer Tools', () => {
+test('X.509 identity settings live on Security & recovery, not Developer Tools', () => {
   assert.match(devices, /X509IdentityCard/);
   assert.match(devices, /isNativeMatrixSession/);
   assert.equal(developerTools.includes('X509'), false);

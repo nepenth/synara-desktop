@@ -792,7 +792,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
 
     private func routeToFallback() {
         guard let router else {
-            pendingRoute = .notifications
+            pendingRoute = .activity
             return
         }
 
@@ -850,8 +850,8 @@ private extension AppEnvironment {
             router.selectedTab = .settings
         } else if processEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] == "later" {
             router.selectedTab = .later
-        } else if processEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] == "notifications" {
-            router.selectedTab = .notifications
+        } else if ["activity", "notifications"].contains(processEnvironment["SYNARA_UI_TEST_SELECTED_TAB"]) {
+            router.selectedTab = .activity
         }
 
         let timeline: TimelineServicing

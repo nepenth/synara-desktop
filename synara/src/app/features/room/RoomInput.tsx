@@ -107,7 +107,7 @@ import { stopPropagation } from '../../utils/keyboard';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { Command, SHRUG, TABLEFLIP, UNFLIP, useCommands } from '../../hooks/useCommands';
 import { mobileOrTablet } from '../../utils/user-agent';
-import { ReplyLayout, ThreadIndicator } from '../../components/message';
+import { ReplyQuote, ThreadIndicator } from '../../components/message';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { useImagePackRooms } from '../../hooks/useImagePackRooms';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
@@ -363,6 +363,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const imagePackRooms: string[] = useImagePackRooms(roomId, roomToParents);
 
     const [toolbar, setToolbar] = useSetting(settingsAtom, 'editorToolbar');
+    // Send is the dominant control only while there is something to send.
+    const [draftHasText, setDraftHasText] = useState(() => !isEmptyEditor(editor));
+    const canSend = draftHasText || selectedFiles.length > 0;
     const [composerToolsAnchor, setComposerToolsAnchor] = useState<RectCords>();
     useEffect(() => {
       if (!composerToolsAnchor) return undefined;
@@ -608,7 +611,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const handleEditorChange = useCallback(
       (value: Parameters<EditorChangeHandler>[0]) => {
-        if (isEmptyEditor(editor)) {
+        const empty = isEmptyEditor(editor);
+        setDraftHasText(!empty);
+        if (empty) {
           clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
           setComposerPreviewUrl(undefined);
           setComposerPreview(null);
@@ -1387,24 +1392,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   >
                     <Icon src={Icons.Cross} size="50" />
                   </IconButton>
-                  <Box direction="Row" gap="200" alignItems="Center">
+                  <Box direction="Row" gap="200" alignItems="Center" style={{ minWidth: 0 }}>
                     {replyDraft.threadRootEventId && <ThreadIndicator />}
-                    <ReplyLayout
-                      userColor={replyUsernameColor}
-                      username={
-                        <Text size="T300" truncate>
-                          <b>
-                            {getMemberDisplayName(room, replyDraft.senderId) ??
-                              getMxIdLocalPart(replyDraft.senderId) ??
-                              replyDraft.senderId}
-                          </b>
-                        </Text>
+                    <ReplyQuote
+                      style={
+                        replyUsernameColor ? { borderLeftColor: replyUsernameColor } : undefined
                       }
-                    >
-                      <Text size="T300" truncate>
-                        {trimReplyFromBody(replyDraft.body)}
-                      </Text>
-                    </ReplyLayout>
+                      senderName={
+                        getMemberDisplayName(room, replyDraft.senderId) ??
+                        getMxIdLocalPart(replyDraft.senderId) ??
+                        replyDraft.senderId
+                      }
+                      body={trimReplyFromBody(replyDraft.body)}
+                    />
                   </Box>
                 </Box>
               </div>
@@ -1783,12 +1783,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 {null}
               </PopOut>
               <IconButton
-                className={css.ComposerAction}
+                className={canSend ? css.ComposerSendReady : css.ComposerAction}
                 fill="None"
                 onClick={() => submit()}
-                variant="Primary"
+                variant={canSend ? 'Primary' : 'Secondary'}
                 size="300"
                 radii="300"
+                aria-disabled={!canSend}
+                data-composer-send-ready={canSend ? 'true' : 'false'}
                 aria-label={t('composer.send_aria_label', 'Send message')}
               >
                 <Icon src={Icons.Send} />

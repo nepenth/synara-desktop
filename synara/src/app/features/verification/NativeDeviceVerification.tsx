@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
-  color,
   config,
   Header,
   Icon,
@@ -17,6 +16,9 @@ import {
 import { Dialog } from '../../components/modal-dialog';
 import FocusTrap from '../../components/FocusTrap';
 import { ContainerColor } from '../../styles/ContainerColor.css';
+import { InlineMessage } from '../../components/inline-message';
+import { stopPropagation } from '../../utils/keyboard';
+import { VERIFY_DEVICE_PROMPT_COPY } from '../cross-signing/nativeIdentityReset';
 import { NATIVE_CROSS_SIGNING_CHANGED } from '../cross-signing/nativeCrossSigning';
 import {
   acceptNativeVerification,
@@ -129,22 +131,22 @@ function NativeQrScanned({
   return (
     <Box direction="Column" gap="400">
       <Text>{QR_SCANNED_CONFIRMATION_PROMPT}</Text>
-      <Box direction="Column" gap="200">
-        <Button
-          variant="Primary"
-          fill="Soft"
-          disabled={submitting}
-          onClick={() => void act(confirmNativeVerification)}
-        >
-          <Text size="B400">Confirm</Text>
-        </Button>
+      <Box gap="200" wrap="Wrap">
         <Button
           variant="Critical"
-          fill="Soft"
+          fill="None"
+          outlined
           disabled={submitting}
           onClick={() => void act(mismatchNativeVerification)}
         >
           <Text size="B400">It doesn&apos;t match</Text>
+        </Button>
+        <Button
+          variant="Primary"
+          disabled={submitting}
+          onClick={() => void act(confirmNativeVerification)}
+        >
+          <Text size="B400">Confirm</Text>
         </Button>
       </Box>
     </Box>
@@ -226,22 +228,22 @@ function NativeSas({
           ))}
         </Box>
       )}
-      <Box direction="Column" gap="200">
-        <Button
-          variant="Primary"
-          fill="Soft"
-          disabled={submitting || !hasCodes}
-          onClick={() => void act(confirmNativeVerification)}
-        >
-          <Text size="B400">They Match</Text>
-        </Button>
+      <Box gap="200" wrap="Wrap">
         <Button
           variant="Critical"
-          fill="Soft"
+          fill="None"
+          outlined
           disabled={submitting || !hasCodes}
           onClick={() => void act(mismatchNativeVerification)}
         >
-          <Text size="B400">Do Not Match</Text>
+          <Text size="B400">They don&apos;t match</Text>
+        </Button>
+        <Button
+          variant="Primary"
+          disabled={submitting || !hasCodes}
+          onClick={() => void act(confirmNativeVerification)}
+        >
+          <Text size="B400">They match</Text>
         </Button>
       </Box>
     </Box>
@@ -329,7 +331,11 @@ export function NativeDeviceVerification({
     }
   };
 
+  // Set once the flow is leaving so the trap's deactivation on unmount does
+  // not ask Core to cancel a second time.
+  const exiting = useRef(false);
   const close = useCallback(async () => {
+    if (exiting.current) return;
     setWorking(true);
     setCloseFailed(false);
     try {
@@ -343,6 +349,7 @@ export function NativeDeviceVerification({
       } else {
         await cancelNativeVerification(request.flowId);
       }
+      exiting.current = true;
       onExit();
     } catch {
       // Never trap the user in the dialog: offer a local close instead.
@@ -353,6 +360,7 @@ export function NativeDeviceVerification({
   }, [onExit, request]);
 
   const closeAnyway = () => {
+    exiting.current = true;
     if (onCloseAnyway) onCloseAnyway(request.flowId);
     else onExit();
   };
@@ -363,8 +371,12 @@ export function NativeDeviceVerification({
         <FocusTrap
           focusTrapOptions={{
             initialFocus: false,
+            // Escape behaves like the close X (cancel or dismiss), never while
+            // a step is running. Clicking outside stays inert: the other device
+            // is waiting on this flow.
+            onDeactivate: () => void close(),
             clickOutsideDeactivates: false,
-            escapeDeactivates: false,
+            escapeDeactivates: (evt) => (working ? false : stopPropagation(evt)),
           }}
         >
           <Dialog variant="Surface">
@@ -377,7 +389,9 @@ export function NativeDeviceVerification({
               size="500"
             >
               <Box grow="Yes">
-                <Text size="H4">Device Verification</Text>
+                <Text as="h2" size="H4">
+                  Device verification
+                </Text>
               </Box>
               <IconButton
                 size="300"
@@ -437,7 +451,7 @@ export function NativeDeviceVerification({
                 <>
                   <Text>Your device is verified.</Text>
                   <Button variant="Primary" onClick={() => void close()}>
-                    <Text size="B400">Okay</Text>
+                    <Text size="B400">Done</Text>
                   </Button>
                 </>
               )}
@@ -469,17 +483,15 @@ export function NativeDeviceVerification({
               )}
               {closeFailed && (
                 <>
-                  <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
-                    {VERIFICATION_CLOSE_FAILED_COPY}
-                  </Text>
+                  <InlineMessage tone="critical">{VERIFICATION_CLOSE_FAILED_COPY}</InlineMessage>
                   <Button variant="Secondary" fill="Soft" disabled={working} onClick={closeAnyway}>
-                    <Text size="B400">Close Anyway</Text>
+                    <Text size="B400">Close anyway</Text>
                   </Button>
                 </>
               )}
               {error && (
                 <>
-                  <Text size="T200">{nativeVerificationErrorMessage()}</Text>
+                  <InlineMessage tone="critical">{nativeVerificationErrorMessage()}</InlineMessage>
                   {shouldBeginSas && (
                     <Button
                       variant="Secondary"
@@ -576,16 +588,22 @@ export function NativeStartVerification({
   };
 
   return (
-    <Box direction="Column" gap="200" alignItems="End">
-      <Button variant="Warning" disabled={starting} onClick={() => void start()}>
-        {starting && <Spinner size="100" variant="Warning" />}
-        <Text size="B300">{deviceId ? 'Verify' : 'Verify from Another Device'}</Text>
+    <Box direction="Column" gap="200" alignItems="Start">
+      <Button
+        variant="Primary"
+        size="300"
+        radii="300"
+        disabled={starting}
+        before={starting ? <Spinner size="100" variant="Primary" fill="Solid" /> : undefined}
+        onClick={() => void start()}
+      >
+        <Text size="B300">{deviceId ? 'Verify' : VERIFY_DEVICE_PROMPT_COPY.verifyWithDevice}</Text>
       </Button>
       {error && (
-        <Text size="T200">
-          Could not start verification. Sign in on Element or another Synara session, keep that
+        <InlineMessage tone="critical">
+          Could not start verification. Log in on Element or another Synara session, keep that
           client online, then try again.
-        </Text>
+        </InlineMessage>
       )}
     </Box>
   );

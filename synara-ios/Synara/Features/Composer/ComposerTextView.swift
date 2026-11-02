@@ -8,6 +8,10 @@ import UIKit
 enum ComposerTextMetrics {
     static let maxHeight: CGFloat = 240
     static let textContainerInset = UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
+    /// The composer types at the timeline's body size, so text does not
+    /// grow on send.
+    static let textStyle: UIFont.TextStyle = .body
+    static var font: UIFont { .preferredFont(forTextStyle: textStyle) }
 
     static func singleLineHeight(font: UIFont) -> CGFloat {
         ceil(font.lineHeight) + textContainerInset.top + textContainerInset.bottom
@@ -103,7 +107,7 @@ struct ComposerTextView: UIViewRepresentable {
         let container = ComposerTextContainer()
         let textView = container.textView
         textView.backgroundColor = .clear
-        textView.font = .preferredFont(forTextStyle: .callout)
+        textView.font = ComposerTextMetrics.font
         textView.adjustsFontForContentSizeCategory = true
         textView.textContainerInset = ComposerTextMetrics.textContainerInset
         textView.textContainer.lineFragmentPadding = 0
@@ -221,7 +225,7 @@ struct ComposerTextView: UIViewRepresentable {
     }
 
     private func applyTextAppearance(to textView: UITextView) {
-        let font = textView.font ?? .preferredFont(forTextStyle: .callout)
+        let font = textView.font ?? ComposerTextMetrics.font
         // SwiftUI's room can use a preferred color scheme that does not match
         // the UIKit text view's inherited trait collection. Resolve against
         // the same theme and scheme as the composer surface.
@@ -538,7 +542,7 @@ final class ComposerPasteTextView: UITextView {
             if value != nil { previousPresentationRanges.append(range) }
         }
         for range in previousPresentationRanges {
-            textStorage.addAttribute(.font, value: font ?? UIFont.preferredFont(forTextStyle: .callout), range: range)
+            textStorage.addAttribute(.font, value: font ?? ComposerTextMetrics.font, range: range)
             textStorage.removeAttribute(.underlineStyle, range: range)
             textStorage.removeAttribute(.strikethroughStyle, range: range)
             textStorage.removeAttribute(.obliqueness, range: range)
@@ -657,7 +661,7 @@ final class ComposerPasteTextView: UITextView {
                 value: UIColor.clear,
                 range: NSRange(location: markers.location, length: markers.length + 1)
             )
-            let base = font ?? UIFont.preferredFont(forTextStyle: .callout)
+            let base = font ?? ComposerTextMetrics.font
             let scale: CGFloat = level == 1 ? 1.35 : (level == 2 ? 1.2 : 1.1)
             textStorage.addAttribute(
                 .font,
@@ -702,7 +706,7 @@ final class ComposerPasteTextView: UITextView {
 
     private func applyFontTraits(_ traits: UIFontDescriptor.SymbolicTraits, in range: NSRange) {
         let current = (textStorage.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont)
-            ?? font ?? UIFont.preferredFont(forTextStyle: .callout)
+            ?? font ?? ComposerTextMetrics.font
         let combined = current.fontDescriptor.symbolicTraits.union(traits)
         let descriptor = current.fontDescriptor.withSymbolicTraits(combined) ?? current.fontDescriptor
         textStorage.addAttribute(.font, value: UIFont(descriptor: descriptor, size: current.pointSize), range: range)
@@ -780,7 +784,7 @@ final class ComposerPasteTextView: UITextView {
         return ComposerAttributedMarkdown.markdownSelection(
             from: attributedText,
             visibleRange: recentPasteRange,
-            baseFont: font ?? .preferredFont(forTextStyle: .callout)
+            baseFont: font ?? ComposerTextMetrics.font
         )
     }
 
@@ -808,7 +812,7 @@ final class ComposerPasteTextView: UITextView {
         if let html = ComposerPasteboard.htmlString(),
            let attributed = ComposerAttributedMarkdown.attributedString(
                fromHTML: html,
-               baseFont: font ?? .preferredFont(forTextStyle: .callout)
+               baseFont: font ?? ComposerTextMetrics.font
            ),
            attributed.length > 0
         {
@@ -842,7 +846,7 @@ final class ComposerPasteTextView: UITextView {
         recentPasteText = text
         refreshQuotePresentation()
         typingAttributes = [
-            .font: font ?? .preferredFont(forTextStyle: .callout),
+            .font: font ?? ComposerTextMetrics.font,
             .foregroundColor: textColor ?? .label,
         ]
     }
@@ -865,7 +869,7 @@ final class ComposerTextContainer: UIView {
     var onWidthChange: (() -> Void)?
 
     func preferredHeight(forWidth width: CGFloat, showsPlaceholder: Bool) -> CGFloat {
-        let font = textView.font ?? .preferredFont(forTextStyle: .callout)
+        let font = textView.font ?? ComposerTextMetrics.font
         let singleLineHeight = ComposerTextMetrics.singleLineHeight(font: font)
         if showsPlaceholder {
             let placeholderHeight = placeholderLabel.sizeThatFits(

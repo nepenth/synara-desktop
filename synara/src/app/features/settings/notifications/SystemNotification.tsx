@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Text, Switch, Button, color } from 'folds';
+import { Text, Switch, Button } from 'folds';
+import { InlineMessage } from '../../../components/inline-message';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
@@ -83,16 +84,16 @@ export function SystemNotification() {
         gap="400"
       >
         <SettingTile
-          title="Desktop Notifications"
+          title="Desktop notifications"
           description={
             notifPermission === 'denied' ? (
-              <Text as="span" style={{ color: color.Critical.Main }} size="T200">
+              <InlineMessage tone="critical">
                 {platformNotifications
                   ? 'Notification permission is blocked. Allow Synara in your system notification settings.'
                   : 'Notification' in window
-                    ? 'Notification permission is blocked. Please allow notification permission from browser address bar.'
+                    ? 'Notification permission is blocked. Allow notifications from the browser address bar.'
                     : 'Notifications are not supported by the system.'}
-              </Text>
+              </InlineMessage>
             ) : (
               <span>
                 Show desktop notifications when messages arrive. Approval requests alert even when
@@ -115,7 +116,7 @@ export function SystemNotification() {
               </Button>
             ) : (
               <Switch
-                aria-label="Desktop Notifications"
+                aria-label="Desktop notifications"
                 disabled={notifPermission !== 'granted'}
                 value={showNotifications}
                 onChange={setShowNotifications}
@@ -125,29 +126,24 @@ export function SystemNotification() {
         />
         {platformNotifications && notifPermission !== 'prompt' && (
           <SettingTile
-            title="Notification Permission"
+            title="Notification permission"
             description="On supported macOS builds, requesting permission also lets you opt into Critical Alerts for verified agent approvals. Your macOS notification settings control which alerts can be delivered."
-          >
-            <Button
-              className={SettingsQuietControl}
-              size="300"
-              radii="300"
-              variant="Secondary"
-              fill="Soft"
-              disabled={isRequestingPermission}
-              onClick={requestNotificationPermission}
-            >
-              <Text size="B300">
-                {isRequestingPermission ? 'Requesting…' : 'Request notification permission'}
-              </Text>
-            </Button>
-          </SettingTile>
+            after={
+              <Button
+                className={SettingsQuietControl}
+                size="300"
+                radii="300"
+                variant="Secondary"
+                fill="Soft"
+                disabled={isRequestingPermission}
+                onClick={requestNotificationPermission}
+              >
+                <Text size="B300">{isRequestingPermission ? 'Requesting…' : 'Request again'}</Text>
+              </Button>
+            }
+          />
         )}
-        {permissionMessage && (
-          <Text size="T200" role="status">
-            {permissionMessage}
-          </Text>
-        )}
+        {permissionMessage && <InlineMessage tone="info">{permissionMessage}</InlineMessage>}
       </SequenceCard>
       <SequenceCard
         className={SequenceCardStyle}
@@ -156,12 +152,12 @@ export function SystemNotification() {
         gap="400"
       >
         <SettingTile
-          title="Notification Sound"
-          description="Play sound when new message arrive."
+          title="Notification sound"
+          description="Play a sound when a message arrives."
           after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
         />
         <SettingTile
-          title="Show Approval Details"
+          title="Show approval details"
           description="Show the reason and requested command in agent approval notifications. When off, approval notifications only name the room."
           after={<Switch value={showApprovalDetails} onChange={setShowApprovalDetails} />}
         />

@@ -6,7 +6,7 @@ for (const kind of ['home', 'direct', 'space'] as const) {
   }) => {
     await page.goto(`/e2e/approvals-harness/routing.html?kind=${kind}`);
     await page.getByRole('button', { name: 'Open approvals', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Agent approvals' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Approvals' })).toBeVisible();
     await page.getByRole('button', { name: 'Open message', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Room destination' })).toBeVisible();
     const prefix = kind === 'space' ? '/%23origin-parent%3Aexample.test' : `/${kind}`;
@@ -45,7 +45,7 @@ for (const origin of [
   test(`Mobile Approvals Back returns to ${origin}`, async ({ page }) => {
     await page.goto(`/e2e/approvals-harness/routing.html?origin=${encodeURIComponent(origin)}`);
     await page.getByRole('button', { name: 'Open approvals', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Agent approvals' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Approvals' })).toBeVisible();
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     await expect(page.getByTestId('location')).toHaveText(origin);
     await expect(page.getByRole('heading', { name: 'Origin section' })).toBeVisible();

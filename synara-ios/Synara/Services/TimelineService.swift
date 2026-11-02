@@ -749,12 +749,39 @@ enum TimelineWindowPolicy {
 protocol LaterServicing {
     func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never>
     func completeItem(id: String) async -> Result<Bool, LaterInboxError>
+    /// Saves a message to Later (review-2 DS-9). The item has desktop's
+    /// shape, so both clients write one `in.synara.later` store.
+    func saveItem(roomID: String, eventID: String) async -> Result<Void, LaterInboxError>
+}
+
+/// Later item identity shared with desktop (`nativeLaterOwner.ts`
+/// `getLaterItemId`): one item per message, so saving twice updates it.
+enum LaterItemIdentity {
+    static func itemID(roomID: String, eventID: String) -> String {
+        "\(roomID)\n\(eventID)"
+    }
+
+    /// Only a message the homeserver has accepted can be saved: a local echo
+    /// has no event id to come back to, and a system line or a deleted
+    /// message is not something to read later.
+    static func savableEventID(for item: TimelineItem) -> String? {
+        guard let eventID = item.serverEventID, eventID.isEmpty == false else {
+            return nil
+        }
+        switch item.kind {
+        case .redacted, .systemNotice:
+            return nil
+        default:
+            return eventID
+        }
+    }
 }
 
 enum LaterInboxError: Error, LocalizedError, Equatable {
     case noSession
     case malformedPayload
     case networkFailure
+    case saveFailed
 
     var errorDescription: String? {
         switch self {
@@ -764,6 +791,8 @@ enum LaterInboxError: Error, LocalizedError, Equatable {
             return String(localized: "Later account data was not readable.")
         case .networkFailure:
             return String(localized: "Could not load Later account data.")
+        case .saveFailed:
+            return String(localized: "Couldn't save this message to Later. Try again.")
         }
     }
 }
@@ -851,6 +880,27 @@ final class MockLaterService: LaterServicing {
             isCompleted: true
         )
         return .success(true)
+    }
+
+    /// Upserts like Core: the saved item replaces any item for the same
+    /// message (an open reminder or a completed save) and comes first.
+    func saveItem(roomID: String, eventID: String) async -> Result<Void, LaterInboxError> {
+        let id = LaterItemIdentity.itemID(roomID: roomID, eventID: eventID)
+        items.removeAll { $0.id == id }
+        items.insert(
+            SynaraLaterListItem(
+                id: id,
+                roomID: roomID,
+                eventID: eventID,
+                kind: .saved,
+                dueTs: nil,
+                completedAt: nil,
+                createdAt: now(),
+                isCompleted: false
+            ),
+            at: 0
+        )
+        return .success(())
     }
 }
 

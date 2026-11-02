@@ -46,3 +46,8 @@ export const SettingsThemeSwatch = style({
     },
   },
 });
+
+/** Hairline around a colour sample so a light swatch still reads on a light card. */
+export const SettingsThemeSwatchOutline = style({
+  boxShadow: `inset 0 0 0 ${config.borderWidth.B300} ${color.Surface.ContainerLine}`,
+});

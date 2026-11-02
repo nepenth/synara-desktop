@@ -12,6 +12,7 @@ import {
   SidebarItemTooltip,
 } from '../../../components/sidebar';
 import { useHomeSelected } from '../../../hooks/router/useHomeSelected';
+import { useDirectSelected } from '../../../hooks/router/useDirectSelected';
 import { UnreadBadge } from '../../../components/unread-badge';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
@@ -22,7 +23,8 @@ type HomeMenuProps = {
   requestClose: () => void;
 };
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
-  const { roomIds, unread } = useNativeNavigationScope('home');
+  // One Home list of rooms and DMs (NAV-12): mark both read.
+  const { roomIds, unread } = useNativeNavigationScope('merged');
 
   const { markRead, markingRead, markReadError } = useMarkRoomsAsRead();
 
@@ -60,8 +62,12 @@ export function HomeTab() {
   const screenSize = useScreenSizeContext();
   const navToActivePath = useAtomValue(useNavToActivePathAtom());
 
-  const { unread: homeUnread } = useNativeNavigationScope('home');
-  const homeSelected = useHomeSelected();
+  // Rooms and DMs share one list, so they share one attention badge (NAV-12).
+  const { unread: homeUnread, attention } = useNativeNavigationScope('merged');
+  // The Home pane also hosts `/direct/` routes; it stays the selected tab.
+  const homeRouteSelected = useHomeSelected();
+  const directRouteSelected = useDirectSelected();
+  const homeSelected = homeRouteSelected || directRouteSelected;
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const handleHomeClick = () => {
@@ -100,8 +106,9 @@ export function HomeTab() {
         )}
       </SidebarItemTooltip>
       {homeUnread && (
-        <SidebarItemBadge hasCount={homeUnread.total > 0}>
-          <UnreadBadge highlight={homeUnread.highlight > 0} count={homeUnread.total} />
+        // Slack rule: a red count for mentions and unread DMs, a dot for plain unread.
+        <SidebarItemBadge hasCount={attention > 0}>
+          <UnreadBadge highlight={attention > 0} count={attention} />
         </SidebarItemBadge>
       )}
       {menuAnchor && (

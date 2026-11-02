@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, Icon, Icons, Scroll, Spinner, Text, config } from 'folds';
+import React, { RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Button, Chip, Icon, Icons, Input, Scroll, Spinner, Text, config } from 'folds';
+import { quietInteractiveSurface } from '../../styles/Depth.css';
 import { Page, PageHeader } from '../../components/page';
 import { AgentApprovalCard } from '../../components/agent-approval/AgentApprovalCard';
 import { formatCoreAgentApprovalPrompt } from '../../utils/agentApprovals';
@@ -32,11 +33,17 @@ export function ApprovalsView({
   senderName,
   openMessage,
   roomAvailable,
+  focusTarget,
 }: {
   roomName: (id: string) => string;
   senderName: (item: ApprovalInboxItem) => string;
   openMessage: (item: ApprovalInboxItem) => void;
   roomAvailable?: (roomId: string) => boolean;
+  /**
+   * The page title that takes focus after a decision. When the surrounding
+   * page header already names the page, the view renders no heading of its own.
+   */
+  focusTarget?: RefObject<HTMLElement | null>;
 }) {
   const {
     sessionGeneration,
@@ -60,7 +67,7 @@ export function ApprovalsView({
     setSearch('');
     setFilter('pending');
   }, [sessionGeneration]);
-  const headingRef = useRef<HTMLHeadingElement>(null);
+  const ownHeadingRef = useRef<HTMLHeadingElement>(null);
   const recentCount = recentItems.length;
   const visible = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
@@ -85,51 +92,72 @@ export function ApprovalsView({
   const handleDecision = (item: ApprovalInboxItem) => {
     if (!decided(item)) return;
     setAnnouncement(`Request in ${roomName(item.roomId)} resolved. Available in Recent.`);
-    headingRef.current?.focus();
+    (focusTarget?.current ?? ownHeadingRef.current)?.focus();
   };
 
   return (
     <div className={css.Content}>
       <Box direction="Column" gap="200">
-        <Text as="h1" size="H3" tabIndex={-1} ref={headingRef}>
-          Agent approvals
-        </Text>
-        <Text priority="300">
-          Review Hermes requests across your rooms. Requests closest to expiry appear first.
+        {!focusTarget && (
+          <Text as="h1" size="H3" tabIndex={-1} ref={ownHeadingRef}>
+            Approvals
+          </Text>
+        )}
+        <Text size="T300" priority="300">
+          Agent requests across your rooms. Requests closest to expiry appear first.
         </Text>
       </Box>
       <div className={css.Toolbar}>
-        <div className={css.Filters} role="group" aria-label="Approval request filter">
-          <button
-            type="button"
-            className={css.Filter}
-            aria-pressed={filter === 'pending'}
-            onClick={() => setFilter('pending')}
-          >
-            {filter === 'pending' && <Icon size="50" src={Icons.Check} aria-hidden />}
-            Pending · {pendingCount}
-            {(incomplete || error) && pendingCount > 0 ? '+' : ''}
-          </button>
-          <button
-            type="button"
-            className={css.Filter}
-            aria-pressed={filter === 'recent'}
-            onClick={() => setFilter('recent')}
-          >
-            {filter === 'recent' && <Icon size="50" src={Icons.Check} aria-hidden />}
-            Recent · {recentCount}
-          </button>
-        </div>
-        <input
+        <Box gap="100" role="group" aria-label="Approval request filter">
+          {(
+            [
+              [
+                'pending',
+                `Pending · ${pendingCount}${(incomplete || error) && pendingCount > 0 ? '+' : ''}`,
+              ],
+              ['recent', `Recent · ${recentCount}`],
+            ] as Array<[Filter, string]>
+          ).map(([value, label]) => (
+            <Button
+              key={value}
+              type="button"
+              className={quietInteractiveSurface}
+              size="300"
+              radii="300"
+              variant="Secondary"
+              fill={filter === value ? 'Soft' : 'None'}
+              aria-pressed={filter === value}
+              before={
+                <Icon
+                  size="100"
+                  src={Icons.Check}
+                  aria-hidden
+                  style={{ visibility: filter === value ? 'visible' : 'hidden' }}
+                />
+              }
+              onClick={() => setFilter(value)}
+            >
+              <Text size="B300">{label}</Text>
+            </Button>
+          ))}
+        </Box>
+        <Input
           type="search"
           className={css.Search}
+          size="300"
+          radii="300"
+          variant="Surface"
+          outlined
           aria-label="Search approval requests"
-          placeholder="Search agent, room, or command"
+          placeholder="Search agent, room or command"
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => setSearch(event.currentTarget.value)}
+          before={<Icon src={Icons.Search} size="50" />}
         />
         <Button
+          className={quietInteractiveSurface}
           size="300"
+          radii="300"
           variant="Secondary"
           fill="None"
           onClick={refresh}
@@ -174,8 +202,8 @@ export function ApprovalsView({
       )}
       {filter === 'recent' && (
         <Text size="T300" priority="300">
-          Decisions your account made, synced across devices. Inbox-only expired requests stay here
-          until they age out of recent room activity.
+          Decisions your account made, synced across devices. Expired requests with no recorded
+          decision stay here until they age out of recent room activity.
         </Text>
       )}
       {visible.length === 0 ? (
@@ -201,7 +229,7 @@ export function ApprovalsView({
             {search
               ? 'Try a different agent, room, or command.'
               : filter === 'pending'
-                ? 'New Hermes approval requests will appear here as they arrive.'
+                ? 'New agent approval requests will appear here as they arrive.'
                 : 'Decided approvals will appear here after you approve or deny a request.'}
           </Text>
         </div>
@@ -220,30 +248,38 @@ export function ApprovalsView({
                   aria-label={`Approval from ${senderName(item)} in ${roomName(item.roomId)}`}
                 >
                   <div className={css.CardHeader}>
-                    <Box direction="Column" gap="100" style={{ minWidth: 0, flex: 1 }}>
-                      <Text as="h2" size="H5" truncate>
+                    <Box gap="200" alignItems="Center" style={{ minWidth: 0, flex: 1 }}>
+                      <Text
+                        as="h2"
+                        size="T300"
+                        className={css.Sender}
+                        truncate
+                        dir="auto"
+                        title={item.sender}
+                      >
                         {senderName(item)}
                       </Text>
-                      <Text
-                        size="T200"
-                        priority="300"
-                        style={{ overflowWrap: 'anywhere' }}
-                        dir="auto"
-                      >
-                        {item.sender}
-                      </Text>
-                      <Text size="T300" truncate dir="auto">
-                        {roomName(item.roomId)}
+                      <Text size="T300" priority="300" truncate dir="auto">
+                        in {roomName(item.roomId)}
                       </Text>
                     </Box>
-                    <Box gap="300" alignItems="Center" wrap="Wrap">
-                      <Text className={css.Status} size="T200">
-                        {item.status === 'pending'
-                          ? remainingTime(item.expiresAt, now)
-                          : historyDecisionLabel(item.decision, item.status)}
-                      </Text>
+                    <Box gap="200" alignItems="Center" wrap="Wrap">
+                      <Chip
+                        as="span"
+                        variant={item.status === 'pending' ? 'Warning' : 'Secondary'}
+                        radii="Pill"
+                        outlined
+                      >
+                        <Text className={css.Status} size="T200">
+                          {item.status === 'pending'
+                            ? remainingTime(item.expiresAt, now)
+                            : historyDecisionLabel(item.decision, item.status)}
+                        </Text>
+                      </Chip>
                       <Button
+                        className={quietInteractiveSurface}
                         size="300"
+                        radii="300"
                         variant="Secondary"
                         fill="None"
                         onClick={() => openMessage(item)}
@@ -313,7 +349,7 @@ export function ApprovalsView({
                       ) : null}
                       <Text size="T200" priority="300">
                         {item.status === 'expired'
-                          ? 'This request can no longer be acted on. Open the conversation to ask Hermes for a fresh request.'
+                          ? 'This request can no longer be acted on. Open the conversation to ask the agent for a fresh request.'
                           : canOpenRoom
                             ? 'Your account has already sent a decision for this request.'
                             : 'Your account has already sent a decision for this request. The room is no longer joined, so the original message cannot be opened.'}
@@ -333,6 +369,7 @@ export function ApprovalsView({
 export function Approvals() {
   const { navigateRoom } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
+  const headingRef = useRef<HTMLHeadingElement>(null);
   return (
     <Page>
       <PageHeader>
@@ -353,11 +390,14 @@ export function Approvals() {
             </BackRouteHandler>
           )}
           <Icon src={Icons.Shield} />
-          <Text size="H4">Approvals</Text>
+          <Text as="h1" size="H4" tabIndex={-1} ref={headingRef}>
+            Approvals
+          </Text>
         </Box>
       </PageHeader>
       <Scroll variant="Background" size="300" hideTrack>
         <ApprovalsView
+          focusTarget={headingRef}
           roomName={(id) => getNativeRoom(id)?.name || id}
           senderName={(item) =>
             getNativeRoom(item.roomId)?.getMember(item.sender)?.name ||

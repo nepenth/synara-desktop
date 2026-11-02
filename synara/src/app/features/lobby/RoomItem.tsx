@@ -21,6 +21,7 @@ import {
 import FocusTrap from '../../components/FocusTrap';
 import type { RoomReading } from '../../utils/room';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
+import { avatarLadderStyle } from '../../components/user-avatar';
 import { SequenceCard } from '../../components/sequence-card';
 import { HierarchyItem, SpaceHierarchyRoom } from '../../hooks/useSpaceHierarchy';
 import { millify } from '../../plugins/millify';
@@ -112,7 +113,7 @@ function RoomJoinButton({ roomId, via }: RoomJoinButtonProps) {
 function RoomProfileLoading() {
   return (
     <Box grow="Yes" gap="300">
-      <Avatar className={styleCss.AvatarPlaceholder} />
+      <Avatar className={styleCss.AvatarPlaceholder} style={avatarLadderStyle('profileRow')} />
       <Box grow="Yes" direction="Column" gap="100">
         <Box gap="200" alignItems="Center">
           <Box className={styleCss.LinePlaceholder} shrink="No" style={{ maxWidth: toRem(80) }} />
@@ -141,7 +142,7 @@ type RoomProfileErrorProps = {
 function RoomProfileError({ roomId, suggested, inaccessibleRoom, via }: RoomProfileErrorProps) {
   return (
     <Box grow="Yes" gap="300">
-      <Avatar>
+      <Avatar style={avatarLadderStyle('profileRow')}>
         <RoomAvatar
           roomId={roomId}
           src={undefined}
@@ -213,7 +214,7 @@ function RoomProfile({
 }: RoomProfileProps) {
   return (
     <Box grow="Yes" gap="300">
-      <Avatar>
+      <Avatar style={avatarLadderStyle('profileRow')}>
         <RoomAvatar
           roomId={roomId}
           src={avatarUrl}

@@ -1,16 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Avatar,
-  Button,
-  Icon,
-  IconButton,
-  Icons,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
-  Text,
-} from 'folds';
-import FocusTrap from '../../components/FocusTrap';
+import { Avatar, Button, Icon, IconButton, Icons, Text } from 'folds';
 import { General } from './general';
 import { AppearancePage as AppearanceSettings } from './appearance';
 import { PageRoot } from '../../components/page';
@@ -22,12 +11,11 @@ import { getMxIdLocalPart } from '../../utils/matrix';
 import { UserAvatar } from '../../components/user-avatar';
 import { nameInitials } from '../../utils/common';
 import { Notifications } from './notifications';
-import { Devices } from './devices';
+import { Devices, SecurityRecovery } from './devices';
 import { DeveloperTools } from './developer-tools';
 import { Diagnostics } from './diagnostics';
 import { About } from './about';
 import { UseStateProvider } from '../../components/UseStateProvider';
-import { stopPropagation } from '../../utils/keyboard';
 import { LogoutDialog } from '../../components/LogoutDialog';
 import * as depthCss from '../../styles/Depth.css';
 import { isDesktopPlatform } from '../../platform';
@@ -52,9 +40,11 @@ const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
               'calls',
               'date',
               'time',
+              'composer',
               'editor',
               'enter',
               'markdown',
+              'shortcuts',
               'storage',
               'updates',
             ],
@@ -93,18 +83,25 @@ const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
             keywords: ['profile', 'name', 'avatar', 'email', 'contact', 'ignored', 'matrix id'],
           },
           {
-            id: SettingsPages.DevicesPage,
-            name: 'Devices',
-            icon: Icons.Monitor,
+            id: SettingsPages.SecurityPage,
+            name: 'Security & recovery',
+            icon: Icons.ShieldLock,
             keywords: [
-              'sessions',
               'verification',
+              'verify',
               'security',
               'backup',
-              'recovery',
+              'recovery key',
               'keys',
               'encryption',
+              'reset identity',
             ],
+          },
+          {
+            id: SettingsPages.DevicesPage,
+            name: 'Sessions',
+            icon: Icons.Monitor,
+            keywords: ['devices', 'sessions', 'log out', 'export keys', 'import keys'],
           },
         ],
       },
@@ -123,7 +120,7 @@ const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
             : []),
           {
             id: SettingsPages.DeveloperToolsPage,
-            name: 'Developer Tools',
+            name: 'Developer tools',
             icon: Icons.Terminal,
             keywords: ['account data', 'debug', 'json'],
           },
@@ -214,23 +211,9 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
                       before={<Icon src={Icons.Power} size="100" />}
                       onClick={() => setLogout(true)}
                     >
-                      <Text size="B400">Log Out</Text>
+                      <Text size="B400">Log out</Text>
                     </Button>
-                    {logout && (
-                      <Overlay open backdrop={<OverlayBackdrop />}>
-                        <OverlayCenter>
-                          <FocusTrap
-                            focusTrapOptions={{
-                              onDeactivate: () => setLogout(false),
-                              clickOutsideDeactivates: true,
-                              escapeDeactivates: stopPropagation,
-                            }}
-                          >
-                            <LogoutDialog handleClose={() => setLogout(false)} />
-                          </FocusTrap>
-                        </OverlayCenter>
-                      </Overlay>
-                    )}
+                    {logout && <LogoutDialog onClose={() => setLogout(false)} />}
                   </>
                 )}
               </UseStateProvider>
@@ -250,6 +233,9 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
       )}
       {activePage === SettingsPages.NotificationPage && (
         <Notifications requestClose={handlePageRequestClose} />
+      )}
+      {activePage === SettingsPages.SecurityPage && (
+        <SecurityRecovery requestClose={handlePageRequestClose} />
       )}
       {activePage === SettingsPages.DevicesPage && (
         <Devices requestClose={handlePageRequestClose} />

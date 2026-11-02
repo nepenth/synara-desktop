@@ -124,10 +124,39 @@ final class StableTimelineViewportTests: XCTestCase {
             TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: -15, y: 14)),
             .reject
         )
+        // Rightward is swipe to reply, not a reject.
         XCTAssertEqual(
             TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: 20, y: 2)),
+            .reply
+        )
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: 15, y: 14)),
             .reject
         )
+    }
+
+    func testSwipeToReplyArmsAtFortyPointsAndKeepsItsLockedDirection() {
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.intent(
+                translation: CGPoint(x: 30, y: 90),
+                hasLockedHorizontalIntent: true,
+                lockedIntent: .reply
+            ),
+            .reply
+        )
+        XCTAssertFalse(TimelineTimestampRevealGesturePolicy.isReplyArmed(translationX: 39))
+        XCTAssertTrue(TimelineTimestampRevealGesturePolicy.isReplyArmed(translationX: 40))
+        XCTAssertEqual(TimelineTimestampRevealGesturePolicy.replyProgress(for: 20), 0.5)
+        XCTAssertEqual(TimelineTimestampRevealGesturePolicy.replyProgress(for: 80), 1)
+        XCTAssertEqual(TimelineTimestampRevealGesturePolicy.replyTranslation(for: 24, reduceMotion: false), 24)
+        XCTAssertLessThanOrEqual(
+            TimelineTimestampRevealGesturePolicy.replyTranslation(for: 400, reduceMotion: false),
+            TimelineTimestampRevealGesturePolicy.replyMaxTranslation
+        )
+        XCTAssertEqual(TimelineTimestampRevealGesturePolicy.replyTranslation(for: 48, reduceMotion: true), 0)
+        // The leading edge stays the navigation swipe back.
+        XCTAssertFalse(TimelineTimestampRevealGesturePolicy.allowsReply(originX: 12))
+        XCTAssertTrue(TimelineTimestampRevealGesturePolicy.allowsReply(originX: 60))
     }
 
     func testTimestampRevealGestureRejectsVerticalScrollingAtActivationThreshold() {

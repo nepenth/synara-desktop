@@ -87,7 +87,8 @@ export const EditorTextareaWithFloatingOptions = style({
     '&::before': {
       content: '""',
       float: 'right',
-      width: toRem(184),
+      // Three 32px actions, 2px gaps and 3px padding: no wider than the tools need.
+      width: toRem(108),
       height: toRem(36),
       pointerEvents: 'none',
     },

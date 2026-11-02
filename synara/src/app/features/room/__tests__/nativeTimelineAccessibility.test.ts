@@ -27,15 +27,21 @@ test('the timeline is a labelled region with a polite arrivals log (D58)', () =>
   assert.match(read('features/room/RoomViewHeader.tsx'), /<Text\s+as="h1"/);
   assert.match(read('features/room/Room.tsx'), /<Box as="main"/);
   assert.match(read('components/page/Page.tsx'), /as=\{label \? 'nav' : 'div'\}/);
-  for (const [path, label] of [
-    ['pages/client/home/Home.tsx', 'Rooms'],
-    ['pages/client/direct/Direct.tsx', 'Direct messages'],
-    ['pages/client/inbox/Inbox.tsx', 'Inbox'],
-    ['pages/client/explore/Explore.tsx', 'Explore'],
-    ['pages/client/space/Space.tsx', 'Space rooms'],
-  ]) {
-    assert.match(read(path), new RegExp(`<PageNav label="${label}">`), path);
+  // Room-list panes name the landmark from the translated section noun.
+  for (const [path, pattern] of [
+    // Home is the one list of rooms and DMs (NAV-12); `/direct/` routes share it.
+    ['pages/client/home/Home.tsx', /<PageNav label=\{roomsLabel\}>/],
+    ['pages/client/inbox/Inbox.tsx', /<PageNav label="Activity">/],
+    ['pages/client/explore/Explore.tsx', /<PageNav label="Explore">/],
+    ['pages/client/space/Space.tsx', /<PageNav label=\{roomsLabel\}>/],
+  ] as const) {
+    assert.match(read(path), pattern, path);
   }
+  assert.match(read('pages/client/home/Home.tsx'), /t\('modernization\.nav\.rooms', 'Rooms'\)/);
+  assert.match(
+    read('pages/client/home/Home.tsx'),
+    /t\('modernization\.nav\.direct_messages', 'Direct messages'\)/
+  );
   assert.match(read('pages/client/SidebarNav.tsx'), /<Sidebar as="nav" aria-label="Spaces">/);
 });
 
@@ -46,9 +52,10 @@ test('navigation rows mark the current page, never aria-selected on a plain div 
     /<NavItem\b[^>]*aria-selected=/.test(readFileSync(path, 'utf8'))
   );
   assert.deepEqual(offenders, []);
+  // Home and Direct rows come from RoomNavItem and the search entry from
+  // NavSearchField; both carry aria-current themselves.
   for (const path of [
-    'pages/client/home/Home.tsx',
-    'pages/client/direct/Direct.tsx',
+    'components/nav/NavSearchField.tsx',
     'pages/client/explore/Explore.tsx',
     'pages/client/inbox/Inbox.tsx',
     'pages/client/space/Space.tsx',
@@ -129,8 +136,10 @@ test('settings controls have names (B8a follow-up)', () => {
     read('features/settings/notifications/Notifications.tsx'),
     /<Input\s+aria-label="New keyword"/
   );
-  assert.match(read('pages/client/home/Home.tsx'), /aria-label="Home options"/);
-  assert.match(read('pages/client/direct/Direct.tsx'), /aria-label="Direct messages options"/);
+  assert.match(
+    read('pages/client/home/Home.tsx'),
+    /aria-label=\{t\('modernization\.nav\.home_options', 'Home options'\)\}/
+  );
   assert.match(read('pages/client/space/Space.tsx'), /aria-label=\{`\$\{spaceName\} options`\}/);
   // Every folds Switch is named: by SettingTile when it is the tile's `after`,
   // otherwise by its own aria-label.
@@ -163,13 +172,15 @@ test('room lists show loading until their first readback (D29)', () => {
     roomList,
     /if \(loadedSessionGeneration !== session\.sessionGeneration\) setLoaded\(false\)/
   );
-  for (const [path, label] of [
-    ['pages/client/home/Home.tsx', 'Loading rooms…'],
-    ['pages/client/direct/Direct.tsx', 'Loading direct messages…'],
+  for (const [path, key, label] of [
+    ['pages/client/home/Home.tsx', 'loading_rooms', 'Loading rooms…'],
+    ['pages/client/space/Space.tsx', 'loading_space', 'Loading space…'],
   ]) {
     assert.match(
       read(path),
-      new RegExp(`roomListLoaded \\? \\([\\s\\S]*?<NavLoading label="${label}" />`),
+      new RegExp(
+        `roomListLoaded \\? \\([\\s\\S]*?<NavLoading\\s+label=\\{t\\('modernization\\.nav\\.${key}', '${label}'\\)\\}\\s*/>`
+      ),
       path
     );
   }

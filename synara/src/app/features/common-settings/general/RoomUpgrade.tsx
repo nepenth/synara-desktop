@@ -1,21 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  Button,
-  color,
-  Spinner,
-  Text,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
-  Header,
-  config,
-  Box,
-  IconButton,
-  Icon,
-  Icons,
-} from 'folds';
-import { Dialog } from '../../../components/modal-dialog';
-import FocusTrap from '../../../components/FocusTrap';
+import { Button, Text, config, Box } from 'folds';
+import { ConfirmDialog } from '../../../components/confirm-dialog';
 import type { MatrixError } from '../../../utils/matrix';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
@@ -26,7 +11,6 @@ import { IRoomCreateContent, StateEvent } from '../../../../types/matrix/room';
 import { useStateEvent } from '../../../hooks/useStateEvent';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useCapabilities } from '../../../hooks/useCapabilities';
-import { stopPropagation } from '../../../utils/keyboard';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import {
   AdditionalCreatorInput,
@@ -37,7 +21,6 @@ import { useAlive } from '../../../hooks/useAlive';
 import { upgradeRoom } from '../../../native/nativeRoomExtras';
 import { creatorsSupported } from '../../../utils/matrix';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
-import { BreakWord } from '../../../styles/Text.css';
 
 type RoomTombstoneEventContent = {
   body: string;
@@ -84,79 +67,52 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
     );
   };
 
+  const kind = room.isSpaceRoom() ? 'space' : 'room';
+  const name = room.name?.trim() || `this ${kind}`;
+
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: false,
-            onDeactivate: requestClose,
-            clickOutsideDeactivates: true,
-            escapeDeactivates: stopPropagation,
-          }}
-        >
-          <Dialog variant="Surface">
-            <Header
-              style={{
-                padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
-                borderBottomWidth: config.borderWidth.B300,
-              }}
-              variant="Surface"
-              size="500"
-            >
-              <Box grow="Yes">
-                <Text size="H4">{room.isSpaceRoom() ? 'Space Upgrade' : 'Room Upgrade'}</Text>
-              </Box>
-              <IconButton size="300" onClick={requestClose} radii="300" aria-label="Close">
-                <Icon src={Icons.Cross} />
-              </IconButton>
-            </Header>
-            <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
-              <Text priority="400" style={{ color: color.Critical.Main }}>
-                <b>This action is irreversible!</b>
-              </Text>
-              <Box direction="Column" gap="100">
-                <Text size="L400">Options</Text>
-                <RoomVersionSelector
-                  versions={roomVersions?.available ? Object.keys(roomVersions.available) : ['1']}
-                  value={selectedRoomVersion}
-                  onChange={selectRoomVersion}
-                  disabled={upgrading}
-                />
-                {allowAdditionalCreators && (
-                  <SequenceCard
-                    style={{ padding: config.space.S300 }}
-                    variant="SurfaceVariant"
-                    direction="Column"
-                    gap="500"
-                  >
-                    <AdditionalCreatorInput
-                      additionalCreators={additionalCreators}
-                      onSelect={addAdditionalCreator}
-                      onRemove={removeAdditionalCreator}
-                      disabled={upgrading}
-                    />
-                  </SequenceCard>
-                )}
-              </Box>
-              {upgradeState.status === AsyncStatus.Error && (
-                <Text className={BreakWord} style={{ color: color.Critical.Main }} size="T200">
-                  {(upgradeState.error as MatrixError).message}
-                </Text>
-              )}
-              <Button
-                onClick={handleUpgradeRoom}
-                variant="Secondary"
-                disabled={upgrading}
-                before={upgrading && <Spinner size="200" variant="Secondary" fill="Solid" />}
-              >
-                <Text size="B400">{room.isSpaceRoom() ? 'Upgrade Space' : 'Upgrade Room'}</Text>
-              </Button>
-            </Box>
-          </Dialog>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+    <ConfirmDialog
+      title={`Upgrade ${name}?`}
+      description={`A new ${kind} replaces this one on the chosen version. Everyone is pointed to it, and the old ${kind} becomes read-only. This cannot be undone.`}
+      confirmLabel="Upgrade"
+      busyLabel="Upgrading…"
+      tone="critical"
+      busy={upgrading}
+      error={
+        upgradeState.status === AsyncStatus.Error
+          ? (upgradeState.error as MatrixError).message
+          : undefined
+      }
+      onConfirm={handleUpgradeRoom}
+      onCancel={requestClose}
+    >
+      <Box direction="Column" gap="100">
+        <Text size="L400" priority="300">
+          Room version
+        </Text>
+        <RoomVersionSelector
+          versions={roomVersions?.available ? Object.keys(roomVersions.available) : ['1']}
+          value={selectedRoomVersion}
+          onChange={selectRoomVersion}
+          disabled={upgrading}
+        />
+        {allowAdditionalCreators && (
+          <SequenceCard
+            style={{ padding: config.space.S300 }}
+            variant="SurfaceVariant"
+            direction="Column"
+            gap="500"
+          >
+            <AdditionalCreatorInput
+              additionalCreators={additionalCreators}
+              onSelect={addAdditionalCreator}
+              onRemove={removeAdditionalCreator}
+              disabled={upgrading}
+            />
+          </SequenceCard>
+        )}
+      </Box>
+    </ConfirmDialog>
   );
 }
 
@@ -218,8 +174,8 @@ export function RoomUpgrade({ permissions, requestClose }: RoomUpgradeProps) {
         description={
           replacementRoom
             ? tombstoneContent.body ||
-              `This ${room.isSpaceRoom() ? 'space' : 'room'} has been replaced!`
-            : `Current version: ${roomVersion}.`
+              `This ${room.isSpaceRoom() ? 'space' : 'room'} has been replaced.`
+            : `Room version ${roomVersion}.`
         }
         after={
           <Box alignItems="Center" gap="200">
@@ -232,7 +188,7 @@ export function RoomUpgrade({ permissions, requestClose }: RoomUpgradeProps) {
                 radii="300"
                 onClick={handleOpenOldRoom}
               >
-                <Text size="B300">{room.isSpaceRoom() ? 'Old Space' : 'Old Room'}</Text>
+                <Text size="B300">{room.isSpaceRoom() ? 'Old space' : 'Old room'}</Text>
               </Button>
             )}
             {replacementRoom ? (
@@ -243,7 +199,7 @@ export function RoomUpgrade({ permissions, requestClose }: RoomUpgradeProps) {
                 radii="300"
                 onClick={handleOpenRoom}
               >
-                <Text size="B300">{room.isSpaceRoom() ? 'Open New Space' : 'Open New Room'}</Text>
+                <Text size="B300">{room.isSpaceRoom() ? 'Open new space' : 'Open new room'}</Text>
               </Button>
             ) : (
               <Button

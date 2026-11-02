@@ -317,7 +317,7 @@ function Fixture() {
             </SidebarItem>
             <ApprovalsTab />
             <SidebarItem>
-              <SidebarAvatar as="button" aria-label="Inbox" outlined>
+              <SidebarAvatar as="button" aria-label="Activity" outlined>
                 <Icon src={Icons.Inbox} />
               </SidebarAvatar>
             </SidebarItem>

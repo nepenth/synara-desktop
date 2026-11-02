@@ -5,7 +5,7 @@ final class AppRouter: ObservableObject {
     @Published var selectedTab: AppTab = .rooms
     @Published var authPath: [AppRoute] = []
     @Published var roomsPath: [AppRoute] = []
-    @Published var notificationsPath: [AppRoute] = []
+    @Published var activityPath: [AppRoute] = []
     @Published var laterPath: [AppRoute] = []
     @Published var settingsPath: [AppRoute] = []
     @Published var sheetDestination: SheetDestination?
@@ -15,8 +15,8 @@ final class AppRouter: ObservableObject {
         switch tab {
         case .rooms:
             return Binding(get: { self.roomsPath }, set: { self.roomsPath = $0 })
-        case .notifications:
-            return Binding(get: { self.notificationsPath }, set: { self.notificationsPath = $0 })
+        case .activity:
+            return Binding(get: { self.activityPath }, set: { self.activityPath = $0 })
         case .later:
             return Binding(get: { self.laterPath }, set: { self.laterPath = $0 })
         case .settings:
@@ -36,8 +36,8 @@ final class AppRouter: ObservableObject {
         case .room(let id, let eventID, let title):
             let destination: AppRoute = .room(id: id, eventID: eventID, title: title)
             switch selectedTab {
-            case .notifications:
-                notificationsPath = [destination]
+            case .activity:
+                activityPath = [destination]
             case .later:
                 laterPath = [destination]
             default:
@@ -54,9 +54,9 @@ final class AppRouter: ObservableObject {
         case .settings:
             selectedTab = .settings
             settingsPath = []
-        case .notifications:
-            selectedTab = .notifications
-            notificationsPath = []
+        case .activity:
+            selectedTab = .activity
+            activityPath = []
         case .later:
             selectedTab = .later
             laterPath = [route]
@@ -64,7 +64,7 @@ final class AppRouter: ObservableObject {
     }
 
     func routeToNotificationFallback() {
-        selectedTab = .notifications
+        selectedTab = .activity
     }
 
     @discardableResult
@@ -82,8 +82,8 @@ final class AppRouter: ObservableObject {
             }
         case .settings:
             route(to: .settings, sessionIsSignedIn: sessionIsSignedIn)
-        case .notifications:
-            route(to: .notifications, sessionIsSignedIn: sessionIsSignedIn)
+        case .activity:
+            route(to: .activity, sessionIsSignedIn: sessionIsSignedIn)
         case .later:
             route(to: .later, sessionIsSignedIn: sessionIsSignedIn)
         }
@@ -127,8 +127,8 @@ final class AppRouter: ObservableObject {
         switch selectedTab {
         case .rooms:
             roomsPath = []
-        case .notifications:
-            notificationsPath = []
+        case .activity:
+            activityPath = []
         case .later:
             laterPath = []
         case .settings:
@@ -141,7 +141,7 @@ final class AppRouter: ObservableObject {
         selectedTab = .rooms
         authPath = []
         roomsPath = []
-        notificationsPath = []
+        activityPath = []
         laterPath = []
         settingsPath = []
         sheetDestination = nil
@@ -153,7 +153,7 @@ private extension AppRoute {
         switch self {
         case .login:
             return true
-        case .room, .thread, .settings, .notifications, .later:
+        case .room, .thread, .settings, .activity, .later:
             return false
         }
     }

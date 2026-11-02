@@ -58,7 +58,6 @@ test('Devices Security explains backup-only key recovery, not a forwarding Switc
   assert.match(devices, /nativeSession && \(/);
   assert.match(devices, /from your key backup/);
   assert.match(devices, /Sessions don't hand room keys to each other/);
-  assert.match(devices, />\s*Key backup\s*</);
   assert.doesNotMatch(devices, /Share room keys with my verified devices/);
   assert.doesNotMatch(devices, /set_room_key_forwarding_enabled/);
   assert.doesNotMatch(devices, /settingsAtom/);

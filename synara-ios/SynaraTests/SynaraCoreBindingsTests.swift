@@ -2705,6 +2705,43 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    /// Mirrors desktop `createLaterItemFromIds(roomId, eventId, 'saved')`
+    /// (`synara/src/app/features/room/nativeLaterOwner.ts`) so both clients
+    /// write the same item into one `in.synara.later` store.
+    func testSavedLaterItemMatchesDesktopShape() {
+        let createdAt = Date(timeIntervalSince1970: 1_767_258_300.4567)
+        let item = SharedCoreLater.savedItem(
+            roomID: "!room:example.org",
+            eventID: "$event:example.org",
+            createdAt: createdAt
+        )
+
+        XCTAssertEqual(
+            item,
+            LaterItemDto(
+                id: "!room:example.org\n$event:example.org",
+                kind: .saved,
+                roomId: "!room:example.org",
+                eventId: "$event:example.org",
+                createdAt: 1_767_258_300_456,
+                dueTs: nil,
+                remindedAt: nil,
+                completedAt: nil
+            )
+        )
+        XCTAssertEqual(item.id, LaterItemIdentity.itemID(roomID: item.roomId, eventID: item.eventId))
+    }
+
+    func testSavedLaterItemIDIsStablePerMessage() {
+        let first = SharedCoreLater.savedItem(roomID: "!a:x", eventID: "$1", createdAt: Date(timeIntervalSince1970: 1))
+        let again = SharedCoreLater.savedItem(roomID: "!a:x", eventID: "$1", createdAt: Date(timeIntervalSince1970: 2))
+        let other = SharedCoreLater.savedItem(roomID: "!a:x", eventID: "$2", createdAt: Date(timeIntervalSince1970: 1))
+
+        XCTAssertEqual(first.id, again.id, "saving twice updates one item, as desktop does")
+        XCTAssertNotEqual(first.id, other.id)
+        XCTAssertEqual(again.createdAt, 2000)
+    }
+
     func testSharedCoreLaterWithoutSessionFailsClosed() async {
         let core = SharedCore()
         let item = LaterItemDto(

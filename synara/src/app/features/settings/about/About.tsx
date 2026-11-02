@@ -47,7 +47,7 @@ export function About({ requestClose }: AboutProps) {
               radii="300"
               before={<Icon src={Icons.Code} size="100" filled />}
             >
-              <Text size="B300">Source Code</Text>
+              <Text size="B300">Source code</Text>
             </Button>
             <Button
               as="a"

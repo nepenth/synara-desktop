@@ -120,15 +120,16 @@ export const SidebarItemBadge = recipe({
       lineHeight: 0,
     },
   ],
+  // Bottom-right of the tile (macOS / Slack convention), a count pill or an 8px dot.
   variants: {
     hasCount: {
       true: {
-        top: toRem(-6),
-        left: toRem(-6),
+        bottom: toRem(-4),
+        right: toRem(-6),
       },
       false: {
-        top: toRem(-2),
-        left: toRem(-2),
+        bottom: toRem(-1),
+        right: toRem(-1),
       },
     },
   },

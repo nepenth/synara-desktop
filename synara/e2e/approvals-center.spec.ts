@@ -19,7 +19,7 @@ test('permanent approval requires confirmation; cancel sends nothing, deny updat
   await expect(
     page.getByRole('button', { name: 'Approvals · 1 pending', exact: true })
   ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Agent approvals', exact: true })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Approvals', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Recent · 1', exact: true }).click();
   await expect(
     page.getByText('Your account has already sent a decision for this request.')

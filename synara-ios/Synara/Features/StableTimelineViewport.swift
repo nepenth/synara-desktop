@@ -232,31 +232,68 @@ import SwiftUI
     enum TimelineTimestampRevealGesturePolicy {
         enum Intent: Equatable {
             case pending
+            /// Leftward: shows a grouped row's timestamp.
             case reveal
+            /// Rightward: swipe to reply.
+            case reply
             case reject
         }
 
         static let activationDistance: CGFloat = 12
         static let directionDominance: CGFloat = 1.15
 
+        /// Swipe-to-reply geometry: the row follows the finger up to
+        /// `replyMaxTranslation`; passing `replyArmDistance` arms the reply.
+        static let replyArmDistance: CGFloat = 40
+        static let replyMaxTranslation: CGFloat = 56
+        /// A drag that starts this close to the leading edge is the
+        /// navigation swipe back, never a reply.
+        static let replyLeadingEdgeExclusion: CGFloat = 28
+
+        static func allowsReply(originX: CGFloat, exclusion: CGFloat = replyLeadingEdgeExclusion) -> Bool {
+            originX >= exclusion
+        }
+
         static func intent(
             translation: CGPoint,
             hasLockedHorizontalIntent: Bool = false,
+            lockedIntent: Intent? = nil,
             activationDistance: CGFloat = activationDistance,
             directionDominance: CGFloat = directionDominance
         ) -> Intent {
             if hasLockedHorizontalIntent {
-                return .reveal
+                return lockedIntent ?? .reveal
             }
             let horizontalDistance = abs(translation.x)
             let verticalDistance = abs(translation.y)
             guard max(horizontalDistance, verticalDistance) >= activationDistance else {
                 return .pending
             }
-            guard translation.x < 0 else {
+            guard horizontalDistance > verticalDistance * directionDominance else {
                 return .reject
             }
-            return horizontalDistance > verticalDistance * directionDominance ? .reveal : .reject
+            return translation.x < 0 ? .reveal : .reply
+        }
+
+        /// How far the row moves for a rightward drag: the finger's distance,
+        /// eased past the arm point and capped. Reduce Motion keeps the row
+        /// still and shows the glyph alone.
+        static func replyTranslation(for translationX: CGFloat, reduceMotion: Bool) -> CGFloat {
+            guard reduceMotion == false, translationX > 0 else { return 0 }
+            if translationX <= replyArmDistance {
+                return translationX
+            }
+            let overshoot = translationX - replyArmDistance
+            return min(replyMaxTranslation, replyArmDistance + overshoot * 0.35)
+        }
+
+        /// 0...1 progress toward the arm point, for the glyph's fade and scale.
+        static func replyProgress(for translationX: CGFloat) -> CGFloat {
+            min(1, max(0, translationX / replyArmDistance))
+        }
+
+        static func isReplyArmed(translationX: CGFloat) -> Bool {
+            translationX >= replyArmDistance
         }
 
         static func ownsSingleTouch(activeTouchCount: Int, isTrackedTouch: Bool) -> Bool {
@@ -295,6 +332,8 @@ import SwiftUI
     private final class TimelineTimestampRevealGestureRecognizer: UIGestureRecognizer {
         private var initialLocation: CGPoint?
         private weak var trackedTouch: UITouch?
+        /// The direction this recognition locked to at `.began`.
+        private(set) var recognizedIntent: TimelineTimestampRevealGesturePolicy.Intent?
         var onRecognitionAborted: (() -> Void)?
         var onReset: (() -> Void)?
 
@@ -349,14 +388,21 @@ import SwiftUI
                 cancelRecognition()
                 return
             }
-            switch TimelineTimestampRevealGesturePolicy.intent(
+            let intent = TimelineTimestampRevealGesturePolicy.intent(
                 translation: translation,
-                hasLockedHorizontalIntent: state == .began || state == .changed
-            ) {
+                hasLockedHorizontalIntent: state == .began || state == .changed,
+                lockedIntent: recognizedIntent
+            )
+            switch intent {
             case .pending:
                 break
-            case .reveal:
-                state = state == .possible ? .began : .changed
+            case .reveal, .reply:
+                if state == .possible {
+                    recognizedIntent = intent
+                    state = .began
+                } else {
+                    state = .changed
+                }
             case .reject:
                 cancelRecognition()
             }
@@ -391,6 +437,7 @@ import SwiftUI
             super.reset()
             initialLocation = nil
             trackedTouch = nil
+            recognizedIntent = nil
             onReset?()
         }
     }
@@ -442,6 +489,8 @@ import SwiftUI
         case unreadDivider(String)
         case cryptoBanner
         case pagination
+        /// The "beginning of the conversation" block above the oldest row.
+        case roomStart
     }
 
     struct StableTimelineViewportEventRow: Equatable {
@@ -462,6 +511,9 @@ import SwiftUI
         /// Display names of this row's reaction senders; part of the row so
         /// a sender's rename reconfigures the cell.
         var reactorNames: [String: String] = [:]
+        /// The thread chip's people and recency, from the loaded window.
+        var threadParticipants: [TimelineThreadParticipant] = []
+        var lastReplyAt: Date? = nil
     }
 
     struct StableTimelineViewportRow: Equatable, Identifiable {
@@ -471,6 +523,7 @@ import SwiftUI
             case unreadDivider
             case cryptoBanner(RoomCryptoStatus)
             case pagination
+            case roomStart(TimelineRoomStartInfo)
         }
 
         let id: StableTimelineViewportItemID
@@ -535,6 +588,9 @@ import SwiftUI
         var paginationCompletions: UInt64 = 0
         /// Whether the last-read row or the unread divider is on screen.
         var onLastReadMarkerVisibilityChanged: (String, UInt64, Bool) -> Void = { _, _, _ in }
+        /// A rightward swipe on a message row released past its arm point:
+        /// route, generation, event id.
+        var onReplyRequested: (String, UInt64, String) -> Void = { _, _, _ in }
 
         func makeCoordinator() -> Coordinator {
             Coordinator(parent: self)
@@ -612,6 +668,12 @@ import SwiftUI
             func timestampRevealRequested(routeID: String, generation: UInt64, eventID: String) {
                 DispatchQueue.main.async { [weak self] in
                     self?.parent.onTimestampRevealRequested(routeID, generation, eventID)
+                }
+            }
+
+            func replyRequested(routeID: String, generation: UInt64, eventID: String) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.onReplyRequested(routeID, generation, eventID)
                 }
             }
 
@@ -792,15 +854,101 @@ import SwiftUI
             let snapshotRevision: UInt64
             let itemID: StableTimelineViewportItemID
             let eventID: String
+            let intent: TimelineTimestampRevealGesturePolicy.Intent
+            /// Swipe-to-reply passed its arm point (haptic played once).
+            var isReplyArmed = false
         }
 
         private final class Cell: UITableViewCell {
             var stableID: StableTimelineViewportItemID?
+            /// The swipe-to-reply glyph, revealed at the leading edge while
+            /// the hosted content follows a rightward drag.
+            private var replyGlyphView: UIImageView?
+            private var replyTranslation: CGFloat = 0
 
             override func prepareForReuse() {
                 super.prepareForReuse()
                 stableID = nil
                 contentConfiguration = nil
+                resetReplySwipe()
+            }
+
+            override func layoutSubviews() {
+                super.layoutSubviews()
+                guard let replyGlyphView else { return }
+                let size: CGFloat = 28
+                let lane = TimelineTimestampRevealGesturePolicy.replyMaxTranslation
+                replyGlyphView.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+                replyGlyphView.center = CGPoint(x: lane / 2, y: contentView.bounds.midY)
+            }
+
+            /// The hosted SwiftUI content; the glyph is not part of it.
+            private var hostedContentViews: [UIView] {
+                contentView.subviews.filter { $0 !== replyGlyphView }
+            }
+
+            private func makeReplyGlyphView() -> UIImageView {
+                let configuration = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
+                let view = UIImageView(image: UIImage(systemName: "arrowshape.turn.up.left", withConfiguration: configuration))
+                view.contentMode = .center
+                view.tintColor = tintColor
+                view.alpha = 0
+                view.isAccessibilityElement = false
+                contentView.insertSubview(view, at: 0)
+                replyGlyphView = view
+                setNeedsLayout()
+                return view
+            }
+
+            /// Follows a rightward drag: content translation and glyph reveal.
+            func updateReplySwipe(translationX: CGFloat, reduceMotion: Bool) {
+                let glyph = replyGlyphView ?? makeReplyGlyphView()
+                let progress = TimelineTimestampRevealGesturePolicy.replyProgress(for: translationX)
+                let translation = TimelineTimestampRevealGesturePolicy.replyTranslation(
+                    for: translationX,
+                    reduceMotion: reduceMotion
+                )
+                replyTranslation = translation
+                for view in hostedContentViews {
+                    view.transform = CGAffineTransform(translationX: translation, y: 0)
+                }
+                glyph.alpha = progress
+                let scale = reduceMotion ? 1 : 0.6 + 0.4 * progress
+                glyph.transform = CGAffineTransform(scaleX: scale, y: scale)
+            }
+
+            /// Returns the content to rest; a short spring with no overshoot.
+            func settleReplySwipe(animated: Bool) {
+                guard replyGlyphView != nil || replyTranslation != 0 else { return }
+                let reset = { [self] in
+                    for view in hostedContentViews {
+                        view.transform = .identity
+                    }
+                    replyGlyphView?.alpha = 0
+                    replyGlyphView?.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+                }
+                replyTranslation = 0
+                if animated, UIAccessibility.isReduceMotionEnabled == false {
+                    UIView.animate(
+                        withDuration: 0.28,
+                        delay: 0,
+                        usingSpringWithDamping: 1,
+                        initialSpringVelocity: 0,
+                        options: [.beginFromCurrentState, .allowUserInteraction],
+                        animations: reset
+                    )
+                } else {
+                    UIView.animate(withDuration: animated ? 0.15 : 0, animations: reset)
+                }
+            }
+
+            private func resetReplySwipe() {
+                replyTranslation = 0
+                for view in hostedContentViews {
+                    view.transform = .identity
+                }
+                replyGlyphView?.removeFromSuperview()
+                replyGlyphView = nil
             }
         }
 
@@ -812,7 +960,11 @@ import SwiftUI
                 action: #selector(handleTimestampRevealGesture(_:))
             )
             recognizer.onRecognitionAborted = { [weak self] in
-                self?.timestampRevealGestureSession = nil
+                guard let self else { return }
+                // An aborted reply swipe lets go of the row before the
+                // session is forgotten; the cancelled action has no session.
+                settleReplySwipe(for: timestampRevealGestureSession?.itemID, animated: true)
+                timestampRevealGestureSession = nil
             }
             recognizer.onReset = { [weak self] in
                 self?.timestampRevealGestureSession = nil
@@ -974,7 +1126,10 @@ import SwiftUI
             _ recognizer: TimelineTimestampRevealGestureRecognizer
         ) {
             if recognizer.state == .began {
-                timestampRevealGestureSession = timestampRevealSession(at: recognizer.initialLocation(in: tableView))
+                timestampRevealGestureSession = timestampRevealSession(
+                    at: recognizer.initialLocation(in: tableView),
+                    intent: recognizer.recognizedIntent
+                )
                 if timestampRevealGestureSession == nil {
                     recognizer.cancelRecognition()
                 }
@@ -984,8 +1139,7 @@ import SwiftUI
             if recognizer.state == .ended || recognizer.state == .cancelled || recognizer.state == .failed {
                 timestampRevealGestureSession = nil
             }
-            guard recognizer.state == .ended,
-                  let session,
+            guard let session,
                   let configuration,
                   configuration.routeID == session.routeID,
                   configuration.sessionGeneration == session.generation,
@@ -995,20 +1149,101 @@ import SwiftUI
                   ),
                   let row = rowsByID[session.itemID],
                   case let .event(eventRow) = row.content,
-                  eventRow.isGroupedWithPrevious,
                   eventRow.item.eventID == session.eventID
             else {
+                settleReplySwipe(for: session?.itemID, animated: true)
                 return
             }
-            coordinator.timestampRevealRequested(
-                routeID: session.routeID,
-                generation: session.generation,
-                eventID: session.eventID
-            )
+            switch session.intent {
+            case .reveal:
+                guard recognizer.state == .ended, eventRow.isGroupedWithPrevious else { return }
+                coordinator.timestampRevealRequested(
+                    routeID: session.routeID,
+                    generation: session.generation,
+                    eventID: session.eventID
+                )
+            case .reply:
+                handleReplySwipe(recognizer, session: session, itemID: session.itemID)
+            case .pending, .reject:
+                return
+            }
         }
 
-        private func timestampRevealSession(at origin: CGPoint?) -> TimestampRevealGestureSession? {
+        /// Swipe to reply: the row follows the finger, the reply glyph scales
+        /// in, one selection tick at the arm point, and a release while armed
+        /// asks for the reply. Any other end springs the row back.
+        private func handleReplySwipe(
+            _ recognizer: TimelineTimestampRevealGestureRecognizer,
+            session: TimestampRevealGestureSession,
+            itemID: StableTimelineViewportItemID
+        ) {
+            let translationX = recognizer.translation.x
+            switch recognizer.state {
+            case .changed:
+                guard let cell = replySwipeCell(for: itemID) else { return }
+                cell.updateReplySwipe(
+                    translationX: translationX,
+                    reduceMotion: UIAccessibility.isReduceMotionEnabled
+                )
+                let armed = TimelineTimestampRevealGesturePolicy.isReplyArmed(translationX: translationX)
+                if armed != session.isReplyArmed {
+                    if armed {
+                        SynaraHaptics.trigger(.selection)
+                    }
+                    timestampRevealGestureSession?.isReplyArmed = armed
+                }
+            case .ended:
+                settleReplySwipe(for: itemID, animated: true)
+                guard TimelineTimestampRevealGesturePolicy.isReplyArmed(translationX: translationX) else { return }
+                coordinator.replyRequested(
+                    routeID: session.routeID,
+                    generation: session.generation,
+                    eventID: session.eventID
+                )
+            case .cancelled, .failed:
+                settleReplySwipe(for: itemID, animated: true)
+            default:
+                return
+            }
+        }
+
+        private func replySwipeCell(for itemID: StableTimelineViewportItemID) -> Cell? {
+            guard let indexPath = dataSource.indexPath(for: itemID) else { return nil }
+            return tableView.cellForRow(at: indexPath) as? Cell
+        }
+
+        private func settleReplySwipe(for itemID: StableTimelineViewportItemID?, animated: Bool) {
+            guard let itemID else { return }
+            replySwipeCell(for: itemID)?.settleReplySwipe(animated: animated)
+        }
+
+        /// Whether a row answers a horizontal gesture in `intent`'s direction:
+        /// grouped rows reveal their timestamp leftward; any replyable message
+        /// (never a system notice) replies rightward. `nil` intent: either.
+        private func rowAcceptsRowGesture(
+            _ eventRow: StableTimelineViewportEventRow,
+            intent: TimelineTimestampRevealGesturePolicy.Intent?
+        ) -> Bool {
+            let acceptsReveal = eventRow.isGroupedWithPrevious
+            let acceptsReply = eventRow.availability.canReply && eventRow.item.isSystemNotice == false
+            switch intent {
+            case .reveal:
+                return acceptsReveal
+            case .reply:
+                return acceptsReply
+            case .none:
+                return acceptsReveal || acceptsReply
+            case .pending, .reject:
+                return false
+            }
+        }
+
+        private func timestampRevealSession(
+            at origin: CGPoint?,
+            intent: TimelineTimestampRevealGesturePolicy.Intent?
+        ) -> TimestampRevealGestureSession? {
             guard let origin,
+                  let intent,
                   let configuration,
                   let snapshotRevision = timestampRevealAppliedSnapshotRevision,
                   timestampRevealAppliedRouteID == configuration.routeID,
@@ -1017,7 +1252,8 @@ import SwiftUI
                   let itemID = dataSource.itemIdentifier(for: indexPath),
                   let row = rowsByID[itemID],
                   case let .event(eventRow) = row.content,
-                  eventRow.isGroupedWithPrevious
+                  rowAcceptsRowGesture(eventRow, intent: intent),
+                  intent != .reply || TimelineTimestampRevealGesturePolicy.allowsReply(originX: origin.x)
             else {
                 return nil
             }
@@ -1026,7 +1262,8 @@ import SwiftUI
                 generation: configuration.sessionGeneration,
                 snapshotRevision: snapshotRevision,
                 itemID: itemID,
-                eventID: eventRow.item.eventID
+                eventID: eventRow.item.eventID,
+                intent: intent
             )
         }
 
@@ -1046,7 +1283,7 @@ import SwiftUI
                   let itemID = dataSource.itemIdentifier(for: indexPath),
                   let row = rowsByID[itemID],
                   case let .event(eventRow) = row.content,
-                  eventRow.isGroupedWithPrevious
+                  rowAcceptsRowGesture(eventRow, intent: nil)
             else {
                 return false
             }
@@ -1058,6 +1295,25 @@ import SwiftUI
             shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
         ) -> Bool {
             gestureRecognizer === timestampRevealGesture || otherGestureRecognizer === timestampRevealGesture
+        }
+
+        /// Pans owned by the table's ancestors (the navigation controller's
+        /// swipe back, which on current iOS starts anywhere) wait for the row
+        /// gesture to fail, so a rightward swipe on a message replies instead
+        /// of leaving the room. Gestures inside the cells (taps, the long
+        /// press menu) and the table's own scroll are not held up.
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            guard gestureRecognizer === timestampRevealGesture,
+                  otherGestureRecognizer is UIPanGestureRecognizer,
+                  let otherView = otherGestureRecognizer.view,
+                  otherView !== tableView
+            else {
+                return false
+            }
+            return tableView.isDescendant(of: otherView)
         }
 
         private func configureDataSource() {
@@ -1673,7 +1929,7 @@ import SwiftUI
                     return eventID == markerEventID
                 case .unreadDivider:
                     return true
-                case .dayHeader, .cryptoBanner, .pagination:
+                case .dayHeader, .cryptoBanner, .pagination, .roomStart:
                     return false
                 }
             }

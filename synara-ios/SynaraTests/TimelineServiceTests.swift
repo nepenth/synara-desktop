@@ -3466,6 +3466,101 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(items.first?.isCompleted == true)
     }
 
+    func testMockLaterServiceSavesMessageFirstAndReopensCompletedSave() async {
+        let existingID = LaterItemIdentity.itemID(roomID: "!room:example.org", eventID: "$one")
+        let service = MockLaterService(
+            items: [
+                SynaraLaterListItem(
+                    id: "other",
+                    roomID: "!room:example.org",
+                    eventID: "$other",
+                    kind: .reminder,
+                    dueTs: 5,
+                    completedAt: nil,
+                    createdAt: 1,
+                    isCompleted: false
+                ),
+                SynaraLaterListItem(
+                    id: existingID,
+                    roomID: "!room:example.org",
+                    eventID: "$one",
+                    kind: .saved,
+                    dueTs: nil,
+                    completedAt: 3,
+                    createdAt: 2,
+                    isCompleted: true
+                ),
+            ],
+            now: { 9999 }
+        )
+
+        let result = await service.saveItem(roomID: "!room:example.org", eventID: "$one")
+        guard case .success = result, case let .success((items, _)) = await service.loadItems() else {
+            XCTFail("Expected the save to succeed")
+            return
+        }
+
+        XCTAssertEqual(items.map(\.id), [existingID, "other"])
+        XCTAssertEqual(items.first?.kind, .saved)
+        XCTAssertEqual(items.first?.createdAt, 9999)
+        XCTAssertNil(items.first?.completedAt)
+        XCTAssertEqual(items.first?.isCompleted, false)
+    }
+
+    func testOnlyRemoteMessagesCanBeSavedToLater() {
+        let message = TimelineItem(
+            id: "$remote",
+            eventID: "$remote",
+            senderID: "@ada:example.org",
+            timestamp: Date(timeIntervalSince1970: 1),
+            kind: .text("Hello"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        XCTAssertEqual(LaterItemIdentity.savableEventID(for: message), "$remote")
+
+        var localEcho = message
+        localEcho.serverEventID = nil
+        XCTAssertNil(LaterItemIdentity.savableEventID(for: localEcho))
+
+        let redacted = TimelineItem(
+            id: "$gone",
+            eventID: "$gone",
+            senderID: "@ada:example.org",
+            timestamp: Date(timeIntervalSince1970: 1),
+            kind: .redacted,
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        XCTAssertNil(LaterItemIdentity.savableEventID(for: redacted))
+
+        let notice = TimelineItem(
+            id: "$joined",
+            eventID: "$joined",
+            senderID: "@ada:example.org",
+            timestamp: Date(timeIntervalSince1970: 1),
+            kind: .systemNotice("Ada joined the room"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        XCTAssertNil(LaterItemIdentity.savableEventID(for: notice))
+    }
+
+    func testSaveToLaterFollowsForwardInTheAccessibilityActions() {
+        let actions = TimelineRowAccessibility.actions(
+            availability: EventActionAvailability(canReply: true, canEdit: false, canRedact: false, canReact: false, canForward: true),
+            replyCount: 0,
+            canCopy: false,
+            canPinToNotes: true,
+            canSaveToLater: true
+        )
+        XCTAssertEqual(actions, [.reply, .replyInThread, .forward, .saveToLater, .pinToNotes])
+        XCTAssertEqual(TimelineRowAccessibility.Action.saveToLater.title, "Save to Later")
+    }
+
     func testRoomNoteOrderingMovesOrdinaryNoteWithoutChangingEditTimestamp() {
         let timestamp = Date(timeIntervalSince1970: 1_800_000_000)
         let notes = [

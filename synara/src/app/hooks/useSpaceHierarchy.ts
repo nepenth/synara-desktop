@@ -4,7 +4,13 @@ import type { RoomReading } from '../utils/room';
 import { useQuery } from '@tanstack/react-query';
 import { MSpaceChildContent } from '../../types/matrix/room';
 import { isRoomId } from '../utils/matrix';
-import { SortFunc, byOrderKey, byTsOldToNew, factoryRoomIdByActivity } from '../utils/sort';
+import {
+  SortFunc,
+  byOrderKey,
+  byTsOldToNew,
+  factoryRoomIdByActivity,
+  factoryRoomIdByAtoZ,
+} from '../utils/sort';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 import {
   NativeSpaceHierarchyRoom,
@@ -280,24 +286,32 @@ const getSpaceJoinedHierarchy = (
   return hierarchy;
 };
 
+/** How a (sub-)space's rooms are ordered: the server's order key, by activity, or by name. */
+export type SpaceHierarchySort = 'space' | 'recent' | 'name';
+
 export const useSpaceJoinedHierarchy = (
   spaceId: string,
   getRoom: GetRoomCallback,
   excludeRoom: (parentId: string, roomId: string) => boolean,
-  sortByActivity: (spaceId: string) => boolean
+  sortMode: (spaceId: string) => SpaceHierarchySort
 ): HierarchyItem[] => {
   const edgeMap = useNativeSpaceChildEdgeMap();
 
   const sortRoomItems = useCallback(
     (sId: string, items: HierarchyItem[]) => {
-      if (sortByActivity(sId)) {
+      const mode = sortMode(sId);
+      if (mode === 'recent') {
         items.sort((a, b) => factoryRoomIdByActivity()(a.roomId, b.roomId));
+        return items;
+      }
+      if (mode === 'name') {
+        items.sort((a, b) => factoryRoomIdByAtoZ()(a.roomId, b.roomId));
         return items;
       }
       items.sort(hierarchyItemTs).sort(hierarchyItemByOrder);
       return items;
     },
-    [sortByActivity]
+    [sortMode]
   );
 
   const [hierarchyAtom] = useState(() =>

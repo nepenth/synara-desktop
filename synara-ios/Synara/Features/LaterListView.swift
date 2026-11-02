@@ -4,6 +4,8 @@ struct LaterListView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: LaterInboxState = .idle
     @State private var roomNames: [String: String] = [:]
+    /// Sender and first line of each saved message, keyed by item id.
+    @State private var excerpts: [String: LaterMessageExcerpt] = [:]
 
     var body: some View {
         Group {
@@ -21,7 +23,7 @@ struct LaterListView: View {
             case .empty:
                 SynaraEmptyState(
                     title: String(localized: "No Later Items"),
-                    systemImage: "clock",
+                    systemImage: "bookmark",
                     message: String(localized: "Items saved for later will appear here once synced.")
                 )
             case .failed(let error):
@@ -39,6 +41,7 @@ struct LaterListView: View {
                                 LaterListRow(
                                     item: item,
                                     roomName: roomDisplayName(for: item.roomID),
+                                    excerpt: excerpts[item.id],
                                     onComplete: completeItem
                                 )
                             }
@@ -51,6 +54,7 @@ struct LaterListView: View {
                                 LaterListRow(
                                     item: item,
                                     roomName: roomDisplayName(for: item.roomID),
+                                    excerpt: excerpts[item.id],
                                     onComplete: nil
                                 )
                             }
@@ -59,7 +63,9 @@ struct LaterListView: View {
                 }
                 .listStyle(.insetGrouped)
                 .refreshable {
-                    load()
+                    // Awaited, and the list stays in place; skeletons are for
+                    // the first load only.
+                    await reload()
                 }
                 .accessibilityIdentifier("LaterList")
             }
@@ -83,35 +89,68 @@ struct LaterListView: View {
         RoomDisplayNameLookup.resolve(roomID: roomID, names: roomNames)
     }
 
+    /// First load (and retry after a failure): shows the skeletons.
     private func load() {
         state = .loading
-
         Task {
-            async let laterResult = environment.later.loadItems()
-            async let roomListState = environment.roomList.loadRooms()
-            let result = await laterResult
-            let rooms = await roomListState
+            await reload()
+        }
+    }
 
+    /// Fetches items and room names; a loaded list keeps showing until the
+    /// new snapshot replaces it.
+    private func reload() async {
+        async let laterResult = environment.later.loadItems()
+        async let roomListState = environment.roomList.loadRooms()
+        let result = await laterResult
+        let rooms = await roomListState
+
+        let nextState: LaterInboxState
+        var items: [SynaraLaterListItem] = []
+        if case let .success((loadedItems, error)) = result {
+            if loadedItems.isEmpty {
+                nextState = error.map(LaterInboxState.failed) ?? .empty
+            } else {
+                items = loadedItems
+                nextState = .loaded(
+                    active: loadedItems.filter { $0.isCompleted == false },
+                    completed: loadedItems.filter(\.isCompleted)
+                )
+            }
+        } else {
+            nextState = .failed(.networkFailure)
+        }
+
+        await MainActor.run {
+            roomNames = RoomDisplayNameLookup.names(from: rooms)
+            state = nextState
+        }
+
+        await loadExcerpts(for: items)
+    }
+
+    /// Resolves each saved event's sender and first line from the room's
+    /// loaded timeline, one lookup per room. Events outside the loaded window
+    /// keep the kind label as their excerpt.
+    private func loadExcerpts(for items: [SynaraLaterListItem]) async {
+        let pending = items.filter { $0.canNavigate && excerpts[$0.id] == nil }
+        let roomIDs = Set(pending.map(\.roomID))
+        for roomID in roomIDs.sorted() {
+            guard Task.isCancelled == false,
+                  case .loaded(let timelineItems) = await environment.timeline.loadLatestTimeline(roomID: roomID) else {
+                continue
+            }
+            var resolved: [String: LaterMessageExcerpt] = [:]
+            for item in pending where item.roomID == roomID {
+                if let match = timelineItems.first(where: { $0.eventID == item.eventID || $0.serverEventID == item.eventID }) {
+                    resolved[item.id] = LaterMessageExcerpt(timelineItem: match)
+                }
+            }
+            guard resolved.isEmpty == false else {
+                continue
+            }
             await MainActor.run {
-                roomNames = RoomDisplayNameLookup.names(from: rooms)
-
-                guard case let .success((items, error)) = result else {
-                    state = .failed(.networkFailure)
-                    return
-                }
-
-                if items.isEmpty {
-                    if let error {
-                        state = .failed(error)
-                    } else {
-                        state = .empty
-                    }
-                    return
-                }
-
-                let active = items.filter { $0.isCompleted == false }
-                let completed = items.filter { $0.isCompleted }
-                state = .loaded(active: active, completed: completed)
+                excerpts.merge(resolved) { _, new in new }
             }
         }
     }
@@ -123,13 +162,53 @@ struct LaterListView: View {
 
         Task {
             let result = await environment.later.completeItem(id: item.id)
-            await MainActor.run {
-                guard case .success(true) = result else {
-                    return
-                }
-
-                load()
+            guard case .success(true) = result else {
+                return
             }
+            await MainActor.run {
+                SynaraHaptics.trigger(.success)
+            }
+            await reload()
+        }
+    }
+}
+
+/// Who wrote the saved message and how it starts, as Slack's Later shows.
+struct LaterMessageExcerpt: Equatable {
+    let sender: String
+    let text: String
+
+    init(sender: String, text: String) {
+        self.sender = sender
+        self.text = text
+    }
+
+    init(timelineItem: TimelineItem) {
+        sender = timelineItem.senderProfileDisplayName
+            ?? Self.localpart(of: timelineItem.senderID)
+        text = Self.firstLine(of: timelineItem.kind)
+    }
+
+    static func localpart(of userID: String) -> String {
+        let trimmed = userID.hasPrefix("@") ? String(userID.dropFirst()) : userID
+        return trimmed.split(separator: ":", maxSplits: 1).first.map(String.init) ?? userID
+    }
+
+    static func firstLine(of kind: TimelineItem.Kind) -> String {
+        switch kind {
+        case .text(let body), .formattedText(let body, _), .systemNotice(let body):
+            let line = body.split(whereSeparator: \.isNewline).first.map(String.init) ?? body
+            return line.trimmingCharacters(in: .whitespaces)
+        case .mediaPlaceholder:
+            return String(localized: "Attachment")
+        case .redacted:
+            return String(localized: "Message removed")
+        case .encryptedPlaceholder:
+            return String(localized: "Encrypted message")
+        case .agentCard(let card):
+            return card.title
+        case .unknown:
+            return String(localized: "Message")
         }
     }
 }
@@ -137,6 +216,7 @@ struct LaterListView: View {
 private struct LaterListRow: View {
     let item: SynaraLaterListItem
     let roomName: String
+    var excerpt: LaterMessageExcerpt? = nil
     let onComplete: ((SynaraLaterListItem) -> Void)?
     @Environment(\.appEnvironment) private var environment
     @Environment(\.synaraCanvasLayout) private var canvasLayout
@@ -180,31 +260,34 @@ private struct LaterListRow: View {
         .accessibilityIdentifier(item.accessibilityRowIdentifier)
     }
 
+    /// Sender · excerpt · room, with the due pill on the first line. Without
+    /// a resolved excerpt the kind ("Saved message" / "Reminder") leads.
     private var rowContent: some View {
-        HStack(alignment: .top, spacing: SynaraSpacing.small) {
+        HStack(alignment: .top, spacing: SynaraSpacing.medium) {
             Image(systemName: item.icon)
+                .font(SynaraTypography.body.weight(.semibold))
                 .foregroundStyle(item.statusTint)
+                .frame(width: SynaraMetrics.roomGlyph, alignment: .center)
                 .padding(.top, 2)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                HStack {
-                    Text(item.stateLabel)
-                        .font(SynaraTypography.supporting)
-                        .foregroundStyle(item.statusTint)
+                HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
+                    Text(excerpt?.sender ?? item.stateLabel)
+                        .font(SynaraTypography.body.weight(.bold))
+                        .foregroundStyle(item.canNavigate ? SynaraColor.headingText : SynaraColor.secondaryText)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 0)
 
                     if item.isCompleted {
                         Text("Completed")
-                            .font(.caption)
+                            .font(SynaraTypography.messageMeta)
                             .foregroundStyle(SynaraColor.secondaryText)
-                    }
-
-                    Spacer()
-
-                    if item.showsDueBadge {
+                    } else if item.showsDueBadge {
                         Text(item.dueLabel)
-                            .font(.caption)
-                            .padding(.horizontal, SynaraSpacing.xSmall)
+                            .font(SynaraTypography.chipLabel)
+                            .padding(.horizontal, SynaraSpacing.small)
                             .padding(.vertical, 2)
                             .foregroundStyle(item.dueBadgeForeground)
                             .background(item.dueBadgeBackground)
@@ -213,16 +296,24 @@ private struct LaterListRow: View {
                     }
                 }
 
-                Text(item.preview(roomName: roomName))
-                    .font(SynaraTypography.body)
+                Text(excerpt?.text ?? item.preview)
+                    .font(SynaraTypography.roomPreview)
                     .foregroundStyle(item.canNavigate ? SynaraColor.primaryText : SynaraColor.secondaryText)
                     .lineLimit(2)
 
-                if !item.canNavigate {
-                    Text("Destination unavailable")
-                        .font(.caption)
-                        .foregroundStyle(SynaraColor.criticalText)
+                HStack(spacing: SynaraSpacing.xSmall) {
+                    if item.canNavigate {
+                        Label(roomName, systemImage: "number")
+                            .labelStyle(.titleAndIcon)
+                            .lineLimit(1)
+                    }
+                    if !item.canNavigate {
+                        Text("Destination unavailable")
+                            .foregroundStyle(SynaraColor.criticalText)
+                    }
                 }
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.tertiaryText)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -291,11 +382,7 @@ private extension SynaraLaterListItem {
     }
 
     var stateLabel: String {
-        guard isCompleted == false else {
-            return kind == .saved ? String(localized: "Saved") : String(localized: "Reminder")
-        }
-
-        return kind == .saved ? String(localized: "Saved") : String(localized: "Reminder")
+        kind == .saved ? String(localized: "Saved message") : String(localized: "Reminder")
     }
 
     var dueUrgency: LaterDueUrgency {
@@ -345,8 +432,10 @@ private extension SynaraLaterListItem {
         }
     }
 
+    /// Bookmark for a saved message (desktop's Later glyph), alarm for a
+    /// reminder, seal once completed.
     var icon: String {
-        isCompleted ? "checkmark.seal.fill" : kind == .reminder ? "alarm" : "clock"
+        isCompleted ? "checkmark.seal.fill" : kind == .reminder ? "alarm" : "bookmark.fill"
     }
 
     var statusTint: Color {
@@ -361,20 +450,21 @@ private extension SynaraLaterListItem {
         return SynaraColor.accent
     }
 
-    func preview(roomName: String) -> String {
+    /// Fallback body while the message excerpt is unknown.
+    var preview: String {
         switch kind {
         case .saved:
-            return String(localized: "Saved\nRoom: \(roomName)")
+            return String(localized: "Saved for later")
         case .reminder:
             if let dueTs {
                 let formatter = RelativeDateTimeFormatter()
                 formatter.unitsStyle = .full
                 let dueDate = Date(timeIntervalSince1970: TimeInterval(dueTs) / 1_000)
                 let relative = formatter.localizedString(for: dueDate, relativeTo: Date())
-                return String(localized: "Reminder: \(relative)\nRoom: \(roomName)")
+                return String(localized: "Reminder \(relative)")
             }
 
-            return String(localized: "Reminder\nRoom: \(roomName)")
+            return String(localized: "Reminder")
         }
     }
 

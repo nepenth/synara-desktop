@@ -2,6 +2,7 @@ import { observeRoomLatestAfterSend } from './nativeTimelineNavigation';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFocusWithin, useHover } from 'react-aria';
+import { useTranslation } from 'react-i18next';
 import FocusTrap, { returnFocusOrFallback } from '../../components/FocusTrap';
 import { Modal } from '../../components/modal-dialog';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -99,7 +100,7 @@ import {
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { incomingCallLabel } from '../matrix-rtc/liveCallChrome';
 import { useNativeRoomListSnapshot, useNativeRoomSummary } from '../../state/room-list/roomList';
-import { Time } from '../../components/message';
+import { ReplyQuote, Time } from '../../components/message';
 import { UserAvatar } from '../../components/user-avatar';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
@@ -314,6 +315,33 @@ const rowSenderId = (row: NativeTimelineViewRow | undefined): string | undefined
   return undefined;
 };
 
+/**
+ * Messages from other people after the read position (the unread divider when
+ * present, else the own read receipt). Only meaningful while the loaded window
+ * holds the live tail.
+ */
+export const countNativeTimelineNewMessages = (
+  rows: readonly NativeTimelineViewRow[],
+  ownReadEventId: string | undefined,
+  ownUserId: string | undefined
+): number => {
+  let start = rows.findIndex((row) => row.kind === 'unread_marker');
+  if (start < 0 && ownReadEventId) {
+    start = rows.findIndex((row) => rowEventId(row) === ownReadEventId);
+  }
+  if (start < 0) return 0;
+  let count = 0;
+  for (let index = start + 1; index < rows.length; index += 1) {
+    const row = rows[index];
+    if (!row) continue;
+    if (row.kind !== 'message' && row.kind !== 'sticker' && row.kind !== 'poll') continue;
+    if (!rowEventId(row)) continue;
+    if (ownUserId && rowSenderId(row) === ownUserId) continue;
+    count += 1;
+  }
+  return count;
+};
+
 const rowSenderName = (row: NativeTimelineViewRow): string => {
   if (row.kind === 'sticker') return row.event.senderName;
   if (row.kind === 'other') return row.event?.senderName ?? rowSenderId(row) ?? '';
@@ -431,7 +459,6 @@ const hasMessageSurface = (kind: NativeTimelineViewRow['kind']): boolean =>
   kind === 'message' ||
   kind === 'sticker' ||
   kind === 'poll' ||
-  kind === 'call' ||
   kind === 'redacted' ||
   kind === 'encrypted_unavailable';
 
@@ -526,6 +553,55 @@ const runNativeRowAction = (
     });
 };
 
+type NativeRowActionTarget = {
+  roomId: string;
+  eventId: string;
+  onActionError: (message: string) => void;
+};
+
+// The hover rail and the overflow menu dispatch the same Core owners; these
+// helpers keep one code path per action for both.
+const runNativeReplyAction = ({ roomId, eventId, onActionError }: NativeRowActionTarget) =>
+  runNativeRowAction(
+    async () => {
+      const result = await setNativeComposerReplyDraft({ roomId, eventId });
+      if (result === 'unavailable') {
+        throw new Error(TIMELINE_ACTION_FAILED.reply);
+      }
+    },
+    onActionError,
+    TIMELINE_ACTION_FAILED.reply
+  );
+
+const runNativeThreadReplyAction = (
+  { roomId, eventId, onActionError }: NativeRowActionTarget,
+  threadRoot: string | undefined,
+  onOpenThread: ((rootEventId: string, latestEventId?: string) => void) | undefined
+) =>
+  runNativeRowAction(
+    async () => {
+      const result = await setNativeComposerReplyDraft({
+        roomId,
+        eventId,
+        startThread: true,
+      });
+      if (result === 'unavailable') {
+        throw new Error(TIMELINE_ACTION_FAILED.threadReply);
+      }
+      onOpenThread?.(threadRoot ?? eventId);
+    },
+    onActionError,
+    TIMELINE_ACTION_FAILED.threadReply
+  );
+
+// Later is a room-event affordance for any remote timeline item with an id.
+const runNativeSaveForLaterAction = ({ roomId, eventId, onActionError }: NativeRowActionTarget) =>
+  runNativeRowAction(
+    () => upsertLaterWithNativeOwner(createLaterItemFromIds(roomId, eventId, 'saved')),
+    onActionError,
+    TIMELINE_ACTION_FAILED.later
+  );
+
 type NativeTimelineRowActionsProps = {
   sessionGeneration: number;
   roomId: string;
@@ -547,6 +623,8 @@ type NativeTimelineRowActionsProps = {
   hasReactions?: boolean;
   /** Edit this message in place; set only for text messages Core lets us edit. */
   onEdit?: () => void;
+  /** Open with the forward picker expanded (the rail's Forward button). */
+  initialForwarding?: boolean;
 };
 
 const NativeTimelineRowActions = ({
@@ -567,11 +645,12 @@ const NativeTimelineRowActions = ({
   onViewReactions,
   hasReactions,
   onEdit,
+  initialForwarding = false,
 }: NativeTimelineRowActionsProps) => {
   const roomList = useNativeRoomListSnapshot();
   const [reporting, setReporting] = useState(false);
   const [reportReason, setReportReason] = useState('');
-  const [forwarding, setForwarding] = useState(false);
+  const [forwarding, setForwarding] = useState(initialForwarding);
   const [forwardQuery, setForwardQuery] = useState('');
   const [forwardAsQuote, setForwardAsQuote] = useState(false);
   const [forwardConfirm, setForwardConfirm] = useState<{
@@ -663,16 +742,7 @@ const NativeTimelineRowActions = ({
         fill="None"
         radii="300"
         onClick={() => {
-          runNativeRowAction(
-            async () => {
-              const result = await setNativeComposerReplyDraft({ roomId, eventId });
-              if (result === 'unavailable') {
-                throw new Error(TIMELINE_ACTION_FAILED.reply);
-              }
-            },
-            onActionError,
-            TIMELINE_ACTION_FAILED.reply
-          );
+          runNativeReplyAction({ roomId, eventId, onActionError });
           closeAfterOneShotAction();
         }}
       >
@@ -689,21 +759,7 @@ const NativeTimelineRowActions = ({
         fill="None"
         radii="300"
         onClick={() => {
-          runNativeRowAction(
-            async () => {
-              const result = await setNativeComposerReplyDraft({
-                roomId,
-                eventId,
-                startThread: true,
-              });
-              if (result === 'unavailable') {
-                throw new Error(TIMELINE_ACTION_FAILED.threadReply);
-              }
-              onOpenThread?.(threadRoot ?? eventId);
-            },
-            onActionError,
-            TIMELINE_ACTION_FAILED.threadReply
-          );
+          runNativeThreadReplyAction({ roomId, eventId, onActionError }, threadRoot, onOpenThread);
           closeAfterOneShotAction();
         }}
       >
@@ -821,7 +877,6 @@ const NativeTimelineRowActions = ({
       </MenuItem>
     );
   }
-  // Later is a room-event affordance for any remote timeline item with an id.
   buttons.push(
     <MenuItem
       role="menuitem"
@@ -832,11 +887,7 @@ const NativeTimelineRowActions = ({
       fill="None"
       radii="300"
       onClick={() => {
-        runNativeRowAction(
-          () => upsertLaterWithNativeOwner(createLaterItemFromIds(roomId, eventId, 'saved')),
-          onActionError,
-          TIMELINE_ACTION_FAILED.later
-        );
+        runNativeSaveForLaterAction({ roomId, eventId, onActionError });
         closeAfterOneShotAction();
       }}
     >
@@ -1171,11 +1222,36 @@ const NativeTimelineRowActionSurface = ({
     hovered || focusWithin || menuOpen || emojiBoardOpen || redactConfirm !== undefined;
   const showActionRail = hasActionMenu && actionsActive;
 
+  const { t } = useTranslation();
+  // The rail's Forward opens the overflow menu with the picker expanded.
+  const [menuInitialForwarding, setMenuInitialForwarding] = useState(false);
   const closeMenu = () => setMenuAnchor(undefined);
-  const openMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const openMenu = (event: React.MouseEvent<HTMLButtonElement>, forwarding = false) => {
     setEmojiBoardAnchor(undefined);
+    setMenuInitialForwarding(forwarding);
     setMenuAnchor(event.currentTarget.getBoundingClientRect());
   };
+  // Left/Right (and Home/End) move between the rail's buttons so a focused
+  // row reaches any action without tabbing through the whole bar.
+  const onRailKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const buttons = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')
+    );
+    if (buttons.length === 0) return;
+    const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    let next: number;
+    if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = buttons.length - 1;
+    else if (event.key === 'ArrowLeft') next = current <= 0 ? buttons.length - 1 : current - 1;
+    else next = current < 0 || current >= buttons.length - 1 ? 0 : current + 1;
+    event.preventDefault();
+    event.stopPropagation();
+    buttons[next]?.focus();
+  };
+  const railTarget: NativeRowActionTarget | undefined = eventId
+    ? { roomId: actionProps.roomId, eventId, onActionError: actionProps.onActionError }
+    : undefined;
   const openEmojiBoard = (event: React.MouseEvent<HTMLButtonElement>) => {
     setMenuAnchor(undefined);
     const target = event.currentTarget.parentElement?.parentElement ?? event.currentTarget;
@@ -1242,7 +1318,7 @@ const NativeTimelineRowActionSurface = ({
       {showActionRail && (
         <div data-native-timeline-action-rail="true" className={htmlCss.MessageActionRail}>
           <Menu variant="SurfaceVariant" style={{ padding: config.space.S100 }}>
-            <Box gap="100" role="toolbar" aria-label="Message tools">
+            <Box gap="100" role="toolbar" aria-label="Message tools" onKeyDown={onRailKeyDown}>
               {capabilities?.react && (
                 <PopOut
                   anchor={emojiBoardAnchor}
@@ -1279,6 +1355,80 @@ const NativeTimelineRowActionSurface = ({
                   </IconButton>
                 </PopOut>
               )}
+              {capabilities?.reply && railTarget && (
+                <>
+                  <IconButton
+                    variant={actionsActive ? 'Surface' : 'SurfaceVariant'}
+                    size="300"
+                    radii="300"
+                    title={t('modernization.timeline.action_reply', 'Reply')}
+                    aria-label={t('modernization.timeline.action_reply', 'Reply')}
+                    data-native-timeline-rail-action="reply"
+                    onClick={() => runNativeReplyAction(railTarget)}
+                  >
+                    <Icon src={Icons.ReplyArrow} size="100" />
+                  </IconButton>
+                  <IconButton
+                    variant={actionsActive ? 'Surface' : 'SurfaceVariant'}
+                    size="300"
+                    radii="300"
+                    title={t('modernization.timeline.action_reply_thread', 'Reply in thread')}
+                    aria-label={t('modernization.timeline.action_reply_thread', 'Reply in thread')}
+                    data-native-timeline-rail-action="reply-thread"
+                    onClick={() =>
+                      runNativeThreadReplyAction(
+                        railTarget,
+                        actionProps.threadRoot,
+                        actionProps.onOpenThread
+                      )
+                    }
+                  >
+                    <Icon src={Icons.ThreadReply} size="100" />
+                  </IconButton>
+                </>
+              )}
+              {capabilities?.edit && actionProps.onEdit && (
+                <IconButton
+                  variant={actionsActive ? 'Surface' : 'SurfaceVariant'}
+                  size="300"
+                  radii="300"
+                  title={t('modernization.timeline.action_edit', 'Edit')}
+                  aria-label={t('modernization.timeline.action_edit', 'Edit')}
+                  data-native-timeline-rail-action="edit"
+                  onClick={actionProps.onEdit}
+                >
+                  <Icon src={Icons.Pencil} size="100" />
+                </IconButton>
+              )}
+              {capabilities?.forward &&
+                isNativeTimelineForwardTransport(actionProps.forwardTransport) && (
+                  <IconButton
+                    variant={actionsActive ? 'Surface' : 'SurfaceVariant'}
+                    size="300"
+                    radii="300"
+                    title={t('modernization.timeline.action_forward', 'Forward')}
+                    aria-label={t('modernization.timeline.action_forward', 'Forward')}
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen && menuInitialForwarding}
+                    data-native-timeline-rail-action="forward"
+                    onClick={(event) => openMenu(event, true)}
+                  >
+                    <Icon src={Icons.ArrowGoRight} size="100" />
+                  </IconButton>
+                )}
+              {railTarget && (
+                <IconButton
+                  variant={actionsActive ? 'Surface' : 'SurfaceVariant'}
+                  size="300"
+                  radii="300"
+                  title={t('modernization.timeline.action_later', 'Save for later')}
+                  aria-label={t('modernization.timeline.action_later', 'Save for later')}
+                  data-native-timeline-rail-action="later"
+                  onClick={() => runNativeSaveForLaterAction(railTarget)}
+                >
+                  <Icon src={Icons.Bookmark} size="100" />
+                </IconButton>
+              )}
               <PopOut
                 anchor={menuAnchor}
                 position="Bottom"
@@ -1303,6 +1453,7 @@ const NativeTimelineRowActionSurface = ({
                     >
                       <NativeTimelineRowActions
                         {...actionProps}
+                        initialForwarding={menuInitialForwarding}
                         onRequestClose={closeMenu}
                         onRequestRedact={requestRedact}
                       />
@@ -1318,8 +1469,8 @@ const NativeTimelineRowActionSurface = ({
                   title="More message actions"
                   aria-label="More message actions"
                   aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  onClick={openMenu}
+                  aria-expanded={menuOpen && !menuInitialForwarding}
+                  onClick={(event) => openMenu(event)}
                 >
                   <Icon src={Icons.VerticalDots} size="100" />
                 </IconButton>
@@ -1689,22 +1840,54 @@ const NativeTimelineReplySurface = ({
   onFocusEvent: (eventId: string) => void;
 }) =>
   reply ? (
-    <Box
+    <ReplyQuote
       as="button"
-      direction="Column"
-      gap="100"
+      type="button"
       onClick={() => onFocusEvent(reply.eventId)}
       className={htmlCss.ReplySurface}
       aria-label={`Open message from ${reply.senderName}`}
-    >
-      <Text size="T300" className={htmlCss.SenderName}>
-        Replying to {reply.senderName}
-      </Text>
-      <Text size="T300" style={{ whiteSpace: 'pre-wrap' }}>
-        {reply.body}
-      </Text>
-    </Box>
+      senderName={reply.senderName}
+      body={reply.body}
+    />
   ) : null;
+
+/**
+ * The start of a room's history (and the whole view while a room is empty):
+ * what the room is, so the first message has somewhere to land.
+ */
+const NativeTimelineIntro = ({ roomId }: { roomId: string }) => {
+  const { t } = useTranslation();
+  const summary = useNativeRoomSummary(roomId);
+  const name = summary?.name || summary?.canonicalAlias || undefined;
+  const direct = Boolean(summary?.isDirect);
+  const heading = name
+    ? direct
+      ? t('modernization.timeline.intro_direct', {
+          name,
+          defaultValue: 'This is the start of your conversation with {{name}}',
+        })
+      : t('modernization.timeline.intro_room', {
+          name,
+          defaultValue: 'This is the start of #{{name}}',
+        })
+    : t('modernization.timeline.intro_generic', 'This is the beginning of the conversation');
+  return (
+    <div className={htmlCss.TimelineIntro} data-native-timeline-intro="true">
+      <Avatar size="500" radii="400" className={htmlCss.TimelineIntroGlyph}>
+        <Icon src={direct ? Icons.User : Icons.Hash} size="400" />
+      </Avatar>
+      <Text as="h2" className={htmlCss.TimelineIntroHeading}>
+        {heading}
+      </Text>
+      <Text className={htmlCss.TimelineIntroCaption}>
+        {t(
+          'modernization.timeline.intro_caption',
+          'Messages you send here are the first in its history.'
+        )}
+      </Text>
+    </div>
+  );
+};
 
 const NativeTimelineThreadSurface = ({
   threadRoot,
@@ -2011,6 +2194,13 @@ const NativeTimelineRowImpl = ({
   const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
   const [inlineGifLinks] = useSetting(settingsAtom, 'inlineGifLinks');
   const [xEmbeds] = useSetting(settingsAtom, 'xEmbeds');
+  const { t } = useTranslation();
+  // Lowercase "(edited)" inline after the body, at meta size, as on iOS.
+  const editedMarker = (
+    <span className={htmlCss.EditedMarker} data-native-timeline-edited="true">
+      {t('modernization.timeline.edited', '(edited)')}
+    </span>
+  );
   // "Legacy Username Color": per-user palette instead of the heading colour.
   const senderNameStyle = legacyUsernameColor
     ? { color: colorMXID(rowSenderId(row) ?? '') }
@@ -2263,16 +2453,6 @@ const NativeTimelineRowImpl = ({
               grouped && originServerTs ? new Date(originServerTs).toLocaleString() : undefined
             }
           >
-            {grouped && originServerTs ? (
-              <div className={htmlCss.GroupedTimestampReveal} aria-hidden="true">
-                <Time
-                  compact
-                  ts={originServerTs}
-                  hour24Clock={hour24Clock}
-                  dateFormatString={dateFormatString}
-                />
-              </div>
-            ) : null}
             <Box
               direction="Column"
               gap="100"
@@ -2280,7 +2460,23 @@ const NativeTimelineRowImpl = ({
             >
               <Box gap="300" alignItems="Start">
                 <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
-                  {grouped ? null : <NativeTimelineSenderAvatar row={row} />}
+                  {grouped ? (
+                    // The hover time sits in the empty avatar column, where it
+                    // cannot collide with the action rail on the right.
+                    originServerTs ? (
+                      <div className={htmlCss.GroupedTimestampReveal} aria-hidden="true">
+                        <Time
+                          compact
+                          ts={originServerTs}
+                          hour24Clock={hour24Clock}
+                          dateFormatString={dateFormatString}
+                          className={htmlCss.GroupedTimestampText}
+                        />
+                      </div>
+                    ) : null
+                  ) : (
+                    <NativeTimelineSenderAvatar row={row} />
+                  )}
                 </Box>
                 <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0 }}>
                   {grouped ? null : (
@@ -2342,6 +2538,7 @@ const NativeTimelineRowImpl = ({
                           style={{
                             fontStyle: isEmote ? 'italic' : undefined,
                           }}
+                          after={row.edited ? editedMarker : undefined}
                         />
                       ) : (
                         <NativePlainMessageBody
@@ -2352,13 +2549,10 @@ const NativeTimelineRowImpl = ({
                             lineHeight: 1.47,
                             fontStyle: isEmote ? 'italic' : undefined,
                           }}
+                          after={row.edited ? editedMarker : undefined}
                         />
                       )}
-                      {row.edited ? (
-                        <Text size="T200" className={htmlCss.Metadata}>
-                          Edited
-                        </Text>
-                      ) : null}
+                      {row.edited && inlineGif ? editedMarker : null}
                     </div>
                   )}
                   {xPostUrl ? <NativeXPostEmbed url={xPostUrl} /> : null}
@@ -2508,8 +2702,10 @@ const NativeTimelineRowImpl = ({
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
-          <Box direction="Column" gap="100" className={rowClassName}>
-            <Text size="T300">{incomingCallLabel(row.callKind)}</Text>
+          <Box className={`${rowClassName} ${htmlCss.SystemRow}`}>
+            <Text as="span" size="T300">
+              {incomingCallLabel(row.callKind)}
+            </Text>
             {capabilities?.declineCall && (
               <Button
                 size="300"
@@ -2534,25 +2730,23 @@ const NativeTimelineRowImpl = ({
         </div>
       ) : null;
     case 'read_marker':
-      return (
-        <Box className={`${rowClassName} ${htmlCss.SystemRow}`}>
-          <span className={htmlCss.SystemRule} aria-hidden="true" />
-          <Text size="T300">Read up to here</Text>
-          <span className={htmlCss.SystemRule} aria-hidden="true" />
-        </Box>
-      );
+      // The fully-read position duplicates the unread divider's signal; the
+      // row stays in the snapshot (anchor maths) but draws nothing.
+      return null;
     case 'unread_marker':
       return (
-        <Box className={`${rowClassName} ${htmlCss.SystemRow} ${htmlCss.UnreadSystemRow}`}>
+        <Box
+          className={`${rowClassName} ${htmlCss.SystemRow} ${htmlCss.UnreadSystemRow}`}
+          data-native-timeline-unread-divider="true"
+        >
           <span className={htmlCss.SystemRule} aria-hidden="true" />
-          <Text size="T300">New messages</Text>
-          <span className={htmlCss.SystemRule} aria-hidden="true" />
+          <Text size="T300">{t('modernization.timeline.new_messages', 'New messages')}</Text>
         </Box>
       );
     case 'timeline_start':
       return (
         <Box className={rowClassName}>
-          <Text size="T300">Beginning of timeline</Text>
+          <NativeTimelineIntro roomId={roomId} />
         </Box>
       );
     case 'redacted':
@@ -2579,7 +2773,15 @@ const NativeTimelineRowImpl = ({
           onRetryUnsent={retryUnsent}
         >
           <Box className={rowClassName}>
-            <Text size="T300">{row.summary ?? 'Message removed'}</Text>
+            <Box gap="300" alignItems="Start">
+              <Box style={{ width: 36, flexShrink: 0 }} />
+              <Box gap="200" alignItems="Center" className={htmlCss.SystemNotice}>
+                <Icon src={Icons.Delete} size="50" />
+                <Text as="span" size="T300">
+                  {row.summary ?? t('modernization.timeline.message_removed', 'Message removed')}
+                </Text>
+              </Box>
+            </Box>
           </Box>
         </NativeTimelineRowActionSurface>
       );
@@ -2607,7 +2809,18 @@ const NativeTimelineRowImpl = ({
           onRetryUnsent={retryUnsent}
         >
           <Box className={rowClassName}>
-            <Text size="T300">This encrypted message is not available on this device.</Text>
+            <Box gap="300" alignItems="Start">
+              <Box style={{ width: 36, flexShrink: 0 }} />
+              <Box gap="200" alignItems="Center" className={htmlCss.SystemNotice}>
+                <Icon src={Icons.Lock} size="50" />
+                <Text as="span" size="T300">
+                  {t(
+                    'modernization.timeline.encrypted_unavailable',
+                    'This encrypted message is not available on this device.'
+                  )}
+                </Text>
+              </Box>
+            </Box>
           </Box>
         </NativeTimelineRowActionSurface>
       );
@@ -2635,8 +2848,10 @@ const NativeTimelineRowImpl = ({
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
-          <Box className={rowClassName}>
-            <Text size="T300">{row.summary}</Text>
+          <Box className={`${rowClassName} ${htmlCss.SystemRow}`}>
+            <Text as="span" size="T300">
+              {row.summary}
+            </Text>
           </Box>
         </NativeTimelineRowActionSurface>
       ) : null;
@@ -2738,6 +2953,7 @@ export function NativeTimelinePresenter({
   publishThreadRoot = true,
   showThreadBack = true,
 }: NativeTimelinePresenterProps) {
+  const { t } = useTranslation();
   const [focusEventId, setFocusEventId] = useState(eventId);
   const [threadRootId, setThreadRootId] = useState<string | undefined>(threadRootEventId);
   const [threadScrollEventId, setThreadScrollEventId] = useState<string | undefined>(
@@ -4025,6 +4241,19 @@ export function NativeTimelinePresenter({
   const { snapshot } = readyState;
   const showJumpToLastRead = shouldShowJumpToLastRead(pendingLastRead);
   const showJumpToLatest = shouldShowJumpToLatest(readyState.selectedPosition.kind, atLiveBottom);
+  // Scrolled up from the live tail: how many messages from others arrived
+  // past the read position. Other windows may not hold the tail, so no count.
+  const newMessageCount =
+    showJumpToLatest && readyState.selectedPosition.kind === 'live_bottom'
+      ? countNativeTimelineNewMessages(rows, snapshot.readState.ownReadEventId, ownUserId)
+      : 0;
+  const newMessageLabel =
+    newMessageCount === 1
+      ? t('modernization.timeline.new_message_count_one', '1 new message')
+      : t('modernization.timeline.new_message_count_other', {
+          count: newMessageCount,
+          defaultValue: '{{count}} new messages',
+        });
   const eventRowCount = rows.filter((row) => rowEventId(row)).length;
   const hasSparseLoadButton =
     eventRowCount <= 1 &&
@@ -4115,11 +4344,17 @@ export function NativeTimelinePresenter({
             >
               {rows.length === 0 ? (
                 <Box
-                  alignItems="Center"
-                  justifyContent="Center"
+                  alignItems="End"
+                  justifyContent="Start"
                   style={{ minHeight: '100%', padding: config.space.S400 }}
                 >
-                  <Text size="T300">No messages in this view yet.</Text>
+                  {threadRootId ? (
+                    <Text size="T300">
+                      {t('modernization.timeline.empty_view', 'No messages in this view yet.')}
+                    </Text>
+                  ) : (
+                    <NativeTimelineIntro roomId={roomId} />
+                  )}
                 </Box>
               ) : null}
               <div
@@ -4225,7 +4460,22 @@ export function NativeTimelinePresenter({
                     <Text size="B300">Jump to Last Read</Text>
                   </Button>
                 )}
-                {showJumpToLatest && (
+                {showJumpToLatest && newMessageCount > 0 && (
+                  <Button
+                    variant="Primary"
+                    fill="Solid"
+                    radii="Pill"
+                    size="300"
+                    aria-label="Jump to latest"
+                    aria-description={newMessageLabel}
+                    data-native-timeline-new-count={newMessageCount}
+                    after={<Icon src={Icons.ChevronBottom} size="100" />}
+                    onClick={jumpToLatest}
+                  >
+                    <Text size="B300">{newMessageLabel}</Text>
+                  </Button>
+                )}
+                {showJumpToLatest && newMessageCount === 0 && (
                   <TooltipProvider
                     position="Top"
                     offset={4}

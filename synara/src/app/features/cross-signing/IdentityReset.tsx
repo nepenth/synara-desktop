@@ -1,8 +1,7 @@
-import React, { FormEventHandler, useEffect, useRef, useState } from 'react';
+import React, { FormEventHandler, useEffect, useId, useRef, useState } from 'react';
 import {
   Box,
   Button,
-  color,
   config,
   Header,
   Icon,
@@ -19,6 +18,8 @@ import FocusTrap from '../../components/FocusTrap';
 import { PasswordInput } from '../../components/password-input';
 import { NativeSecretStorageGate } from '../../components/SecretStorage';
 import { openExternalUrl } from '../../utils/appLinks';
+import { stopPropagation } from '../../utils/keyboard';
+import { InlineMessage } from '../../components/inline-message';
 import {
   authenticateIdentityReset,
   cancelIdentityReset,
@@ -52,6 +53,7 @@ export function IdentityResetDialog({ onClose }: { onClose: () => void }) {
   const [recoveryMayBeOff, setRecoveryMayBeOff] = useState(false);
   const pending = step === 'password' || step === 'approval';
   const openedApproval = useRef(false);
+  const passwordId = useId();
 
   useEffect(() => {
     if (step === 'approval' && approvalUrl && !openedApproval.current) {
@@ -104,9 +106,7 @@ export function IdentityResetDialog({ onClose }: { onClose: () => void }) {
 
   const errorText = error && (
     <>
-      <Text size="T200" style={{ color: color.Critical.Main }}>
-        {error}
-      </Text>
+      <InlineMessage tone="critical">{error}</InlineMessage>
       {recoveryMayBeOff && <Text size="T200">{IDENTITY_RESET_COPY.recoveryMayBeOff}</Text>}
     </>
   );
@@ -117,11 +117,15 @@ export function IdentityResetDialog({ onClose }: { onClose: () => void }) {
         <FocusTrap
           focusTrapOptions={{
             initialFocus: false,
-            clickOutsideDeactivates: false,
-            escapeDeactivates: false,
+            // Escape and clicking outside behave like the close X: cancel (which
+            // points back to recovery setup once the reset has started), never
+            // while a step is running.
+            onDeactivate: close,
+            clickOutsideDeactivates: () => !working,
+            escapeDeactivates: (evt) => (working ? false : stopPropagation(evt)),
           }}
         >
-          <Dialog role={step === 'warning' ? 'alertdialog' : 'dialog'}>
+          <Dialog role={step === 'warning' ? 'alertdialog' : 'dialog'} variant="Surface">
             <Header
               style={{
                 padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -131,7 +135,9 @@ export function IdentityResetDialog({ onClose }: { onClose: () => void }) {
               size="500"
             >
               <Box grow="Yes">
-                <Text size="H4">{IDENTITY_RESET_COPY.title}</Text>
+                <Text as="h2" size="H4">
+                  {IDENTITY_RESET_COPY.title}
+                </Text>
               </Box>
               <IconButton
                 size="300"
@@ -153,14 +159,22 @@ export function IdentityResetDialog({ onClose }: { onClose: () => void }) {
               {step === 'warning' && (
                 <>
                   <Text size="T300">{IDENTITY_RESET_COPY.warningIntro}</Text>
-                  <Box as="ul" direction="Column" gap="200" style={{ margin: 0, paddingLeft: 20 }}>
+                  <Box
+                    as="ul"
+                    direction="Column"
+                    gap="200"
+                    style={{ margin: 0, paddingLeft: config.space.S500 }}
+                  >
                     {IDENTITY_RESET_COPY.warnings.map((warning) => (
                       <Text as="li" size="T300" key={warning}>
                         {warning}
                       </Text>
                     ))}
                   </Box>
-                  <Box gap="200">
+                  <Box gap="200" justifyContent="End">
+                    <Button fill="Soft" variant="Secondary" disabled={working} onClick={close}>
+                      <Text size="B400">Cancel</Text>
+                    </Button>
                     <Button
                       variant="Critical"
                       disabled={working}
@@ -169,9 +183,6 @@ export function IdentityResetDialog({ onClose }: { onClose: () => void }) {
                     >
                       <Text size="B400">{IDENTITY_RESET_COPY.title}</Text>
                     </Button>
-                    <Button fill="Soft" variant="Secondary" disabled={working} onClick={close}>
-                      <Text size="B400">Cancel</Text>
-                    </Button>
                   </Box>
                 </>
               )}
@@ -179,18 +190,18 @@ export function IdentityResetDialog({ onClose }: { onClose: () => void }) {
                 <>
                   <Text size="T300">{IDENTITY_RESET_COPY.password}</Text>
                   <Box direction="Column" gap="100">
-                    <Text size="L400">Account Password</Text>
-                    <PasswordInput name="password" size="400" readOnly={working} autoFocus />
+                    <Text as="label" size="L400" priority="300" htmlFor={passwordId}>
+                      Account password
+                    </Text>
+                    <PasswordInput
+                      id={passwordId}
+                      name="password"
+                      size="400"
+                      readOnly={working}
+                      autoFocus
+                    />
                   </Box>
-                  <Box gap="200">
-                    <Button
-                      type="submit"
-                      variant="Critical"
-                      disabled={working}
-                      before={working && <Spinner size="200" variant="Critical" fill="Solid" />}
-                    >
-                      <Text size="B400">Authenticate</Text>
-                    </Button>
+                  <Box gap="200" justifyContent="End">
                     <Button
                       type="button"
                       fill="Soft"
@@ -200,16 +211,24 @@ export function IdentityResetDialog({ onClose }: { onClose: () => void }) {
                     >
                       <Text size="B400">Cancel</Text>
                     </Button>
+                    <Button
+                      type="submit"
+                      variant="Critical"
+                      disabled={working}
+                      before={working && <Spinner size="200" variant="Critical" fill="Solid" />}
+                    >
+                      <Text size="B400">Continue</Text>
+                    </Button>
                   </Box>
                 </>
               )}
               {step === 'approval' && (
                 <>
                   <Text size="T300">{IDENTITY_RESET_COPY.approval}</Text>
-                  <Box gap="200" wrap="Wrap">
+                  <Box gap="200" wrap="Wrap" justifyContent="End">
                     {approvalUrl && (
                       <Button
-                        fill="Soft"
+                        fill="None"
                         variant="Secondary"
                         disabled={working}
                         onClick={() => void openExternalUrl(approvalUrl)}
@@ -217,6 +236,9 @@ export function IdentityResetDialog({ onClose }: { onClose: () => void }) {
                         <Text size="B400">{IDENTITY_RESET_COPY.openAccountPage}</Text>
                       </Button>
                     )}
+                    <Button fill="Soft" variant="Secondary" disabled={working} onClick={close}>
+                      <Text size="B400">Cancel</Text>
+                    </Button>
                     <Button
                       variant="Critical"
                       disabled={working}
@@ -224,9 +246,6 @@ export function IdentityResetDialog({ onClose }: { onClose: () => void }) {
                       onClick={() => void run(continueIdentityReset)}
                     >
                       <Text size="B400">Continue</Text>
-                    </Button>
-                    <Button fill="Soft" variant="Secondary" disabled={working} onClick={close}>
-                      <Text size="B400">Cancel</Text>
                     </Button>
                   </Box>
                 </>

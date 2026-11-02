@@ -1,10 +1,11 @@
-import React, { FormEventHandler, useState } from 'react';
+import React, { FormEventHandler, useId, useState } from 'react';
 import { Box, Button, Spinner, Switch, Text } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { SettingsSection } from '../../../components/settings-layout';
 import { PasswordInput } from '../../../components/password-input';
+import { InlineMessage } from '../../../components/inline-message';
 import { useAuthMetadata } from '../../../hooks/useAuthMetadata';
 import { openExternalUrl } from '../../../utils/appLinks';
 import {
@@ -26,6 +27,9 @@ export function Password() {
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [managedElsewhere, setManagedElsewhere] = useState(false);
   const saving = status.kind === 'saving';
+  const currentId = useId();
+  const newId = useId();
+  const confirmId = useId();
 
   const openAccountPage = () => {
     if (accountPage) void openExternalUrl(accountPage);
@@ -38,7 +42,7 @@ export function Password() {
       <SettingsSection title="Password">
         <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
           <SettingTile
-            title="Change Password"
+            title="Password"
             description="Your homeserver manages your password on its account page."
             after={
               <Button
@@ -50,7 +54,7 @@ export function Password() {
                 radii="300"
                 onClick={openAccountPage}
               >
-                <Text size="B300">Open Account Page</Text>
+                <Text size="B300">Open account page</Text>
               </Button>
             }
           />
@@ -91,52 +95,64 @@ export function Password() {
         direction="Column"
         gap="400"
       >
-        <SettingTile title="Change Password" description="Confirm with your current password.">
+        <SettingTile title="Change password" description="Confirm with your current password.">
           <Box as="form" direction="Column" gap="300" onSubmit={handleSubmit}>
-            <PasswordInput
-              size="400"
-              variant="Secondary"
-              radii="300"
-              outlined
-              autoComplete="current-password"
-              placeholder="Current password"
-              aria-label="Current password"
-              value={currentPassword}
-              onChange={(evt) => setCurrentPassword(evt.currentTarget.value)}
-              readOnly={saving}
-            />
-            <PasswordInput
-              size="400"
-              variant="Secondary"
-              radii="300"
-              outlined
-              autoComplete="new-password"
-              placeholder="New password"
-              aria-label="New password"
-              value={newPassword}
-              onChange={(evt) => setNewPassword(evt.currentTarget.value)}
-              readOnly={saving}
-            />
-            <PasswordInput
-              size="400"
-              variant="Secondary"
-              radii="300"
-              outlined
-              autoComplete="new-password"
-              placeholder="Confirm new password"
-              aria-label="Confirm new password"
-              value={confirmPassword}
-              onChange={(evt) => setConfirmPassword(evt.currentTarget.value)}
-              readOnly={saving}
-            />
+            <Box direction="Column" gap="100">
+              <Text as="label" size="L400" priority="300" htmlFor={currentId}>
+                Current password
+              </Text>
+              <PasswordInput
+                id={currentId}
+                size="400"
+                variant="Secondary"
+                radii="300"
+                outlined
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(evt) => setCurrentPassword(evt.currentTarget.value)}
+                readOnly={saving}
+              />
+            </Box>
+            <Box direction="Column" gap="100">
+              <Text as="label" size="L400" priority="300" htmlFor={newId}>
+                New password
+              </Text>
+              <PasswordInput
+                id={newId}
+                size="400"
+                variant="Secondary"
+                radii="300"
+                outlined
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(evt) => setNewPassword(evt.currentTarget.value)}
+                readOnly={saving}
+              />
+            </Box>
+            <Box direction="Column" gap="100">
+              <Text as="label" size="L400" priority="300" htmlFor={confirmId}>
+                Confirm new password
+              </Text>
+              <PasswordInput
+                id={confirmId}
+                size="400"
+                variant="Secondary"
+                radii="300"
+                outlined
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(evt) => setConfirmPassword(evt.currentTarget.value)}
+                readOnly={saving}
+              />
+            </Box>
             <Box alignItems="Center" justifyContent="SpaceBetween" gap="300">
-              <Text size="T300">Sign out of my other devices</Text>
+              <Text size="T300">Log out of my other sessions</Text>
               <Switch
                 variant="Primary"
                 value={logoutDevices}
                 onChange={setLogoutDevices}
                 disabled={saving}
-                aria-label="Sign out of my other devices"
+                aria-label="Log out of my other sessions"
               />
             </Box>
             <Box alignItems="Center" gap="300">
@@ -151,7 +167,7 @@ export function Password() {
                 disabled={saving}
               >
                 {saving && <Spinner variant="Secondary" size="300" />}
-                <Text size="B400">Change Password</Text>
+                <Text size="B400">Update password</Text>
               </Button>
               {managedElsewhere && accountPage && (
                 <Button
@@ -161,20 +177,18 @@ export function Password() {
                   radii="300"
                   onClick={openAccountPage}
                 >
-                  <Text size="B400">Open Account Page</Text>
+                  <Text size="B400">Open account page</Text>
                 </Button>
               )}
             </Box>
             {status.kind === 'done' && (
-              <Text size="T200" role="status">
+              <InlineMessage tone="success">
                 Password changed.
-                {logoutDevices ? ' Your other devices were signed out.' : ''}
-              </Text>
+                {logoutDevices ? ' Your other sessions were logged out.' : ''}
+              </InlineMessage>
             )}
             {status.kind === 'error' && (
-              <Text size="T200" role="alert">
-                {status.message}
-              </Text>
+              <InlineMessage tone="critical">{status.message}</InlineMessage>
             )}
           </Box>
         </SettingTile>

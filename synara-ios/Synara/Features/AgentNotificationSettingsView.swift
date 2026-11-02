@@ -154,9 +154,8 @@ struct AgentNotificationSettingsView: View {
                 Text("Changes save to your account as you make them. Some encrypted alerts may still show as generic activity, even with previews hidden.")
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(SynaraChrome.settings.ignoresSafeArea())
         .navigationTitle("Agent Notifications")
+        .synaraSettingsChrome()
         .accessibilityIdentifier("AgentNotificationSettingsScreen")
         .task {
             let updates = environment.matrix.agentNotificationPreferenceUpdates()

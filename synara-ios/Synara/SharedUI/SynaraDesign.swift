@@ -581,12 +581,15 @@ enum SynaraColor {
     static var tertiaryText: Color { synaraAdaptive(\.tertiaryText) }
     static let accent = Color.accentColor
     /// A mention of you: gold, as distinct from other people's blue pills.
+    /// The same `#F5B400` as desktop's `--mention-gold`; the text is that
+    /// gold mixed toward warm so it clears the 22 % fill in both modes.
+    static let mentionGold = Color(red: 0xF5 / 255.0, green: 0xB4 / 255.0, blue: 0x00 / 255.0)
     static let selfMentionText = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.98, green: 0.80, blue: 0.36, alpha: 1)
-            : UIColor(red: 0.52, green: 0.36, blue: 0.0, alpha: 1)
+            ? UIColor(red: 0xF8 / 255.0, green: 0xCC / 255.0, blue: 0x5C / 255.0, alpha: 1)
+            : UIColor(red: 0x5C / 255.0, green: 0x3D / 255.0, blue: 0x00 / 255.0, alpha: 1)
     })
-    static let selfMentionFill = Color(uiColor: .systemYellow).opacity(0.22)
+    static let selfMentionFill = mentionGold.opacity(0.22)
     static let agent = Color(.systemTeal)
     static let success = Color(.systemGreen)
     static let warning = Color(.systemOrange)
@@ -638,7 +641,9 @@ enum SynaraStatusTextPalette {
     static let success = Pair(light: "#1a6b2d", dark: "#30d158")
     static let warning = Pair(light: "#9a4500", dark: "#ff9f0a")
     static let critical = Pair(light: "#b3141a", dark: "#ff7f78")
-    static let accent = Pair(light: "#0058b8", dark: "#5eacff")
+    /// Desktop Primary (`synara/src/colors.css.ts`), the same pair as the
+    /// `AccentColor` asset, so accent text matches accent fills on both clients.
+    static let accent = Pair(light: "#1245a8", dark: "#8db4f5")
     static let agent = Pair(light: "#00616e", dark: "#5ad8e6")
     /// A fill, not text: white on it clears 4.5:1 in both modes.
     static let accentFill = Pair(light: "#0062cc", dark: "#1a6fd8")
@@ -655,6 +660,21 @@ enum SynaraStatusTextPalette {
 /// Smallest comfortable touch target (Apple HIG).
 enum SynaraHitTarget {
     static let minimum: CGFloat = 44
+}
+
+/// Shared shell geometry. Both split-canvas columns size their top row from
+/// `columnHeaderHeight` so the room list and the conversation header align.
+enum SynaraMetrics {
+    static let columnHeaderHeight: CGFloat = 44
+    /// Width of the `#` / person glyph column in list rows.
+    static let roomGlyph: CGFloat = 20
+    /// Slack-density room rows: ~56 pt with the preview line.
+    static let roomRowMinHeight: CGFloat = 44
+    static let roomRowVerticalPadding: CGFloat = 4
+    /// Gap between collapsible sections (iOS 17 `listSectionSpacing`).
+    static let roomListSectionSpacing: CGFloat = 8
+    /// Settings on a regular-width canvas never stretch past this.
+    static let readableSettingsWidth: CGFloat = 720
 }
 
 /// A small bordered capsule that keeps a 44-point touch area around it, for
@@ -921,10 +941,23 @@ enum SynaraRadius {
     static let control: CGFloat = 8
     static let composer: CGFloat = 22
 
-    /// People are rounded squares (rooms keep their own tiles).
+    /// Avatars are rounded squares at 22 % of their side, on every size of
+    /// the ladder (`SynaraAvatarSize`), matching desktop (review-2 DS-11).
+    static let avatarFraction: CGFloat = 0.22
+
     static func avatar(_ size: CGFloat) -> CGFloat {
-        (size * 0.22).rounded()
+        (size * avatarFraction).rounded()
     }
+}
+
+/// The shared avatar ladder (review-2 DS-11): 20 row glyph, 24 dense,
+/// 28 lists and the reaction viewer, 36-40 timeline, 44 profile row, 64 hero.
+enum SynaraAvatarSize {
+    static let rowGlyph: CGFloat = 20
+    static let dense: CGFloat = 24
+    static let list: CGFloat = 28
+    static let profileRow: CGFloat = 44
+    static let hero: CGFloat = 64
 }
 
 enum SynaraDepthLevel: String, CaseIterable {
@@ -1291,7 +1324,8 @@ enum SynaraTypography {
     static let fineMeta = Font.caption2
     static let fineMetaBold = Font.caption2.weight(.bold)
     static let monoBody = Font.system(.callout, design: .monospaced)
-    static let composerPlaceholder = Font.callout
+    /// The composer types at the message body size (IOST-15).
+    static let composerPlaceholder = Font.body
     static let composerMetric = Font.caption2
 }
 
@@ -1301,7 +1335,7 @@ struct SynaraAvatar: View {
     let tint: Color
     var size: CGFloat
 
-    init(title: String, systemImage: String? = nil, tint: Color = SynaraColor.accent, size: CGFloat = 38) {
+    init(title: String, systemImage: String? = nil, tint: Color = SynaraColor.accent, size: CGFloat = SynaraAvatarSize.profileRow) {
         self.title = title
         self.systemImage = systemImage
         self.tint = tint
@@ -1309,7 +1343,7 @@ struct SynaraAvatar: View {
     }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: SynaraRadius.avatar(size), style: .continuous)
 
         ZStack {
             shape
@@ -1403,6 +1437,10 @@ struct SynaraStatusChip: View {
     }
 }
 
+/// Count badge. `highlighted` (a mention, or an unread direct message) is the
+/// solid Critical pill desktop's `UnreadBadge` draws; anything else is a quiet
+/// neutral count. Plain unread channels show no badge at all: the bold room
+/// name is the signal (DS-2).
 struct SynaraUnreadBadge: View {
     let count: Int
     let highlighted: Bool
@@ -1414,17 +1452,9 @@ struct SynaraUnreadBadge: View {
                 .monospacedDigit()
                 .padding(.horizontal, SynaraSpacing.small)
                 .frame(minWidth: 24, minHeight: 20)
-                .background(highlighted ? SynaraColor.accent : SynaraColor.accent.opacity(0.16))
-                .foregroundStyle(highlighted ? Color.white : SynaraColor.accent)
+                .background(highlighted ? SynaraColor.critical : SynaraColor.headingText.opacity(0.12))
+                .foregroundStyle(highlighted ? Color.white : SynaraColor.headingText)
                 .clipShape(Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(
-                            highlighted ? Color.clear : SynaraColor.accent.opacity(0.24),
-                            lineWidth: 0.5
-                        )
-                        .allowsHitTesting(false)
-                }
                 .accessibilityLabel("\(count) unread")
         }
     }
@@ -1601,12 +1631,21 @@ struct SynaraEmptyState: View {
     /// Shows the Synara mark instead of the symbol, for the few empty panes
     /// that are a brand moment (no room selected).
     var showsBrandMark = false
+    /// Off when the screen already paints its own plane (the room list).
+    var paintsBackground = true
 
-    init(title: String, systemImage: String, message: String? = nil, showsBrandMark: Bool = false) {
+    init(
+        title: String,
+        systemImage: String,
+        message: String? = nil,
+        showsBrandMark: Bool = false,
+        paintsBackground: Bool = true
+    ) {
         self.title = title
         self.systemImage = systemImage
         self.message = message
         self.showsBrandMark = showsBrandMark
+        self.paintsBackground = paintsBackground
     }
 
     var body: some View {
@@ -1638,23 +1677,7 @@ struct SynaraEmptyState: View {
         }
         .padding(SynaraSpacing.xLarge)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(SynaraColor.surface)
-    }
-}
-
-struct SynaraLoadingState: View {
-    let title: String
-
-    var body: some View {
-        VStack(spacing: SynaraSpacing.medium) {
-            ProgressView()
-            Text(title)
-                .font(SynaraTypography.body)
-                .foregroundStyle(SynaraColor.secondaryText)
-                .multilineTextAlignment(.center)
-        }
-        .padding(SynaraSpacing.xLarge)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(paintsBackground ? SynaraColor.surface : Color.clear)
     }
 }
 
@@ -1679,7 +1702,7 @@ struct SynaraSkeletonRow: View {
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
             if showsAvatar {
-                SynaraSkeletonBlock(width: 42, height: 42, cornerRadius: 11)
+                SynaraSkeletonBlock(width: 42, height: 42, cornerRadius: SynaraRadius.avatar(42))
             }
 
             VStack(alignment: .leading, spacing: SynaraSpacing.small) {
@@ -1716,24 +1739,37 @@ struct SynaraSkeletonList: View {
     }
 }
 
+/// One loading row in the shape of a flat timeline row: a 38 pt avatar
+/// block, the bold name and time bars, then body bars. A grouped follow-up
+/// keeps only the gutter, as a second message from the same sender does.
 struct SynaraTimelineSkeletonRow: View {
-    var isOutgoing = false
+    var isGrouped = false
     var lineCount = 2
 
+    static let avatarSize: CGFloat = 38
+
     var body: some View {
-        HStack(alignment: .top, spacing: SynaraSpacing.small) {
-            if isOutgoing {
-                Spacer(minLength: 48)
+        HStack(alignment: .top, spacing: SynaraSpacing.medium) {
+            if isGrouped {
+                Color.clear
+                    .frame(width: Self.avatarSize, height: 1)
             } else {
-                SynaraSkeletonBlock(width: 34, height: 34, cornerRadius: SynaraRadius.card)
+                SynaraSkeletonBlock(
+                    width: Self.avatarSize,
+                    height: Self.avatarSize,
+                    cornerRadius: SynaraRadius.avatar(Self.avatarSize)
+                )
             }
 
-            VStack(alignment: isOutgoing ? .trailing : .leading, spacing: SynaraSpacing.small) {
-                if isOutgoing == false {
-                    SynaraSkeletonBlock(width: 92, height: 12)
+            VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                if isGrouped == false {
+                    HStack(spacing: SynaraSpacing.small) {
+                        SynaraSkeletonBlock(width: 92, height: 14)
+                        SynaraSkeletonBlock(width: 36, height: 10)
+                    }
                 }
 
-                VStack(alignment: isOutgoing ? .trailing : .leading, spacing: SynaraSpacing.xSmall) {
+                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                     ForEach(0..<lineCount, id: \.self) { line in
                         SynaraSkeletonBlock(
                             width: line == lineCount - 1 ? 132 : 196,
@@ -1742,27 +1778,32 @@ struct SynaraTimelineSkeletonRow: View {
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: isOutgoing ? .trailing : .leading)
-
-            if isOutgoing {
-                SynaraSkeletonBlock(width: 34, height: 34, cornerRadius: SynaraRadius.card)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, SynaraSpacing.xSmall)
+        .padding(.top, isGrouped ? 2 : SynaraSpacing.medium)
         .accessibilityLabel("Loading message")
         .accessibilityIdentifier("SynaraTimelineSkeletonRow")
     }
 }
 
+/// The loading timeline: a day-heading rule, then flat rows with every
+/// third one a grouped follow-up.
 struct SynaraTimelineSkeletonList: View {
     let rowCount: Int
 
     var body: some View {
-        VStack(spacing: SynaraSpacing.medium) {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                SynaraSkeletonBlock(width: 64, height: 14)
+                Rectangle()
+                    .fill(SynaraColor.separator.opacity(0.7))
+                    .frame(height: 0.5)
+            }
+            .padding(.top, SynaraSpacing.small)
             ForEach(0..<rowCount, id: \.self) { index in
                 SynaraTimelineSkeletonRow(
-                    isOutgoing: index.isMultiple(of: 3),
+                    isGrouped: index % 3 == 2,
                     lineCount: index.isMultiple(of: 2) ? 1 : 2
                 )
             }
@@ -1815,8 +1856,6 @@ struct SynaraDesignTokenGallery: View {
                 Section("States") {
                     SynaraEmptyState(title: "No Rooms", systemImage: "bubble.left.and.bubble.right", message: "Joined rooms will appear here.")
                         .frame(minHeight: 220)
-                    SynaraLoadingState(title: "Syncing rooms")
-                        .frame(minHeight: 120)
                     SynaraSkeletonList(rowCount: 3)
                         .padding(.vertical, SynaraSpacing.small)
                 }
@@ -1848,5 +1887,53 @@ struct SynaraDesignTokenGallery_Previews: PreviewProvider {
                 .preferredColorScheme(.dark)
                 .previewDisplayName("Dark")
         }
+    }
+}
+
+/// A short confirmation ("Saved to Later") that floats over the bottom of
+/// its content and leaves on its own after two seconds. VoiceOver hears it
+/// as an announcement. Errors stay in alerts; this is for quiet successes.
+struct SynaraTransientNotice: ViewModifier {
+    @Binding var message: String?
+    var systemImage: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .bottom) {
+                if let message {
+                    Label(message, systemImage: systemImage)
+                        .font(SynaraTypography.supporting.weight(.semibold))
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .padding(.horizontal, SynaraSpacing.large)
+                        .padding(.vertical, SynaraSpacing.small)
+                        .background(SynaraColor.elevatedSurface, in: Capsule())
+                        .synaraDepth(.floating, shape: Capsule())
+                        .padding(.bottom, SynaraSpacing.medium)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .accessibilityIdentifier("SynaraTransientNotice")
+                        .task(id: message) {
+                            try? await Task.sleep(nanoseconds: 2_000_000_000)
+                            guard Task.isCancelled == false else { return }
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                                self.message = nil
+                            }
+                        }
+                }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: message)
+            .onChange(of: message) { message in
+                #if canImport(UIKit)
+                if let message {
+                    UIAccessibility.post(notification: .announcement, argument: message)
+                }
+                #endif
+            }
+    }
+}
+
+extension View {
+    func synaraTransientNotice(_ message: Binding<String?>, systemImage: String) -> some View {
+        modifier(SynaraTransientNotice(message: message, systemImage: systemImage))
     }
 }

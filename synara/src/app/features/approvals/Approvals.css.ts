@@ -1,6 +1,6 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, toRem } from 'folds';
-import { raisedShadow, quietInteractiveSurface } from '../../styles/Depth.css';
+import { raisedShadow } from '../../styles/Depth.css';
 
 export const Content = style({
   width: '100%',
@@ -19,39 +19,10 @@ export const Toolbar = style({
   flexWrap: 'wrap',
   gap: config.space.S300,
 });
-export const Filters = style({ display: 'flex', flexWrap: 'wrap', gap: config.space.S200 });
-export const Filter = style([
-  quietInteractiveSurface,
-  {
-    border: `1px solid ${color.Surface.ContainerLine}`,
-    borderRadius: config.radii.R400,
-    padding: `${config.space.S200} ${config.space.S300}`,
-    backgroundColor: 'transparent',
-    color: color.Surface.OnContainer,
-    cursor: 'pointer',
-    font: 'inherit',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: config.space.S100,
-    selectors: {
-      // Selection reads as a quiet pressed surface plus the check glyph the
-      // button renders; no saturated fill at rest.
-      '&[aria-pressed=true]': {
-        borderColor: `color-mix(in srgb, currentColor 35%, ${color.Surface.ContainerLine})`,
-        fontWeight: config.fontWeight.W600,
-      },
-    },
-  },
-]);
+/** The search field grows to fill the toolbar beside the filters. */
 export const Search = style({
   minWidth: toRem(160),
   flex: 1,
-  padding: config.space.S300,
-  borderRadius: config.radii.R400,
-  border: `1px solid ${color.Surface.ContainerLine}`,
-  backgroundColor: color.Background.Container,
-  color: color.Background.OnContainer,
-  font: 'inherit',
 });
 export const List = style({
   display: 'flex',
@@ -94,7 +65,10 @@ export const Notice = style({
   backgroundColor: color.SurfaceVariant.Container,
 });
 export const Status = style({
-  color: color.Surface.OnContainer,
   fontVariantNumeric: 'tabular-nums',
   whiteSpace: 'nowrap',
+});
+export const Sender = style({
+  fontWeight: config.fontWeight.W600,
+  minWidth: 0,
 });

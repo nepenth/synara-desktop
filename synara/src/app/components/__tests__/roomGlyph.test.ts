@@ -42,6 +42,28 @@ test('group and channel rooms keep the channel glyph', () => {
   assert.deepEqual(roomGlyphFor(undefined, 'Ops'), { kind: 'channel' });
 });
 
+test('a non-public room shows the lock glyph; unknown join rules keep #', () => {
+  assert.deepEqual(roomGlyphFor({ isDirect: false, joinRule: 'invite' }, 'Ops'), {
+    kind: 'channel',
+    locked: true,
+  });
+  assert.deepEqual(roomGlyphFor({ isDirect: false, joinRule: 'restricted' }, 'Ops'), {
+    kind: 'channel',
+    locked: true,
+  });
+  assert.deepEqual(roomGlyphFor({ isDirect: false, joinRule: 'public' }, 'Ops'), {
+    kind: 'channel',
+  });
+  assert.deepEqual(roomGlyphFor({ isDirect: false, joinRule: undefined }, 'Ops'), {
+    kind: 'channel',
+  });
+  // A DM with a known peer shows the person even when invite-only.
+  assert.equal(
+    roomGlyphFor({ isDirect: true, directUserId: peer, joinRule: 'invite' }, 'Alice').kind,
+    'person'
+  );
+});
+
 test('a DM whose peer Core does not know keeps the channel glyph', () => {
   assert.deepEqual(
     roomGlyphFor(

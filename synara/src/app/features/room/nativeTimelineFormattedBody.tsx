@@ -405,11 +405,14 @@ export function NativeFormattedBody({
   fallbackBody,
   style,
   highlightRegex,
+  after,
 }: {
   html: string;
   fallbackBody: string;
   style?: React.CSSProperties;
   highlightRegex?: RegExp;
+  /** Inline trailer after the body (the "(edited)" marker); block endings wrap it to a new line. */
+  after?: React.ReactNode;
 }) {
   const onPermalink = useContext(NativePermalinkContext);
   const ownUserId = getMyUserId() ?? undefined;
@@ -440,6 +443,7 @@ export function NativeFormattedBody({
       style={{ ...style, whiteSpace: parsed === undefined ? 'pre-wrap' : undefined }}
     >
       {parsed === undefined ? fallbackBody : parsed}
+      {after}
     </div>
   );
 }

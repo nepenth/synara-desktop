@@ -1,15 +1,23 @@
 import SwiftUI
 
+/// Switches kept so the review-2 density pass is easy to revert.
+/// `showsSpaceChipStrip` brings back the second chip row (All spaces / Space…)
+/// under the filters; spaces are otherwise reached from the title menu.
+enum RoomListChromePolicy {
+    static let showsSpaceChipStrip = false
+}
+
 struct RoomListView: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(\.synaraCanvasLayout) private var canvasLayout
     @Environment(\.synaraSelectedConversationID) private var selectedConversationID
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var state: RoomListState = .idle
     @State private var membershipError: String?
     @State private var searchQuery: String = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] ?? ""
     @State private var selectedFilter: RoomListFilter = .all
     @State private var selectedSpaceID: String?
-    @State private var expandedSpaceIDs: Set<String> = []
+    @State private var collapsedSections: Set<String> = RoomListSectionCollapse.stored()
     @State private var isRoomManagementSheetPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_MANAGEMENT_SHEET"] == "1"
     @State private var loadRoomsTask: Task<Void, Never>?
     @State private var liveUpdates = RoomListLiveUpdates()
@@ -17,9 +25,8 @@ struct RoomListView: View {
     @State private var roomPendingLeave: RoomSummary?
     @State private var isResettingSession = false
     @State private var sessionRecoveryError: String?
-    @State private var favoriteSort: RoomListSortOrder = RoomListSortOrder.stored(for: .favorites)
-    @State private var roomsSort: RoomListSortOrder = RoomListSortOrder.stored(for: .rooms)
-    @State private var directsSort: RoomListSortOrder = RoomListSortOrder.stored(for: .directs)
+    /// One order for every section (desktop stores one `synara.roomListSort`).
+    @State private var sortOrder: RoomListSortOrder = RoomListSortOrder.storedShared()
     /// Direct-message peers whose MSC4426 status says they are in a call.
     @State private var peersInCall: Set<String> = []
     @State private var peerCallStatusGeneration: UInt64 = 0
@@ -30,22 +37,7 @@ struct RoomListView: View {
             switch state {
             case .idle, .loading:
                 VStack(spacing: 0) {
-                    VStack(spacing: SynaraSpacing.medium) {
-                        RoomListHeader(
-                            title: accountMenuTitle,
-                            onAccount: { environment.router.present(.accountSwitcher) },
-                            onSearch: { presentSearch() },
-                            onNewRoom: { isRoomManagementSheetPresented = true }
-                        )
-                        RoomFilterStrip(
-                            selectedFilter: $selectedFilter,
-                            filterBadges: [:]
-                        )
-                    }
-                    .padding(.horizontal, SynaraSpacing.large)
-                    .padding(.top, SynaraSpacing.medium)
-                    .padding(.bottom, SynaraSpacing.xSmall)
-                    .background(SynaraChrome.roomList)
+                    roomListChrome(spaces: [], unreadCounts: [:], selectedSpaceTitle: nil, filterBadges: [:])
 
                     List {
                         Section {
@@ -63,16 +55,23 @@ struct RoomListView: View {
                 }
             case .empty:
                 HeldConnectionEmptyState(
-                    title: String(localized: "No Rooms"),
+                    title: String(localized: "No rooms yet"),
                     systemImage: "bubble.left.and.bubble.right",
-                    store: environment.connectionStatus
+                    store: environment.connectionStatus,
+                    connectedMessage: String(localized: "Join a room or start a direct message."),
+                    action: HeldConnectionEmptyState.Action(
+                        title: String(localized: "Create or join a room"),
+                        identifier: "RoomListEmptyStateButton"
+                    ) {
+                        isRoomManagementSheetPresented = true
+                    }
                 )
             case .failed(let message):
                 VStack(spacing: SynaraSpacing.medium) {
                     SynaraErrorState(title: String(localized: "Could Not Load Rooms"), message: message) {
                         loadRooms(startUpdatesAfterLoad: true)
                     }
-                    Button("Sign In Again") {
+                    Button("Sign in again") {
                         signInAgain()
                     }
                     .buttonStyle(.bordered)
@@ -90,22 +89,10 @@ struct RoomListView: View {
             case .loaded(let rooms):
                 let filteredRooms = filteredRooms(from: rooms)
                 let sections = RoomListFavorites.sections(from: filteredRooms)
-                let favoriteRooms = RoomListFavorites.sorted(
-                    sections.favorites,
-                    order: favoriteSort
-                )
-                let channelRooms = RoomListFavorites.sorted(
-                    sections.channels,
-                    order: roomsSort
-                )
-                let directRooms = RoomListFavorites.sorted(
-                    sections.directs,
-                    order: directsSort
-                )
-                let lowPriorityRooms = RoomListFavorites.sorted(
-                    sections.lowPriority,
-                    order: roomsSort
-                )
+                let favoriteRooms = RoomListFavorites.sorted(sections.favorites, order: sortOrder)
+                let channelRooms = RoomListFavorites.sorted(sections.channels, order: sortOrder)
+                let directRooms = RoomListFavorites.sorted(sections.directs, order: sortOrder)
+                let lowPriorityRooms = RoomListFavorites.sorted(sections.lowPriority, order: sortOrder)
                 let spaces = spaces(from: rooms)
                 let spaceUnreadCounts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
                 let selectedSpaceTitle = RoomListSpaceGrouping.selectedSpaceName(
@@ -115,136 +102,39 @@ struct RoomListView: View {
                 let spaceChannelGroups = RoomListSpaceGrouping.spaceChannelGroups(from: channelRooms)
                 let ungroupedChannelRooms = RoomListSpaceGrouping.ungroupedChannelRooms(from: channelRooms)
                 VStack(spacing: 0) {
-                    VStack(spacing: SynaraSpacing.medium) {
-                        RoomListHeader(
-                            title: accountMenuTitle,
-                            onAccount: { environment.router.present(.accountSwitcher) },
-                            onSearch: { presentSearch() },
-                            onNewRoom: { isRoomManagementSheetPresented = true }
-                        )
-                        if isSearchPresented {
-                            RoomSearchField(text: $searchQuery, isFocused: $isSearchFocused) {
-                                dismissSearch(clearQuery: false)
-                            }
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-                        RoomFilterStrip(
-                            selectedFilter: $selectedFilter,
-                            filterBadges: filterBadges(from: rooms)
-                        )
-                        if spaces.isEmpty == false {
-                            SpaceFilterStrip(
-                                spaces: spaces,
-                                unreadCountsBySpaceID: spaceUnreadCounts,
-                                selectedSpaceID: $selectedSpaceID
-                            )
-                        }
-                    }
-                    .padding(.horizontal, SynaraSpacing.large)
-                    .padding(.top, SynaraSpacing.medium)
-                    .padding(.bottom, SynaraSpacing.xSmall)
-                    .background(SynaraChrome.roomList)
+                    roomListChrome(
+                        spaces: spaces,
+                        unreadCounts: spaceUnreadCounts,
+                        selectedSpaceTitle: selectedSpaceTitle,
+                        filterBadges: filterBadges(from: rooms)
+                    )
 
                     List {
                         if searchQuery.isEmpty == false && filteredRooms.isEmpty {
                             SynaraEmptyState(
                                 title: String(localized: "No Matching Rooms"),
                                 systemImage: "magnifyingglass",
-                                message: String(localized: "Try another room name or message preview.")
+                                message: String(localized: "Try another room name or message preview."),
+                                paintsBackground: false
                             )
                             .listRowInsets(EdgeInsets())
+                            .listRowBackground(SynaraChrome.roomList)
                         }
 
-                        if favoriteRooms.isEmpty == false {
-                            Section {
-                                ForEach(favoriteRooms, id: \.id) { room in
-                                    roomRow(room)
-                                }
-                            } header: {
-                                RoomSectionHeader(
-                                    title: String(localized: "Favorites"),
-                                    count: favoriteRooms.count,
-                                    selectedSort: $favoriteSort
-                                )
-                            }
-                        }
+                        roomSection(RoomListSectionKey.favorites, title: String(localized: "Favorites"), rooms: favoriteRooms)
 
-                        if let selectedSpaceTitle {
-                            if channelRooms.isEmpty == false {
-                                Section {
-                                    ForEach(channelRooms) { room in
-                                        roomRow(room)
-                                    }
-                                } header: {
-                                    SpaceSelectedHeader(
-                                        title: selectedSpaceTitle,
-                                        roomCount: channelRooms.count
-                                    )
-                                }
-                            }
-                        } else if channelRooms.isEmpty == false {
+                        if let selectedSpaceTitle, let selectedSpaceID {
+                            roomSection(RoomListSectionKey.space(selectedSpaceID), title: selectedSpaceTitle, rooms: channelRooms)
+                        } else {
                             ForEach(spaceChannelGroups) { group in
-                                Section {
-                                    DisclosureGroup(
-                                        isExpanded: spaceExpansionBinding(for: group.id)
-                                    ) {
-                                        ForEach(group.rooms) { room in
-                                            roomRow(room)
-                                        }
-                                    } label: {
-                                        SpaceDisclosureLabel(
-                                            title: group.space.name,
-                                            roomCount: group.rooms.count,
-                                            unreadCount: spaceUnreadCounts[group.space.id] ?? 0
-                                        )
-                                    }
-                                    .listRowSeparator(.hidden)
-                                    .listRowBackground(SynaraChrome.roomList)
-                                }
+                                roomSection(RoomListSectionKey.space(group.space.id), title: group.space.name, rooms: group.rooms)
                             }
 
-                            if ungroupedChannelRooms.isEmpty == false {
-                                Section {
-                                    ForEach(ungroupedChannelRooms) { room in
-                                        roomRow(room)
-                                    }
-                                } header: {
-                                    RoomSectionHeader(
-                                        title: String(localized: "Channels"),
-                                        count: ungroupedChannelRooms.count,
-                                        selectedSort: $roomsSort
-                                    )
-                                }
-                            }
+                            roomSection(RoomListSectionKey.channels, title: String(localized: "Rooms"), rooms: ungroupedChannelRooms)
                         }
 
-                        if directRooms.isEmpty == false {
-                            Section {
-                                ForEach(directRooms) { room in
-                                    roomRow(room)
-                                }
-                            } header: {
-                                RoomSectionHeader(
-                                    title: String(localized: "Direct messages"),
-                                    count: directRooms.count,
-                                    selectedSort: $directsSort
-                                )
-                            }
-                        }
-
-                        if lowPriorityRooms.isEmpty == false {
-                            Section {
-                                ForEach(lowPriorityRooms) { room in
-                                    roomRow(room)
-                                }
-                            } header: {
-                                RoomSectionHeader(
-                                    title: String(localized: "Low priority"),
-                                    count: lowPriorityRooms.count,
-                                    selectedSort: $roomsSort
-                                )
-                            }
-                        }
+                        roomSection(RoomListSectionKey.directs, title: String(localized: "Direct messages"), rooms: directRooms)
+                        roomSection(RoomListSectionKey.lowPriority, title: String(localized: "Low priority"), rooms: lowPriorityRooms)
                     }
                     .listStyle(.plain)
                     .modifier(RoomListTopMargin())
@@ -259,12 +149,6 @@ struct RoomListView: View {
                             .accessibilityHidden(true)
                     }
                     .accessibilityIdentifier("RoomList")
-                    .onAppear {
-                        seedExpandedSpacesIfNeeded(
-                            groups: spaceChannelGroups,
-                            unreadCounts: spaceUnreadCounts
-                        )
-                    }
                 }
             }
         }
@@ -351,15 +235,89 @@ struct RoomListView: View {
             loadRoomsTask?.cancel()
             liveUpdates.stop()
         }
-        .onChange(of: favoriteSort) { sort in
-            RoomListSortOrder.persist(sort, for: .favorites)
+        .onChange(of: sortOrder) { sort in
+            RoomListSortOrder.persistShared(sort)
         }
-        .onChange(of: roomsSort) { sort in
-            RoomListSortOrder.persist(sort, for: .rooms)
+    }
+
+    /// One 44 pt header row (account mark, title menu, search, new room), the
+    /// search field while open, and one filter chip row.
+    @ViewBuilder
+    private func roomListChrome(
+        spaces: [SpaceSummary],
+        unreadCounts: [String: Int],
+        selectedSpaceTitle: String?,
+        filterBadges: [RoomListFilter: Int]
+    ) -> some View {
+        VStack(spacing: SynaraSpacing.small) {
+            RoomListHeader(
+                title: selectedSpaceTitle ?? accountMenuTitle,
+                spaces: spaces,
+                unreadCountsBySpaceID: unreadCounts,
+                selectedSpaceID: $selectedSpaceID,
+                sortOrder: $sortOrder,
+                onAccount: { environment.router.present(.accountSwitcher) },
+                onSearch: { presentSearch() },
+                onNewRoom: { isRoomManagementSheetPresented = true }
+            )
+            if isSearchPresented {
+                RoomSearchField(text: $searchQuery, isFocused: $isSearchFocused) {
+                    dismissSearch(clearQuery: false)
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            RoomFilterStrip(
+                selectedFilter: $selectedFilter,
+                filterBadges: filterBadges
+            )
+            if RoomListChromePolicy.showsSpaceChipStrip, spaces.isEmpty == false {
+                SpaceFilterStrip(
+                    spaces: spaces,
+                    unreadCountsBySpaceID: unreadCounts,
+                    selectedSpaceID: $selectedSpaceID
+                )
+            }
         }
-        .onChange(of: directsSort) { sort in
-            RoomListSortOrder.persist(sort, for: .directs)
+        .padding(.horizontal, SynaraSpacing.large)
+        .padding(.top, SynaraSpacing.small)
+        .padding(.bottom, SynaraSpacing.xSmall)
+        .background(SynaraChrome.roomList)
+    }
+
+    /// A collapsible section. Collapsing hides the read rows only; unread
+    /// rooms stay listed, as in Slack's sidebar.
+    @ViewBuilder
+    private func roomSection(_ key: String, title: String, rooms: [RoomSummary]) -> some View {
+        if rooms.isEmpty == false {
+            let isCollapsed = collapsedSections.contains(key)
+            let visibleRooms = isCollapsed ? rooms.filter(\.hasUnreadActivity) : rooms
+            Section {
+                ForEach(visibleRooms) { room in
+                    roomRow(room)
+                }
+            } header: {
+                RoomListSectionHeader(
+                    title: title,
+                    count: rooms.count,
+                    isCollapsed: isCollapsed,
+                    identifier: key
+                ) {
+                    toggleSection(key)
+                }
+            }
         }
+    }
+
+    private func toggleSection(_ key: String) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            if collapsedSections.contains(key) {
+                collapsedSections.remove(key)
+            } else {
+                collapsedSections.insert(key)
+            }
+        }
+        RoomListSectionCollapse.persist(collapsedSections)
+        SynaraHaptics.trigger(.lightImpact)
     }
 
     private var peerCallStatusKey: RoomListPeerCallStatus.Key {
@@ -540,19 +498,6 @@ struct RoomListView: View {
         }
     }
 
-    private func spaceExpansionBinding(for spaceID: String) -> Binding<Bool> {
-        Binding(
-            get: { expandedSpaceIDs.contains(spaceID) },
-            set: { isExpanded in
-                if isExpanded {
-                    expandedSpaceIDs.insert(spaceID)
-                } else {
-                    expandedSpaceIDs.remove(spaceID)
-                }
-            }
-        )
-    }
-
     private var accountMenuTitle: String {
         guard case .signedIn(let session) = environment.session.currentState else {
             return "Synara"
@@ -581,7 +526,7 @@ struct RoomListView: View {
                 RoomListRow(room: room, peerInCall: RoomListPeerCallStatus.isInCall(room, peersInCall: peersInCall))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, SynaraSpacing.medium)
-                    .padding(.vertical, SynaraSpacing.small)
+                    .padding(.vertical, SynaraMetrics.roomRowVerticalPadding)
                     .background {
                         // Rows sit on the list plane; the open conversation
                         // is marked by a quiet accent fill, as on desktop.
@@ -623,7 +568,7 @@ struct RoomListView: View {
                     Button {
                         markRoomAsRead(room)
                     } label: {
-                        Label("Read", systemImage: "envelope.open")
+                        Label("Mark read", systemImage: "envelope.open")
                     }
                     .tint(SynaraColor.accent)
                     .accessibilityIdentifier("MarkRead-\(room.id)")
@@ -631,9 +576,12 @@ struct RoomListView: View {
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button {
-                    muteRoom(room)
+                    toggleMute(room)
                 } label: {
-                    Label("Mute", systemImage: "bell.slash")
+                    Label(
+                        room.isMuted ? "Unmute" : "Mute",
+                        systemImage: room.isMuted ? "bell" : "bell.slash"
+                    )
                 }
                 .tint(SynaraColor.secondaryText)
                 .accessibilityIdentifier("MuteRoom-\(room.id)")
@@ -646,12 +594,27 @@ struct RoomListView: View {
                 .accessibilityIdentifier("LeaveRoom-\(room.id)")
             }
             .contextMenu {
+                if room.hasUnreadActivity {
+                    Button {
+                        markRoomAsRead(room)
+                    } label: {
+                        Label("Mark read", systemImage: "envelope.open")
+                    }
+                }
                 Button {
                     toggleFavorite(room)
                 } label: {
                     Label(
                         room.isFavorite ? "Remove from Favorites" : "Add to Favorites",
                         systemImage: room.isFavorite ? "star.slash" : "star"
+                    )
+                }
+                Button {
+                    toggleMute(room)
+                } label: {
+                    Label(
+                        room.isMuted ? "Unmute" : "Mute",
+                        systemImage: room.isMuted ? "bell" : "bell.slash"
                     )
                 }
             }
@@ -675,6 +638,7 @@ struct RoomListView: View {
                 return
             }
             await MainActor.run {
+                SynaraHaptics.trigger(.success)
                 loadRooms(showLoading: false)
             }
         }
@@ -685,6 +649,7 @@ struct RoomListView: View {
             do {
                 try await environment.roomManagement.setRoomFavorite(!room.isFavorite, roomID: room.id)
                 await MainActor.run {
+                    SynaraHaptics.trigger(.lightImpact)
                     loadRooms(showLoading: false)
                 }
             } catch {
@@ -695,10 +660,19 @@ struct RoomListView: View {
         }
     }
 
-    private func muteRoom(_ room: RoomSummary) {
+    /// Mute ↔ default. The reload shows the muted row style (or clears it) and
+    /// flips the swipe label.
+    private func toggleMute(_ room: RoomSummary) {
         Task {
             do {
-                try await environment.roomManagement.setNotificationMode(.mute, roomID: room.id)
+                try await environment.roomManagement.setNotificationMode(
+                    room.isMuted ? .default : .mute,
+                    roomID: room.id
+                )
+                await MainActor.run {
+                    SynaraHaptics.trigger(.lightImpact)
+                    loadRooms(showLoading: false)
+                }
             } catch {
                 await MainActor.run {
                     membershipError = RoomManagementError.failed.localizedDescription
@@ -744,23 +718,6 @@ struct RoomListView: View {
         ]
     }
 
-    private func seedExpandedSpacesIfNeeded(
-        groups: [SpaceChannelGroup],
-        unreadCounts: [String: Int]
-    ) {
-        guard expandedSpaceIDs.isEmpty else {
-            return
-        }
-
-        let unreadSpaceIDs = groups
-            .filter { unreadCounts[$0.space.id, default: 0] > 0 }
-            .map(\.id)
-        guard unreadSpaceIDs.isEmpty == false else {
-            return
-        }
-        expandedSpaceIDs = Set(unreadSpaceIDs)
-    }
-
     private func dismissSearch(clearQuery: Bool) {
         isSearchFocused = false
         if clearQuery {
@@ -771,6 +728,35 @@ struct RoomListView: View {
                 isSearchPresented = false
             }
         }
+    }
+}
+
+/// Keys of the collapsible room-list sections.
+enum RoomListSectionKey {
+    static let favorites = "favorites"
+    static let channels = "channels"
+    static let directs = "directs"
+    static let lowPriority = "lowPriority"
+
+    static func space(_ id: String) -> String {
+        "space:\(id)"
+    }
+}
+
+/// Collapsed sections survive relaunch, like the sort order. UI tests start
+/// expanded whatever the simulator's defaults hold.
+enum RoomListSectionCollapse {
+    static let storageKey = "synara.roomListCollapsedSections"
+
+    static func stored(defaults: UserDefaults = .standard) -> Set<String> {
+        guard SynaraLaunchEnvironment.isUITest == false else {
+            return []
+        }
+        return Set(defaults.stringArray(forKey: storageKey) ?? [])
+    }
+
+    static func persist(_ keys: Set<String>, defaults: UserDefaults = .standard) {
+        defaults.set(Array(keys).sorted(), forKey: storageKey)
     }
 }
 
@@ -809,39 +795,37 @@ private enum RoomListFilter: String, CaseIterable, Identifiable {
     }
 }
 
+/// The one header row: account mark, a title menu (space switcher + sort),
+/// search and new room. 44 pt, the shared `SynaraMetrics.columnHeaderHeight`.
 private struct RoomListHeader: View {
     let title: String
+    let spaces: [SpaceSummary]
+    let unreadCountsBySpaceID: [String: Int]
+    @Binding var selectedSpaceID: String?
+    @Binding var sortOrder: RoomListSortOrder
     let onAccount: () -> Void
     let onSearch: () -> Void
     let onNewRoom: () -> Void
 
     var body: some View {
-        HStack(spacing: SynaraSpacing.medium) {
+        HStack(spacing: SynaraSpacing.small) {
             Button(action: onAccount) {
-                HStack(spacing: SynaraSpacing.small) {
-                    SynaraBrandMark(size: 38)
-
-                    HStack(spacing: SynaraSpacing.xSmall) {
-                        Text(title)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(SynaraColor.headingText)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.78)
-                    }
-                    .frame(maxWidth: 210, alignment: .leading)
-                }
+                SynaraBrandMark(size: 28)
+                    .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .contentShape(Rectangle())
             .accessibilityLabel("Account menu")
             .accessibilityHint("Shows account details, settings, and logout")
             .accessibilityIdentifier("RoomHeaderAccountMenuButton")
 
-            Spacer()
+            titleMenu
+
+            Spacer(minLength: SynaraSpacing.small)
 
             Button(action: onSearch) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.body.weight(.semibold))
                     .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
                     .foregroundStyle(SynaraColor.accent)
             }
@@ -852,7 +836,7 @@ private struct RoomListHeader: View {
 
             Button(action: onNewRoom) {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.body.weight(.semibold))
                     .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
                     .foregroundStyle(SynaraColor.accent)
             }
@@ -861,6 +845,118 @@ private struct RoomListHeader: View {
             .accessibilityLabel("New room")
             .accessibilityIdentifier("NewRoomButton")
         }
+        .frame(minHeight: SynaraMetrics.columnHeaderHeight)
+    }
+
+    /// Spaces (when the account has any) and the list order live behind the
+    /// title, so the chrome stays one row.
+    private var titleMenu: some View {
+        Menu {
+            if spaces.isEmpty == false {
+                // Inside a space, the way back to every room comes first and
+                // reads as a way back, not as one more checkable row.
+                if selectedSpaceID != nil {
+                    Section {
+                        Button {
+                            selectedSpaceID = nil
+                        } label: {
+                            Label(String(localized: "All spaces"), systemImage: "arrow.uturn.backward")
+                        }
+                        .accessibilityHint("Shows the rooms of every space")
+                        .accessibilityIdentifier("SpaceFilter-all")
+                    }
+                }
+
+                Section {
+                    if selectedSpaceID == nil {
+                        Button {
+                            selectedSpaceID = nil
+                        } label: {
+                            menuItem(String(localized: "All spaces"), isSelected: true)
+                        }
+                        .accessibilityIdentifier("SpaceFilter-all")
+                    }
+
+                    ForEach(spaces) { space in
+                        Button {
+                            selectedSpaceID = space.id
+                        } label: {
+                            spaceMenuItem(space, isSelected: selectedSpaceID == space.id)
+                        }
+                        .accessibilityLabel(spaceAccessibilityLabel(space))
+                        .accessibilityIdentifier("SpaceFilter-\(space.id)")
+                    }
+                } header: {
+                    Text("Spaces")
+                }
+            }
+
+            Section {
+                ForEach(RoomListSortOrder.allCases) { sort in
+                    Button {
+                        sortOrder = sort
+                    } label: {
+                        menuItem(sort.shortTitle, isSelected: sortOrder == sort)
+                    }
+                    .accessibilityLabel(sort.title)
+                    .accessibilityIdentifier("RoomListSortMenu-\(sort.rawValue)")
+                }
+            } header: {
+                Text("Sort by")
+            }
+        } label: {
+            HStack(spacing: SynaraSpacing.xSmall) {
+                Text(title)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(SynaraColor.headingText)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: SynaraHitTarget.minimum)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(title))
+        .accessibilityValue(Text(sortOrder.title))
+        .accessibilityHint("Switches space and list order")
+        .accessibilityIdentifier("RoomListTitleMenu")
+    }
+
+    @ViewBuilder
+    private func menuItem(_ title: String, isSelected: Bool) -> some View {
+        if isSelected {
+            Label(title, systemImage: "checkmark")
+        } else {
+            Text(title)
+        }
+    }
+
+    /// The space name with its unread count as the menu row's subtitle.
+    @ViewBuilder
+    private func spaceMenuItem(_ space: SpaceSummary, isSelected: Bool) -> some View {
+        let unread = unreadCountsBySpaceID[space.id] ?? 0
+        if isSelected {
+            Label {
+                Text(space.name)
+                if unread > 0 {
+                    Text(String(localized: "\(unread) unread"))
+                }
+            } icon: {
+                Image(systemName: "checkmark")
+            }
+        } else {
+            Text(space.name)
+            if unread > 0 {
+                Text(String(localized: "\(unread) unread"))
+            }
+        }
+    }
+
+    private func spaceAccessibilityLabel(_ space: SpaceSummary) -> String {
+        let unread = unreadCountsBySpaceID[space.id] ?? 0
+        return unread > 0 ? String(localized: "\(space.name), \(unread) unread") : space.name
     }
 }
 
@@ -1139,6 +1235,9 @@ private struct RoomFilterStrip: View {
     }
 }
 
+/// The pre-review-2 space chip row. Kept behind
+/// `RoomListChromePolicy.showsSpaceChipStrip` for an easy revert; the title
+/// menu carries the same identifiers.
 private struct SpaceFilterStrip: View {
     let spaces: [SpaceSummary]
     let unreadCountsBySpaceID: [String: Int]
@@ -1169,101 +1268,56 @@ private struct SpaceFilterStrip: View {
     }
 }
 
-private struct RoomSectionHeader: View {
+/// The one section header of the Rooms list and the Notifications inbox:
+/// title, count, and (when `onToggle` is set) a chevron that collapses the
+/// section. Collapsed state is persisted by the owner.
+struct RoomListSectionHeader: View {
     let title: String
     let count: Int
-    var selectedSort: Binding<RoomListSortOrder>?
+    var isCollapsed = false
+    /// Stable, non-localized suffix of the accessibility identifier.
+    var identifier: String? = nil
+    var onToggle: (() -> Void)? = nil
 
     var body: some View {
-        HStack {
+        if let onToggle {
+            Button(action: onToggle) {
+                label
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(title))
+            .accessibilityValue(isCollapsed ? Text("Collapsed") : Text("Expanded"))
+            .accessibilityHint(isCollapsed ? Text("Expands this section") : Text("Collapses this section"))
+            .accessibilityIdentifier("RoomListSectionHeader-\(identifier ?? title)")
+        } else {
+            label
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("RoomListSectionHeader-\(identifier ?? title)")
+        }
+    }
+
+    private var label: some View {
+        HStack(spacing: SynaraSpacing.small) {
             Text(title)
                 .font(SynaraTypography.emphasis)
                 .textCase(nil)
                 .foregroundStyle(SynaraColor.headingText)
-            Spacer()
-            if let selectedSort {
-                RoomListSortIcons(sectionTitle: title, selectedSort: selectedSort)
-            }
+                .lineLimit(1)
+            Spacer(minLength: SynaraSpacing.small)
             Text("\(count)")
                 .font(SynaraTypography.chipLabel)
+                .monospacedDigit()
                 .foregroundStyle(SynaraColor.secondaryText)
-        }
-    }
-}
-
-private struct RoomListSortIcons: View {
-    let sectionTitle: String
-    @Binding var selectedSort: RoomListSortOrder
-
-    var body: some View {
-        Menu {
-            ForEach(RoomListSortOrder.allCases) { sort in
-                Button {
-                    selectedSort = sort
-                } label: {
-                    if selectedSort == sort {
-                        Label(sort.shortTitle, systemImage: "checkmark")
-                    } else {
-                        Text(sort.shortTitle)
-                    }
-                }
-                .accessibilityLabel(sort.title(for: sectionTitle))
+            if onToggle != nil {
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                    .accessibilityHidden(true)
             }
-        } label: {
-            Image(systemName: selectedSort.systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(SynaraColor.secondaryText)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
         }
-        .accessibilityLabel("Sort \(sectionTitle). Current: \(selectedSort.shortTitle)")
-        .accessibilityIdentifier("RoomListSortMenu")
-    }
-}
-
-private struct SpaceSelectedHeader: View {
-    let title: String
-    let roomCount: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-            Text(title)
-                .font(SynaraTypography.screenTitle.weight(.bold))
-                .foregroundStyle(SynaraColor.headingText)
-            Text("\(roomCount) channels")
-                .font(SynaraTypography.messageMeta.weight(.medium))
-                .foregroundStyle(SynaraColor.secondaryText)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .textCase(nil)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("SpaceSelectedHeader-\(title)")
-    }
-}
-
-private struct SpaceDisclosureLabel: View {
-    let title: String
-    let roomCount: Int
-    let unreadCount: Int
-
-    var body: some View {
-        HStack(spacing: SynaraSpacing.small) {
-            Text(title)
-                .font(SynaraTypography.emphasis)
-                .foregroundStyle(SynaraColor.primaryText)
-
-            Spacer(minLength: SynaraSpacing.small)
-
-            if unreadCount > 0 {
-                SynaraUnreadBadge(count: unreadCount, highlighted: false)
-            }
-
-            Text("\(roomCount)")
-                .font(SynaraTypography.chipLabel)
-                .foregroundStyle(SynaraColor.secondaryText)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("SpaceDisclosureLabel-\(title)")
+        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 
@@ -1297,7 +1351,7 @@ private struct RoomSearchField: View {
             }
         }
         .padding(SynaraSpacing.medium)
-        .frame(height: 44)
+        .frame(minHeight: SynaraHitTarget.minimum)
         .background(
             SynaraColor.mutedControl.opacity(0.6),
             in: RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
@@ -1326,50 +1380,66 @@ private struct RoomListRow: View {
         room.hasUnreadActivity
     }
 
-    private var roomGlyphColor: Color {
-        guard room.isSecureRoom == false else {
-            return SynaraColor.secure
+    /// Muted rooms read as tertiary throughout; unread rows carry the
+    /// heading colour and a bold name, read rows stay regular.
+    private var nameColor: Color {
+        if room.isMuted {
+            return SynaraColor.tertiaryText
         }
-        return hasUnreadActivity ? SynaraColor.primaryText : SynaraColor.secondaryText
+        return hasUnreadActivity ? SynaraColor.headingText : SynaraColor.primaryText
+    }
+
+    private var glyphColor: Color {
+        if room.isMuted {
+            return SynaraColor.tertiaryText
+        }
+        return hasUnreadActivity ? SynaraColor.headingText : SynaraColor.secondaryText
     }
 
     private var previewColor: Color {
-        SynaraColor.secondaryText
+        hasUnreadActivity && room.isMuted == false ? SynaraColor.secondaryText : SynaraColor.tertiaryText
+    }
+
+    /// Mentions and unread direct messages get the red count; a plain unread
+    /// channel is marked by its bold name alone. Muted rooms badge mentions only.
+    private var showsCountBadge: Bool {
+        if room.hasHighlight {
+            return true
+        }
+        return room.isMuted == false && room.kind == .directMessage && hasUnreadActivity
     }
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            switch SynaraRoomGlyph.glyph(for: room) {
-            case .channel:
-                Text("#")
-                    .font(SynaraTypography.body.weight(.semibold))
-                    .foregroundStyle(roomGlyphColor)
-                    .frame(width: 20, alignment: .center)
-                    .accessibilityHidden(true)
-            case let .person(initial):
-                // Same 20 pt column as "#", so names stay aligned.
-                SynaraPersonGlyph(initial: initial, avatarURL: room.avatarURL, size: 20, seed: room.directUserId ?? room.id)
-            }
+            SynaraRoomGlyphView(room: room, tint: glyphColor)
 
-            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
                     Text(room.name)
-                        .font(SynaraTypography.body.weight(hasUnreadActivity ? .semibold : .regular))
-                        .foregroundStyle(SynaraColor.primaryText)
+                        .font(SynaraTypography.body.weight(hasUnreadActivity && room.isMuted == false ? .bold : .regular))
+                        .foregroundStyle(nameColor)
                         .lineLimit(SynaraDynamicTypeLayout.titleLineLimit(dynamicTypeSize))
                         .layoutPriority(1)
                         .accessibilityIdentifier("RoomRowTitle-\(room.id)")
 
-                    if room.isSecureRoom {
+                    if room.isEncrypted {
                         Image(systemName: "lock.fill")
                             .font(SynaraTypography.chipLabel)
                             .foregroundStyle(SynaraColor.secondaryText)
                             .accessibilityLabel("Encrypted room")
                     }
 
+                    if room.isMuted {
+                        Image(systemName: "bell.slash.fill")
+                            .font(SynaraTypography.chipLabel)
+                            .foregroundStyle(SynaraColor.tertiaryText)
+                            .accessibilityLabel("Muted")
+                            .accessibilityIdentifier("RoomRowMuted-\(room.id)")
+                    }
+
                     if room.isFavorite {
                         Image(systemName: "star.fill")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(SynaraTypography.fineMeta.weight(.semibold))
                             .foregroundStyle(SynaraColor.secondaryText)
                             .accessibilityLabel("Favorite")
                     }
@@ -1405,7 +1475,7 @@ private struct RoomListRow: View {
                     : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SynaraSpacing.xSmall))
                 previewLayout {
                     Text(room.lastMessagePreview)
-                        .font(SynaraTypography.roomPreview.weight(hasUnreadActivity ? .medium : .regular))
+                        .font(SynaraTypography.roomPreview)
                         .foregroundStyle(previewColor)
                         .lineLimit(SynaraDynamicTypeLayout.previewLineLimit(dynamicTypeSize))
                         .layoutPriority(1)
@@ -1446,13 +1516,15 @@ private struct RoomListRow: View {
                                 .lineLimit(1)
                         }
 
-                        SynaraUnreadBadge(count: room.unreadBadgeCount, highlighted: room.hasHighlight)
+                        if showsCountBadge {
+                            SynaraUnreadBadge(count: room.unreadBadgeCount, highlighted: true)
+                        }
                     }
                     .fixedSize(horizontal: true, vertical: false)
                 }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: SynaraMetrics.roomRowMinHeight, alignment: .leading)
         .accessibilityElement(children: accessibilityChildren)
         .accessibilityLabel(rowAccessibilityLabel)
     }
@@ -1478,22 +1550,6 @@ private struct RoomRowCompactStatusIcon: View {
             .foregroundStyle(tint)
             .frame(width: width, height: height)
             .accessibilityLabel(accessibilityLabel)
-    }
-}
-
-private struct RoomListSyncBanner: View {
-    let status: String
-    let roomCount: Int
-
-    var body: some View {
-        HStack(spacing: SynaraSpacing.small) {
-            SynaraStatusChip(title: status, tint: SynaraColor.agent, systemImage: "arrow.triangle.2.circlepath")
-            Spacer()
-            Text("\(roomCount) rooms")
-                .font(SynaraTypography.messageMeta)
-                .foregroundStyle(SynaraColor.secondaryText)
-        }
-        .padding(.vertical, SynaraSpacing.xSmall)
     }
 }
 
@@ -1537,10 +1593,13 @@ private extension RoomSummary {
         if isFavorite {
             parts.append(String(localized: "favorite"))
         }
+        if isMuted {
+            parts.append(String(localized: "muted"))
+        }
         if hasActiveCall {
             parts.append(liveCallChipLabel)
         }
-        if isSecureRoom {
+        if isEncrypted {
             parts.append(String(localized: "encrypted"))
         }
         if requiresAgentApproval {
@@ -1588,25 +1647,6 @@ private extension RoomSummary {
             : formatters.monthDayYear
         return formatter.format(lastActivityAt)
     }
-
-    var roomTint: Color {
-        if kind == .directMessage {
-            return SynaraColor.secondaryText
-        }
-        if isAgentRoom {
-            return SynaraColor.design
-        }
-        if isSecureRoom {
-            return SynaraColor.secure
-        }
-        if name.localizedCaseInsensitiveContains("design") {
-            return SynaraColor.design
-        }
-        if name.localizedCaseInsensitiveContains("ops") {
-            return SynaraColor.ops
-        }
-        return SynaraColor.primaryText
-    }
 }
 
 struct RoomListView_Previews: PreviewProvider {
@@ -1618,12 +1658,16 @@ struct RoomListView_Previews: PreviewProvider {
     }
 }
 
-/// A custom account/filter header already provides the list's top spacing.
+/// A custom account/filter header already provides the list's top spacing,
+/// and sections sit close together (Slack density) instead of the default
+/// grouped gap.
 private struct RoomListTopMargin: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
-            content.contentMargins(.top, 0, for: .scrollContent)
+            content
+                .contentMargins(.top, 0, for: .scrollContent)
+                .listSectionSpacing(SynaraMetrics.roomListSectionSpacing)
         } else {
             content
         }

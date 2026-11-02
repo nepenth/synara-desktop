@@ -20,6 +20,7 @@ import classNames from 'classnames';
 import FocusTrap from '../FocusTrap';
 import * as css from './style.css';
 import { RoomAvatar } from '../room-avatar';
+import { avatarLadderStyle } from '../user-avatar';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { nameInitials } from '../../utils/common';
@@ -203,7 +204,7 @@ export const RoomCard = as<'div', RoomCardProps>(
     return (
       <RoomCardBase {...props} ref={ref}>
         <Box gap="200" justifyContent="SpaceBetween">
-          <Avatar size="500">
+          <Avatar style={avatarLadderStyle('hero')}>
             <RoomAvatar
               roomId={roomIdOrAlias}
               src={avatar ?? undefined}

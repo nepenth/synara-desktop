@@ -1,22 +1,27 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, toRem } from 'folds';
-import { raisedShadow } from '../../styles/Depth.css';
 
-export const CategoryButton = style({
-  flexGrow: 1,
-});
-export const CategoryButtonIcon = style({
-  opacity: config.opacity.P400,
-});
-
+/**
+ * The leading glyph column: `#`, a lock for non-public rooms, or a DM peer.
+ * 18px wide so names start at one x whatever the glyph. The glyph follows the
+ * name: primary when unread, secondary when read, tertiary when muted.
+ */
 export const RoomGlyph = style({
   width: toRem(18),
   flex: 'none',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   color: 'var(--synara-content-secondary)',
-  fontSize: toRem(17),
-  fontWeight: 500,
+  fontSize: toRem(15),
+  fontWeight: config.fontWeight.W600,
   lineHeight: 1,
   textAlign: 'center',
+});
+
+export const RoomGlyphIcon = style({
+  width: toRem(15),
+  height: toRem(15),
 });
 
 /** A DM's peer in the `#` slot, at the glyph's size so rows keep their height. */
@@ -39,8 +44,29 @@ export const RoomNameRead = style({
   color: 'var(--synara-content-secondary)',
 });
 
+/** Muted rooms step back one more tone; the small bell-mute glyph names it. */
+export const RoomNameMuted = style({
+  color: 'var(--synara-content-tertiary)',
+});
+
+export const RoomGlyphUnread = style({
+  color: 'var(--synara-content-primary)',
+});
+
+export const RoomGlyphMuted = style({
+  color: 'var(--synara-content-tertiary)',
+});
+
+/** Trailing state glyphs (favourite star, notification mode) in tertiary. */
+export const RoomStateGlyph = style({
+  flex: 'none',
+  color: 'var(--synara-content-tertiary)',
+  width: toRem(12),
+  height: toRem(12),
+});
+
 /**
- * Resting rows remain on the reading plane; interaction supplies elevation.
+ * Rows are flat: hover is the surface tint from `NavItem`, nothing else.
  * Rows are 32px so a long room list scans like a list, not a stack of tiles.
  */
 export const RoomSurface = style({
@@ -51,20 +77,6 @@ export const RoomSurface = style({
   selectors: {
     '&:hover, &:focus-within': {
       backgroundColor: color.Surface.ContainerHover,
-      borderColor: color.Surface.ContainerLine,
-      boxShadow: raisedShadow,
-    },
-  },
-  '@media': {
-    '(prefers-contrast: more)': {
-      boxShadow: 'none',
-      borderColor: 'var(--synara-depth-contrast-edge)',
-      selectors: {
-        '&:hover, &:focus-within': {
-          borderColor: 'var(--synara-depth-contrast-strong-edge)',
-          boxShadow: 'none',
-        },
-      },
     },
   },
 });

@@ -18,6 +18,7 @@ extension TimelineRowAccessibility {
         case copy
         case selectText
         case forward
+        case saveToLater
         case pinToNotes
         case declineCall
         case report
@@ -47,6 +48,8 @@ extension TimelineRowAccessibility {
                 return String(localized: "Select Text")
             case .forward:
                 return String(localized: "Forward")
+            case .saveToLater:
+                return String(localized: "Save to Later")
             case .pinToNotes:
                 return String(localized: "Pin to Notes")
             case .declineCall:
@@ -54,7 +57,7 @@ extension TimelineRowAccessibility {
             case .report:
                 return String(localized: "Report")
             case .redact:
-                return String(localized: "Redact")
+                return String(localized: "Delete")
             }
         }
     }
@@ -66,6 +69,7 @@ extension TimelineRowAccessibility {
         replyCount: Int,
         canCopy: Bool,
         canPinToNotes: Bool,
+        canSaveToLater: Bool = false,
         reactions: [String: Int] = [:],
         ownReactions: TimelineReactionOwnership = .unknown,
         quickReactions: [String] = [],
@@ -105,6 +109,9 @@ extension TimelineRowAccessibility {
         }
         if availability.canForward {
             actions.append(.forward)
+        }
+        if canSaveToLater {
+            actions.append(.saveToLater)
         }
         if canPinToNotes {
             actions.append(.pinToNotes)

@@ -47,6 +47,10 @@ export const MembersGroup = style({
 });
 export const MembersGroupLabel = style({
   padding: config.space.S200,
+  fontSize: toRem(13),
+  fontWeight: config.fontWeight.W600,
+  lineHeight: 1.3,
+  color: 'var(--synara-content-secondary)',
   selectors: {
     '&:not(:first-child)': {
       paddingTop: config.space.S500,

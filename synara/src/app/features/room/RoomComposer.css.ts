@@ -72,3 +72,33 @@ export const ComposerError = style({
 
 /** One shared surface with a faint edge and soft contact shadow on hover. */
 export const ComposerAction = quietActionButton;
+
+/**
+ * Send while there is something to send: a filled Primary square, the one
+ * dominant control in the composer. Empty drafts fall back to the quiet action.
+ */
+export const ComposerSendReady = style({
+  transition: 'background-color 140ms ease-out',
+  selectors: {
+    '&&': {
+      backgroundColor: color.Primary.Main,
+      color: color.Primary.OnMain,
+      boxShadow: 'none',
+    },
+    '&&:hover': {
+      backgroundColor: color.Primary.MainHover,
+    },
+    '&&:active': {
+      backgroundColor: color.Primary.MainActive,
+    },
+    '&&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: '2px',
+    },
+  },
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      transition: 'none',
+    },
+  },
+});

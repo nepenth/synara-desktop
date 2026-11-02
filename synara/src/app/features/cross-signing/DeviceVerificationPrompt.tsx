@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -19,6 +19,7 @@ import FocusTrap from '../../components/FocusTrap';
 import { NativeSecretStorageAction } from '../../components/SecretStorage';
 import { useNativeSecretStorage } from '../../hooks/useNativeSecretStorage';
 import { NativeStartVerification } from '../verification/NativeDeviceVerification';
+import { stopPropagation } from '../../utils/keyboard';
 import { IdentityResetDialog } from './IdentityReset';
 import {
   dismissDeviceVerificationPrompt,
@@ -57,9 +58,17 @@ export function DeviceVerificationPromptRenderer() {
     };
   }, []);
 
+  // The trap deactivates when the prompt gives way to the reset dialog; only
+  // an unprompted deactivation (Escape, click outside) means "Later".
+  const chosen = useRef<PromptView>('choices');
   const choose = (next: PromptView) => {
+    chosen.current = next;
     void dismissDeviceVerificationPrompt();
     setView(next);
+  };
+  const handleDeactivate = () => {
+    if (chosen.current === 'reset' || chosen.current === 'hidden') return;
+    choose('hidden');
   };
 
   if (view === 'hidden') return null;
@@ -71,11 +80,13 @@ export function DeviceVerificationPromptRenderer() {
         <FocusTrap
           focusTrapOptions={{
             initialFocus: false,
-            clickOutsideDeactivates: false,
-            escapeDeactivates: false,
+            // Escape and clicking outside mean "Later", like the close X.
+            onDeactivate: handleDeactivate,
+            clickOutsideDeactivates: true,
+            escapeDeactivates: stopPropagation,
           }}
         >
-          <Dialog>
+          <Dialog variant="Surface">
             <Header
               style={{
                 padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -85,7 +96,9 @@ export function DeviceVerificationPromptRenderer() {
               size="500"
             >
               <Box grow="Yes">
-                <Text size="H4">{VERIFY_DEVICE_PROMPT_COPY.title}</Text>
+                <Text as="h2" size="H4">
+                  {VERIFY_DEVICE_PROMPT_COPY.title}
+                </Text>
               </Box>
               <IconButton
                 size="300"

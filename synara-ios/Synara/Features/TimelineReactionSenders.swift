@@ -14,6 +14,11 @@ struct TimelineReactorDirectory: Equatable {
 
     init() {}
 
+    /// Every known sender's display name, by user id.
+    var displayNames: [String: String] {
+        profiles.compactMapValues(\.displayName)
+    }
+
     /// Later rows win, so a renamed sender reads by their newest name; a row
     /// without a profile name never replaces one that has it.
     init(items: [TimelineItem]) {

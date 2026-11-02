@@ -94,7 +94,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     test('room header menu and room settings', async ({ page }) => {
       await page.goto(`${HARNESS}#/home/${ROOM}/`);
-      await page.getByRole('button', { name: 'More Options' }).click();
+      await page
+        .locator('header')
+        .getByRole('button', { name: /more options/i })
+        .click();
       await expect(page.getByText('Copy Link')).toBeVisible();
       const backgrounds = await page.evaluate(() =>
         ['Invite', 'Copy Link', 'Room Settings', 'Jump to Time'].map((label) => {
@@ -139,21 +142,21 @@ test('settings search finds individual settings and opens them', async ({ page }
 
   await search.fill('thread');
   const results = page.locator('[data-settings-search-results]');
-  await expect(results.locator('[data-settings-search-result="Thread Display"]')).toBeVisible();
+  await expect(results.locator('[data-settings-search-result="Thread display"]')).toBeVisible();
   await expect(results.getByRole('group', { name: 'Appearance' })).toBeVisible();
 
-  // Enter opens the first result: Appearance, scrolled to the Thread Display row.
+  // Enter opens the first result: Appearance, scrolled to the Thread display row.
   await search.press('Enter');
-  await expect(page.locator('[data-setting-title="Thread Display"]').first()).toBeInViewport();
+  await expect(page.locator('[data-setting-title="Thread display"]').first()).toBeInViewport();
   await shot(page, 'settings-search-thread');
 
   // Arrow keys reach the results.
   await search.fill('notification sound');
   await search.press('ArrowDown');
-  const sound = results.locator('[data-settings-search-result="Notification Sound"]');
+  const sound = results.locator('[data-settings-search-result="Notification sound"]');
   await expect(sound).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page.locator('[data-setting-title="Notification Sound"]').first()).toBeInViewport();
+  await expect(page.locator('[data-setting-title="Notification sound"]').first()).toBeInViewport();
 
   // No match keeps the empty state; Escape clears the search and restores the nav.
   await search.fill('zzzz no such setting');
@@ -165,7 +168,10 @@ test('settings search finds individual settings and opens them', async ({ page }
 
 test('room settings search finds room rows', async ({ page }) => {
   await page.goto(`${HARNESS}#/home/${ROOM}/`);
-  await page.getByRole('button', { name: 'More Options' }).click();
+  await page
+    .locator('header')
+    .getByRole('button', { name: /more options/i })
+    .click();
   await page.getByRole('button', { name: 'Room Settings' }).click();
   const search = page.getByRole('textbox', { name: 'Search settings' });
   await search.fill('history');

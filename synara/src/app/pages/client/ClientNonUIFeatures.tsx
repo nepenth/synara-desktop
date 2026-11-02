@@ -485,7 +485,7 @@ function MessageNotifications() {
           // Privacy-filtered product strings only: room name and a fixed
           // summary. Never message content, ciphertext, or identifiers.
           title: room?.name ?? 'Unknown',
-          body: `New inbox notification from ${
+          body: `New activity from ${
             (room ? getMemberDisplayName(room, sender) : undefined) ??
             getMxIdLocalPart(sender) ??
             sender
