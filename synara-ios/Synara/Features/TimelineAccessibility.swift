@@ -54,7 +54,7 @@ extension TimelineRowAccessibility {
             case .report:
                 return String(localized: "Report")
             case .redact:
-                return String(localized: "Redact")
+                return String(localized: "Delete")
             }
         }
     }

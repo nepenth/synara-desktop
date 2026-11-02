@@ -463,7 +463,7 @@ final class HitTargetAndDynamicTypeLayoutTests: XCTestCase {
             descriptor: font.fontDescriptor.withSymbolicTraits(.traitBold) ?? font.fontDescriptor,
             size: font.pointSize
         )
-        let textWidth = ("Unread messages" as NSString).size(withAttributes: [.font: bold]).width
+        let textWidth = ("New messages" as NSString).size(withAttributes: [.font: bold]).width
         let available = width - 2 * SynaraSpacing.medium
         let lines: CGFloat = textWidth > available ? 2 : 1
 

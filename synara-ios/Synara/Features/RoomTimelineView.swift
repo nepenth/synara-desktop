@@ -534,6 +534,24 @@ enum RoomTypingPresentation {
             return String(localized: "\(names[0]), \(names[1]), and \(names.count - 2) more are typing...")
         }
     }
+
+    /// Display names where the room knows them, else the localpart; the
+    /// animated dots stand in for the ellipsis.
+    static func text(for userIDs: [String], displayNames: [String: String]) -> String? {
+        let names = Array(Set(userIDs.map { userID in
+            displayNames[userID].flatMap { $0.isEmpty ? nil : $0 } ?? displayName(for: userID)
+        })).sorted()
+        switch names.count {
+        case 0:
+            return nil
+        case 1:
+            return String(localized: "\(names[0]) is typing")
+        case 2:
+            return String(localized: "\(names[0]) and \(names[1]) are typing")
+        default:
+            return String(localized: "\(names[0]), \(names[1]), and \(names.count - 2) more are typing")
+        }
+    }
 }
 
 struct RoomTimelineView: View {
@@ -616,6 +634,8 @@ struct RoomTimelineView: View {
     @State private var sendLatestRequest = 0
     @State private var sendFollowLatestTask: Task<Void, Never>?
     @State private var hasReachedOldestMessages = false
+    /// The topic for the room-start block, loaded once the start is reached.
+    @State private var roomStartTopic: String?
     @State private var lastOlderPaginationAt = Date.distantPast
     @State private var olderPaginationCompletions: UInt64 = 0
     @State private var paginationScrollAnchorID: String?
@@ -706,7 +726,10 @@ struct RoomTimelineView: View {
                     Task { await loadTimeline() }
                 }
             }
-            if let typingText = RoomTypingPresentation.text(for: typingUserIDs) {
+            if let typingText = RoomTypingPresentation.text(
+                for: typingUserIDs,
+                displayNames: TimelineReactorDirectory(items: loadedTimelineItems).displayNames
+            ) {
                 RoomTypingIndicator(text: typingText)
             }
             RoomIdentityWarningBanner(roomID: roomID, crypto: environment.crypto)
@@ -777,6 +800,14 @@ struct RoomTimelineView: View {
                 onDismiss: {
                     timelineSearchQuery = ""
                     isTimelineSearchPresented = false
+                },
+                onOpenMessage: { eventID in
+                    timelineSearchQuery = ""
+                    isTimelineSearchPresented = false
+                    Task { @MainActor in
+                        await Task.yield()
+                        focusMessage(eventID: eventID)
+                    }
                 }
             )
         }
@@ -1039,6 +1070,10 @@ struct RoomTimelineView: View {
         .onChange(of: timelineBottomAnchorGeneration) { _ in
             cancelTimestampReveal()
         }
+        .onChange(of: hasReachedOldestMessages) { reached in
+            guard reached else { return }
+            Task { await loadRoomStartTopic() }
+        }
         .onChange(of: isRoomDetailsPresented) { isPresented in
             guard isPresented == false, shouldReturnToListAfterDetailsDismiss else {
                 return
@@ -1069,11 +1104,14 @@ struct RoomTimelineView: View {
             .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
             .accessibilityIdentifier("TimelineLoading")
         case .empty:
-            SynaraEmptyState(
-                title: String(localized: "No Messages"),
-                systemImage: "text.bubble",
-                message: String(localized: "Messages will appear here.")
-            )
+            ScrollView {
+                TimelineRoomStartRow(info: roomStartInfo, showsSayHello: true)
+                    .padding(.horizontal, timelineHorizontalPadding)
+                    .padding(.top, SynaraSpacing.large)
+            }
+            .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
+            .task { await loadRoomStartTopic() }
+            .accessibilityIdentifier("TimelineEmpty")
         case let .failed(message):
             SynaraErrorState(title: String(localized: "Could Not Load Timeline"), message: message) {
                 Task {
@@ -1110,10 +1148,15 @@ struct RoomTimelineView: View {
                                 currentUserID: currentUserID
                             )
                             let reactorDirectory = TimelineReactorDirectory(items: items)
+                            let threadSummaries = TimelineThreadLocalSummary.summaries(for: items)
 
                             let dayHeaders = TimelineDayHeaderPolicy.headers(for: items)
                             let userID = currentUserID
                             let isInlineThreadMode = threadDisplay == .inline
+                            if hasReachedOldestMessages, isPaginating == false {
+                                TimelineRoomStartRow(info: roomStartInfo)
+                                    .padding(.horizontal, timelineHorizontalPadding)
+                            }
                             ForEach(Array(items.enumerated()), id: \.element.eventID) { index, item in
                                 if let day = dayHeaders[item.eventID] {
                                     TimelineDayHeader(day: day)
@@ -1190,7 +1233,10 @@ struct RoomTimelineView: View {
                                         discardFailedMessage(item)
                                     },
                                     reactorNames: reactorDirectory.names(for: item),
-                                    onShowReactions: { key in showReactions(for: item, key: key) }
+                                    onShowReactions: { key in showReactions(for: item, key: key) },
+                                    onOpenReplyTarget: { eventID in focusMessage(eventID: eventID) },
+                                    threadParticipants: threadSummaries[item.eventID]?.participants ?? [],
+                                    lastReplyAt: threadSummaries[item.eventID]?.lastReplyAt
                                 )
                                 .id(item.eventID)
                                 .onAppear {
@@ -1399,6 +1445,15 @@ struct RoomTimelineView: View {
                     return
                 }
                 isLastReadMarkerVisible = isVisible
+            },
+            onReplyRequested: { callbackRouteID, callbackGeneration, eventID in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration,
+                      let item = loadedTimelineItems.first(where: { $0.eventID == eventID })
+                else {
+                    return
+                }
+                beginReply(item)
             }
         )
         .id(routeID)
@@ -1531,10 +1586,16 @@ struct RoomTimelineView: View {
                 onRetryFailedSend: { retryFailedMessage(eventRow.item) },
                 onDiscardFailedSend: { discardFailedMessage(eventRow.item) },
                 reactorNames: eventRow.reactorNames,
-                onShowReactions: { key in showReactions(for: eventRow.item, key: key) }
+                onShowReactions: { key in showReactions(for: eventRow.item, key: key) },
+                onOpenReplyTarget: { eventID in focusMessage(eventID: eventID) },
+                threadParticipants: eventRow.threadParticipants,
+                lastReplyAt: eventRow.lastReplyAt
             )
             .padding(.horizontal, timelineHorizontalPadding)
             .padding(.bottom, SynaraSpacing.xSmall)
+        case let .roomStart(info):
+            TimelineRoomStartRow(info: info)
+                .padding(.horizontal, timelineHorizontalPadding)
         }
     }
 
@@ -1545,11 +1606,14 @@ struct RoomTimelineView: View {
         let replyCounts = TimelineReplyCounter.replyCounts(for: items)
         let previews = TimelineReplyPreview.previewsByEventID(in: items, currentUserID: userID)
         let reactorDirectory = TimelineReactorDirectory(items: items)
+        let threadSummaries = TimelineThreadLocalSummary.summaries(for: items)
         var rows: [StableTimelineViewportRow] = []
-        rows.reserveCapacity(items.count + 3)
+        rows.reserveCapacity(items.count + 4)
 
         if isPaginating {
             rows.append(.init(id: .pagination, content: .pagination))
+        } else if hasReachedOldestMessages {
+            rows.append(.init(id: .roomStart, content: .roomStart(roomStartInfo)))
         }
         if shouldShowCryptoBanner(items: items) {
             rows.append(.init(id: .cryptoBanner, content: .cryptoBanner(cryptoStatus.observing(items))))
@@ -1591,7 +1655,9 @@ struct RoomTimelineView: View {
                             isInlineThreadMode: isInlineThreadMode,
                             isThreadExpanded: isThreadExpanded(item),
                             timeText: item.timestamp.timelineTime,
-                            reactorNames: reactorDirectory.names(for: item)
+                            reactorNames: reactorDirectory.names(for: item),
+                            threadParticipants: threadSummaries[item.eventID]?.participants ?? [],
+                            lastReplyAt: threadSummaries[item.eventID]?.lastReplyAt
                         )
                     )
                 )
@@ -2823,7 +2889,6 @@ struct RoomTimelineView: View {
             switch status {
             case .sent:
                 sendError = nil
-                SynaraHaptics.trigger(.lightImpact)
                 if SynaraLaunchEnvironment.isUITest,
                    case let .loaded(items, _) = state,
                    let confirmed = items.first(where: { $0.id == id })
@@ -3781,6 +3846,43 @@ struct RoomTimelineView: View {
         )
     }
 
+    /// Scrolls to a message (a reply's original, a search result): a loaded
+    /// row scrolls in place; anything else opens the room at that event.
+    private func focusMessage(eventID: String) {
+        guard eventID.isEmpty == false else { return }
+        let isLoaded = loadedTimelineItems.contains { $0.eventID == eventID || $0.serverEventID == eventID }
+        if isLoaded, StableScrollAnchoringFeatureFlag.isEnabled {
+            timelinePosition = .focusedEvent
+            showJumpToLatest = true
+            enqueueStableViewportCommand(
+                .focused(eventID: eventID, animated: accessibilityReduceMotion == false),
+                generation: timelineBottomAnchorGeneration
+            )
+            return
+        }
+        environment.router.route(to: .room(id: roomID, eventID: eventID, title: displayRoomTitle))
+    }
+
+    /// The "beginning of the conversation" block's facts. The room's creation
+    /// date is not in `RoomSummary`/`RoomDetails`, so it is left out.
+    private var roomStartInfo: TimelineRoomStartInfo {
+        TimelineRoomStartInfo(
+            name: displayRoomTitle,
+            topic: roomStartTopic,
+            glyph: SynaraRoomGlyph.glyph(for: roomSummary),
+            avatarURL: roomSummary?.avatarURL,
+            seed: roomSummary?.directUserId
+        )
+    }
+
+    private func loadRoomStartTopic() async {
+        guard roomStartTopic == nil else { return }
+        let topic = await environment.roomManagement.roomDetails(roomID: roomID)?.topic
+        await MainActor.run {
+            roomStartTopic = topic?.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
     private func beginEdit(_ item: TimelineItem) {
         guard isSendingMessage == false else {
             return
@@ -3891,6 +3993,10 @@ struct RoomTimelineView: View {
         let matrix = environment.matrix
         Task {
             let succeeded = await performAction(.react(key), to: item)
+            if succeeded {
+                // The one send-side haptic: a reaction landing.
+                SynaraHaptics.trigger(.lightImpact)
+            }
             if succeeded, isAdding {
                 await quickReactions.recordUse(key) { await matrix.recordRecentEmoji($0) }
             }
@@ -4267,9 +4373,8 @@ private struct RoomTypingIndicator: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: SynaraSpacing.xSmall) {
-            ProgressView()
-                .controlSize(.mini)
+        HStack(spacing: SynaraSpacing.small) {
+            TimelineTypingDots()
             Text(text)
                 .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
@@ -4279,7 +4384,37 @@ private struct RoomTypingIndicator: View {
         .padding(.horizontal, SynaraSpacing.medium)
         .padding(.vertical, SynaraSpacing.xSmall)
         .background(SynaraColor.surface)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
         .accessibilityIdentifier("RoomTypingIndicator")
+    }
+}
+
+/// Three dots that rise in turn, as on desktop; still under Reduce Motion.
+private struct TimelineTypingDots: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isAnimating = false
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0 ..< 3, id: \.self) { index in
+                Circle()
+                    .fill(SynaraColor.secondaryText)
+                    .frame(width: 5, height: 5)
+                    .offset(y: isAnimating && reduceMotion == false ? -3 : 0)
+                    .animation(
+                        reduceMotion
+                            ? nil
+                            : .easeInOut(duration: 0.45)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * 0.15),
+                        value: isAnimating
+                    )
+            }
+        }
+        .frame(height: 12)
+        .onAppear { isAnimating = true }
+        .accessibilityHidden(true)
     }
 }
 
@@ -4483,6 +4618,8 @@ private struct TimelineSearchSheet: View {
     @Binding var query: String
     let items: [TimelineItem]
     let onDismiss: () -> Void
+    /// Opens a result in the room (dismissing the sheet first).
+    var onOpenMessage: ((String) -> Void)? = nil
     @FocusState private var isSearchFocused: Bool
 
     private var filteredItems: [TimelineItem] {
@@ -4533,26 +4670,40 @@ private struct TimelineSearchSheet: View {
                     .frame(maxHeight: .infinity)
                 } else {
                     List(filteredItems) { item in
-                        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                            HStack {
-                                Text(item.senderDisplayName)
-                                    .font(SynaraTypography.emphasis)
-                                    .foregroundStyle(SynaraColor.primaryText)
-                                Spacer()
-                                Text(item.timestamp.timelineTime)
-                                    .font(SynaraTypography.messageMeta)
+                        Button {
+                            onOpenMessage?(item.serverEventID ?? item.eventID)
+                        } label: {
+                            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                                HStack {
+                                    Text(item.senderDisplayName)
+                                        .font(SynaraTypography.emphasis)
+                                        .foregroundStyle(SynaraColor.primaryText)
+                                    Spacer()
+                                    Text(item.timestamp.timelineTime)
+                                        .font(SynaraTypography.messageMeta)
+                                        .foregroundStyle(SynaraColor.secondaryText)
+                                }
+                                Text(item.threadTitle)
+                                    .font(SynaraTypography.body)
                                     .foregroundStyle(SynaraColor.secondaryText)
+                                    .lineLimit(3)
                             }
-                            Text(item.threadTitle)
-                                .font(SynaraTypography.body)
-                                .foregroundStyle(SynaraColor.secondaryText)
-                                .lineLimit(3)
+                            .padding(.vertical, SynaraSpacing.xSmall)
+                            .contentShape(Rectangle())
                         }
-                        .padding(.vertical, SynaraSpacing.xSmall)
+                        .buttonStyle(.plain)
+                        .disabled(onOpenMessage == nil)
+                        .accessibilityHint(onOpenMessage == nil ? "" : TimelineReplyQuoteCopy.openHint)
                         .accessibilityIdentifier("TimelineSearchResult-\(item.eventID)")
                     }
                     .listStyle(.plain)
                     .accessibilityIdentifier("TimelineSearchResults")
+                    .safeAreaInset(edge: .bottom) {
+                        Text("Searches the messages loaded in this room.")
+                            .font(SynaraTypography.fineMeta)
+                            .foregroundStyle(SynaraColor.tertiaryText)
+                            .padding(.vertical, SynaraSpacing.xSmall)
+                    }
                 }
             }
             .background(SynaraColor.surface)
@@ -4622,7 +4773,9 @@ struct ThreadTimelineView: View {
     var body: some View {
         VStack(spacing: 0) {
             ThreadHeader(
-                subtitle: rootTitle ?? roomTitle ?? String(localized: "Room message"),
+                // The room, as Slack's thread header; the root message is
+                // the first row below.
+                subtitle: roomTitle ?? rootTitle ?? String(localized: "Room message"),
                 onBack: { dismiss() }
             )
 
@@ -5111,6 +5264,10 @@ struct ThreadTimelineView: View {
         let matrix = environment.matrix
         Task {
             let succeeded = await performAction(.react(key), to: item)
+            if succeeded {
+                // The one send-side haptic: a reaction landing.
+                SynaraHaptics.trigger(.lightImpact)
+            }
             if succeeded, isAdding {
                 await quickReactions.recordUse(key) { await matrix.recordRecentEmoji($0) }
             }
@@ -5386,9 +5543,7 @@ struct ThreadTimelineView: View {
             switch environment.outgoingSends.queue.item(id: id)?.deliveryStatus {
             case .failed:
                 SynaraHaptics.trigger(.warning)
-            case .sent:
-                SynaraHaptics.trigger(.lightImpact)
-            case .queued, .sending, .none:
+            case .sent, .queued, .sending, .none:
                 break
             }
         }
@@ -5648,19 +5803,15 @@ private struct ThreadHeader: View {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 19, weight: .semibold))
-                        .frame(width: 38, height: 38)
+                        .frame(width: SynaraHitTarget.minimum, height: SynaraHitTarget.minimum)
+                        .synaraChromeGlass(in: Circle(), interactive: true)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(SynaraColor.primaryText)
                 .accessibilityLabel("Back")
 
                 Spacer()
-
-                HStack(spacing: SynaraSpacing.medium) {
-                    Image(systemName: "bell")
-                    Image(systemName: "ellipsis")
-                }
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(SynaraColor.primaryText)
             }
 
             VStack(spacing: 2) {
@@ -7245,6 +7396,13 @@ private struct TimelineRow: View {
     /// Opens the Reactions sheet on a reaction key (nil: the first one);
     /// nil where the sheet is unavailable.
     var onShowReactions: ((String?) -> Void)?
+    /// Scrolls to the message this one replies to; nil where the quote
+    /// cannot be followed.
+    var onOpenReplyTarget: ((String) -> Void)? = nil
+    /// Who has replied in this message's thread (loaded window), oldest first.
+    var threadParticipants: [TimelineThreadParticipant] = []
+    /// When the newest loaded thread reply arrived.
+    var lastReplyAt: Date? = nil
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appEnvironment) private var environment
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
@@ -7253,6 +7411,8 @@ private struct TimelineRow: View {
     /// A GIF link that failed to load shows as its link instead.
     @State private var failedInlineGifURL: String?
     @State private var isDeclinePending = false
+    @ScaledMetric(relativeTo: .footnote) private var reactionPillHeight = ReactionPill.baseHeight
+    @ScaledMetric(relativeTo: .body) private var reactionPillEmojiSize = ReactionPill.baseEmojiSize
 
     var body: some View {
         if case let .systemNotice(text) = item.kind {
@@ -7285,11 +7445,6 @@ private struct TimelineRow: View {
                             Text(timeText)
                                 .font(SynaraTypography.messageTime)
                                 .foregroundStyle(SynaraColor.secondaryText)
-                            if item.isEdited {
-                                Text("edited")
-                                    .font(SynaraTypography.messageTime)
-                                    .foregroundStyle(SynaraColor.tertiaryText)
-                            }
                         }
 
                         Spacer(minLength: SynaraSpacing.xSmall)
@@ -7336,6 +7491,10 @@ private struct TimelineRow: View {
             }
         }
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
+        .modifier(OpenReplyTargetAccessibilityAction(
+            targetEventID: item.replyToEventID.map { replyPreview?.eventID ?? $0 },
+            onOpen: onOpenReplyTarget
+        ))
         .sheet(isPresented: $isSelectingText) {
             if let copyPayload = TimelineMessageCopy.payload(for: item) {
                 MessageTextSelectionSheet(payload: copyPayload)
@@ -7406,6 +7565,9 @@ private struct TimelineRow: View {
             : nil
     }
 
+    /// The long-press menu, in the desktop action rail's order: React,
+    /// Reply, Reply in Thread, Edit, Forward, then Copy, Select Text, Pin,
+    /// and the destructive actions behind a divider.
     @ViewBuilder
     private var messageActions: some View {
         if isOutgoing, OutgoingSendPolicy.canDiscard(item) {
@@ -7414,15 +7576,8 @@ private struct TimelineRow: View {
             }
             .accessibilityIdentifier("TimelineItemDiscard-\(item.eventID)")
         }
-        if let copyPayload = TimelineMessageCopy.payload(for: item) {
-            Button("Copy", systemImage: "doc.on.doc") {
-                TimelineMessageCopy.copyToPasteboard(copyPayload)
-            }
-            .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
-            Button("Select Text", systemImage: "text.cursor") {
-                isSelectingText = true
-            }
-            .accessibilityIdentifier("TimelineItemSelectText-\(item.eventID)")
+        if TimelineReactionTogglePolicy.canToggle(availability: availability, ownership: item.reactionOwnership) {
+            quickReactionMenu
         }
         if availability.canReply {
             Button("Reply", systemImage: "arrowshape.turn.up.left", action: onReply)
@@ -7435,18 +7590,29 @@ private struct TimelineRow: View {
         if availability.canEdit {
             Button("Edit", systemImage: "pencil", action: onEdit)
         }
-        if TimelineReactionTogglePolicy.canToggle(availability: availability, ownership: item.reactionOwnership) {
-            quickReactionMenu
+        if availability.canForward {
+            Button("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
+                .accessibilityIdentifier("TimelineItemForward-\(item.eventID)")
+        }
+        if let copyPayload = TimelineMessageCopy.payload(for: item) {
+            Button("Copy", systemImage: "doc.on.doc") {
+                TimelineMessageCopy.copyToPasteboard(copyPayload)
+            }
+            .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
+            Button("Select Text", systemImage: "text.cursor") {
+                isSelectingText = true
+            }
+            .accessibilityIdentifier("TimelineItemSelectText-\(item.eventID)")
+        }
+        if TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes {
+            Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
+                .accessibilityIdentifier("TimelineItemPinToNotes-\(item.eventID)")
         }
         if item.reactions.isEmpty == false, let onShowReactions {
             Button("View Reactions", systemImage: "person.2") {
                 onShowReactions(nil)
             }
             .accessibilityIdentifier("TimelineItemViewReactions-\(item.eventID)")
-        }
-        if availability.canForward {
-            Button("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
-                .accessibilityIdentifier("TimelineItemForward-\(item.eventID)")
         }
         if availability.canDeclineCall {
             Button("Decline Call", systemImage: "phone.down.fill", role: .destructive) {
@@ -7460,17 +7626,77 @@ private struct TimelineRow: View {
                 .disabled(isDeclinePending)
                 .accessibilityIdentifier("TimelineItemDeclineCall-\(item.eventID)")
         }
-        if TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes {
-            Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
-                .accessibilityIdentifier("TimelineItemPinToNotes-\(item.eventID)")
+        if availability.canReport || availability.canRedact {
+            Divider()
         }
         if availability.canReport {
             Button("Report", systemImage: "exclamationmark.bubble", role: .destructive, action: onReport)
                 .accessibilityIdentifier("TimelineItemReport-\(item.eventID)")
         }
         if availability.canRedact {
-            Button("Redact", systemImage: "trash", role: .destructive, action: onRedact)
+            Button("Delete", systemImage: "trash", role: .destructive, action: onRedact)
         }
+    }
+
+    /// Plain text carries the edited marker inline; everything else needs
+    /// its own line.
+    private var showsSeparateEditedMarker: Bool {
+        guard case .text = item.kind, inlineGif == nil, item.poll == nil, approvalPrompt == nil else {
+            return true
+        }
+        return false
+    }
+
+    /// "N replies" with the people in the thread and how fresh it is; the
+    /// chevron turns to expand/collapse in inline mode.
+    private var threadChip: some View {
+        Button(action: onOpenThread) {
+            HStack(spacing: SynaraSpacing.small) {
+                if threadParticipants.isEmpty == false {
+                    HStack(spacing: -6) {
+                        ForEach(threadParticipants.prefix(3)) { participant in
+                            TimelineAvatar(senderID: participant.userID, avatarURL: participant.avatarURL, size: 20)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: SynaraRadius.avatar(20), style: .continuous)
+                                        .strokeBorder(SynaraColor.surface, lineWidth: 1.5)
+                                }
+                        }
+                    }
+                    .accessibilityHidden(true)
+                } else {
+                    Image(systemName: "text.bubble")
+                        .font(SynaraTypography.messageTime.weight(.semibold))
+                        .foregroundStyle(SynaraColor.accentText)
+                        .accessibilityHidden(true)
+                }
+                Text(TimelineRowAccessibility.replyCountLabel(replyCount))
+                    .font(SynaraTypography.messageTime.weight(.semibold))
+                    .foregroundStyle(SynaraColor.accentText)
+                if let lastReplyText {
+                    Text(lastReplyText)
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .lineLimit(1)
+                }
+                Image(systemName: isInlineThreadMode ? (isThreadExpanded ? "chevron.up" : "chevron.down") : "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(SynaraColor.tertiaryText)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: SynaraHitTarget.minimum)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("ThreadButton-\(item.eventID)")
+        .accessibilityHint(threadChipHint)
+        .accessibilityValue(isInlineThreadMode ? (isThreadExpanded ? "Expanded" : "Collapsed") : "")
+    }
+
+    /// "Last reply 2 hours ago", from the newest loaded reply.
+    private var lastReplyText: String? {
+        guard let lastReplyAt else { return nil }
+        let relative = TimelineRelativeTime.text(for: lastReplyAt)
+        return String(localized: "Last reply \(relative)")
     }
 
     private var threadChipHint: String {
@@ -7519,6 +7745,15 @@ private struct TimelineRow: View {
                     bubbleWrappedBodyContent
                 }
 
+            // Plain text carries "(edited)" inline after its body; other
+            // kinds (HTML, media, polls) show it as a quiet line below.
+            if item.isEdited, showsSeparateEditedMarker {
+                Text(TimelineEditedMarker.text)
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundStyle(SynaraColor.tertiaryText)
+                    .accessibilityHidden(true)
+            }
+
             if let xPostLink {
                 XPostEmbedView(url: xPostLink)
             } else if let linkPreviewURL {
@@ -7530,7 +7765,8 @@ private struct TimelineRow: View {
                     availability: availability,
                     ownership: item.reactionOwnership
                 )
-                HStack(spacing: SynaraSpacing.small) {
+                // Pills wrap onto new rows; the add pill is always last.
+                TimelineFlowLayout(itemSpacing: SynaraSpacing.small, rowSpacing: 6) {
                     ForEach(Array(item.reactions.keys.sorted().enumerated()), id: \.element) { index, reaction in
                         ReactionPill(
                             title: reaction,
@@ -7549,25 +7785,7 @@ private struct TimelineRow: View {
             }
 
             if replyCount > 0 {
-                Button(action: onOpenThread) {
-                    HStack(spacing: SynaraSpacing.xSmall) {
-                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .accessibilityHidden(true)
-                        Text(TimelineRowAccessibility.replyCountLabel(replyCount))
-                        if isInlineThreadMode {
-                            Image(systemName: isThreadExpanded ? "chevron.up" : "chevron.down")
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .font(SynaraTypography.chipLabel)
-                    .foregroundStyle(SynaraColor.accentText)
-                    .frame(minHeight: SynaraHitTarget.minimum)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("ThreadButton-\(item.eventID)")
-                .accessibilityHint(threadChipHint)
-                .accessibilityValue(isInlineThreadMode ? (isThreadExpanded ? "Expanded" : "Collapsed") : "")
+                threadChip
             }
 
             if let inlineThread {
@@ -7697,6 +7915,7 @@ private struct TimelineRow: View {
     private func plainTextBubble(_ body: String) -> some View {
         SynaraMessageBubble(
             text: body,
+            trailingMarker: item.isEdited ? TimelineEditedMarker.text : nil,
             alignment: bubbleAlignment,
             isGrouped: isGroupedWithPrevious,
             deliveryStatus: item.presentedDeliveryStatus,
@@ -7897,10 +8116,10 @@ private struct TimelineRow: View {
             quickReactionButtons
         } label: {
             Image(systemName: "face.smiling")
-                .font(.system(size: 17, weight: .regular))
+                .font(.system(size: reactionPillEmojiSize, weight: .regular))
                 .foregroundStyle(SynaraColor.secondaryText)
-                .padding(.horizontal, ReactionPill.horizontalPadding)
-                .frame(minHeight: ReactionPill.height)
+                .padding(.horizontal, ReactionPill.horizontalPadding + 2)
+                .frame(minHeight: reactionPillHeight)
                 .background(ReactionPill.fill, in: Capsule())
                 .contentShape(Capsule())
         }
@@ -8039,28 +8258,62 @@ private struct TimelineRow: View {
         SynaraSpacing.medium
     }
 
+    /// The quoted message: a thin accent bar, the sender in bold and up to
+    /// two lines of the original. Tapping it scrolls to that message.
     @ViewBuilder
-    private func replyQuoteLabel(for _: String) -> some View {
-        if let preview = replyPreview {
-            // One quiet line: the reply, not the quote, is the message.
-            (Text(preview.senderName).fontWeight(.semibold) + Text("  ") + Text(preview.snippet))
-                .font(SynaraTypography.messageMeta)
-                .foregroundStyle(SynaraColor.secondaryText)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .accessibilityLabel("Replying to \(preview.senderName): \(preview.snippet)")
-            .padding(.leading, SynaraSpacing.small)
-            .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(SynaraColor.accent.opacity(0.55))
-                    .frame(width: 3)
+    private func replyQuoteLabel(for replyToEventID: String) -> some View {
+        let targetEventID = replyPreview?.eventID ?? replyToEventID
+        if let onOpenReplyTarget, targetEventID.isEmpty == false {
+            Button {
+                onOpenReplyTarget(targetEventID)
+            } label: {
+                replyQuoteContent
             }
+            .buttonStyle(.plain)
+            .accessibilityHint(TimelineReplyQuoteCopy.openHint)
+            .accessibilityIdentifier("ReplyQuote-\(item.eventID)")
         } else {
-            Label("Replying to a message", systemImage: "arrowshape.turn.up.left")
-                .font(SynaraTypography.messageMeta)
-                .foregroundStyle(SynaraColor.secondaryText)
-                .lineLimit(1)
+            replyQuoteContent
         }
+    }
+
+    private var replyQuoteContent: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            if let preview = replyPreview {
+                Text(preview.senderName)
+                    .font(SynaraTypography.messageTime.weight(.semibold))
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .lineLimit(1)
+                Text(preview.snippet)
+                    .font(SynaraTypography.messageTime)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+            } else {
+                Label("Replying to a message", systemImage: "arrowshape.turn.up.left")
+                    .font(SynaraTypography.messageTime)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.leading, SynaraSpacing.small + 2)
+        .padding(.vertical, 1)
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 1, style: .continuous)
+                .fill(SynaraColor.accent)
+                .frame(width: 2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(replyQuoteAccessibilityLabel)
+    }
+
+    private var replyQuoteAccessibilityLabel: String {
+        guard let preview = replyPreview else {
+            return String(localized: "Replying to a message")
+        }
+        return String(localized: "Replying to \(preview.senderName): \(preview.snippet)")
     }
 
     private var senderDisplayName: String {
@@ -8272,6 +8525,80 @@ enum TimelineUnavailableMessageCopy {
     static let text = String(localized: "This message can't be shown in Synara.")
 }
 
+/// What the "beginning of the conversation" block says about the room.
+struct TimelineRoomStartInfo: Equatable {
+    let name: String
+    let topic: String?
+    let glyph: SynaraRoomGlyph
+    let avatarURL: URL?
+    /// The peer's Matrix ID for a DM's fallback colour.
+    var seed: String? = nil
+}
+
+/// The top of the room's history: its avatar, "This is the very beginning
+/// of #room" and the topic. The empty room shows it with a "Say hello".
+private struct TimelineRoomStartRow: View {
+    let info: TimelineRoomStartInfo
+    var showsSayHello = false
+
+    private let avatarSize: CGFloat = 56
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            avatar
+            Text(title)
+                .font(SynaraTypography.dayHeader)
+                .foregroundStyle(SynaraColor.headingText)
+                .fixedSize(horizontal: false, vertical: true)
+            if let topic = info.topic, topic.isEmpty == false {
+                Text(topic)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if showsSayHello {
+                Text("Say hello to start the conversation.")
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundStyle(SynaraColor.tertiaryText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, SynaraSpacing.xLarge)
+        .padding(.bottom, SynaraSpacing.medium)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("TimelineRoomStart")
+    }
+
+    private var title: String {
+        switch info.glyph {
+        case .channel:
+            return String(localized: "This is the very beginning of #\(info.name)")
+        case .person:
+            return String(localized: "This is the very beginning of your conversation with \(info.name)")
+        }
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        switch info.glyph {
+        case .channel:
+            Text("#")
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .foregroundStyle(SynaraColor.secondaryText)
+                .frame(width: avatarSize, height: avatarSize)
+                .background(
+                    SynaraColor.secondarySurface,
+                    in: RoundedRectangle(cornerRadius: SynaraRadius.avatar(avatarSize), style: .continuous)
+                )
+                .accessibilityHidden(true)
+        case let .person(initial):
+            SynaraPersonGlyph(initial: initial, avatarURL: info.avatarURL, size: avatarSize, seed: info.seed)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
 /// The day the rows below belong to, in the unread divider's rule style.
 private struct TimelineDayHeader: View {
     let day: Date
@@ -8325,26 +8652,28 @@ struct UnreadMessagesDivider: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        // Slack's marker: "New messages" on a red-tinted rule, the same
+        // words as desktop.
         HStack(spacing: SynaraSpacing.medium) {
             Rectangle()
-                .fill(SynaraColor.separator.opacity(0.55))
-                .frame(height: 0.5)
-            // The label wins the width over the rules ("Unr…" at AX5).
-            Text("Unread messages")
+                .fill(SynaraColor.critical.opacity(0.6))
+                .frame(height: 1)
+            // The label wins the width over the rules ("New…" at AX5).
+            Text("New messages")
                 .font(SynaraTypography.chipLabel)
-                .foregroundStyle(SynaraColor.accentText)
+                .foregroundStyle(SynaraColor.criticalText)
                 .multilineTextAlignment(.center)
                 .lineLimit(SynaraDynamicTypeLayout.ruleLabelLineLimit(dynamicTypeSize))
                 .fixedSize(horizontal: dynamicTypeSize.isAccessibilitySize == false, vertical: true)
                 .layoutPriority(1)
             Rectangle()
-                .fill(SynaraColor.separator.opacity(0.55))
-                .frame(height: 0.5)
+                .fill(SynaraColor.critical.opacity(0.6))
+                .frame(height: 1)
         }
         .padding(.leading, dynamicTypeSize.isAccessibilitySize ? 0 : 46)
         // A heading, so the rotor can jump to where unread messages start.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Unread messages")
+        .accessibilityLabel("New messages")
         .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("TimelineUnreadDivider")
     }
@@ -8778,29 +9107,140 @@ private struct ReactionPill: View {
         }
     }
 
-    static let height: CGFloat = 32
-    static let fill = SynaraColor.primaryText.opacity(0.09)
-    static let horizontalPadding: CGFloat = 10
+    /// Desktop's pill: 28 tall (radius 14), 8 % label fill, 16 pt emoji,
+    /// 13 pt semibold count; your own is accent 18 % with an accent border.
+    static let baseHeight: CGFloat = 28
+    static let baseEmojiSize: CGFloat = 16
+    static let fill = SynaraColor.primaryText.opacity(0.08)
+    static let horizontalPadding: CGFloat = 8
+    @ScaledMetric(relativeTo: .footnote) private var height = ReactionPill.baseHeight
+    @ScaledMetric(relativeTo: .body) private var emojiSize = ReactionPill.baseEmojiSize
 
     private var pill: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: SynaraSpacing.xSmall) {
             Text(title)
-                .font(.system(size: 17))
+                .font(.system(size: emojiSize))
             Text("\(count)")
-                .font(.subheadline.weight(.semibold))
+                .font(.footnote.weight(.semibold))
                 .monospacedDigit()
         }
         .padding(.horizontal, Self.horizontalPadding)
-        .frame(minHeight: Self.height)
+        .frame(minHeight: height)
         .foregroundStyle(isSelected ? SynaraColor.accentText : SynaraColor.primaryText)
         .background(isSelected ? SynaraColor.accent.opacity(0.18) : Self.fill)
         .clipShape(Capsule())
         .overlay {
             if isSelected {
-                Capsule().strokeBorder(SynaraColor.accent.opacity(0.8), lineWidth: 1)
+                Capsule().strokeBorder(SynaraColor.accent, lineWidth: 1)
             }
         }
         .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
+    }
+}
+
+/// Reaction pills flow onto new rows instead of squeezing into one.
+private struct TimelineFlowLayout: Layout {
+    var itemSpacing: CGFloat = SynaraSpacing.small
+    var rowSpacing: CGFloat = 6
+
+    struct Cache {
+        var sizes: [CGSize] = []
+    }
+
+    func makeCache(subviews: Subviews) -> Cache {
+        Cache(sizes: subviews.map { $0.sizeThatFits(.unspecified) })
+    }
+
+    func updateCache(_ cache: inout Cache, subviews: Subviews) {
+        cache.sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
+        let width = proposal.width ?? cache.sizes.reduce(0) { $0 + $1.width + itemSpacing }
+        let rows = arrange(in: width, sizes: cache.sizes)
+        let height = rows.reduce(0) { $0 + $1.height } + rowSpacing * CGFloat(max(0, rows.count - 1))
+        let widest = rows.map(\.width).max() ?? 0
+        return CGSize(width: proposal.width ?? widest, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        var y = bounds.minY
+        for row in arrange(in: bounds.width, sizes: cache.sizes) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = cache.sizes[index]
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                    proposal: ProposedViewSize(size)
+                )
+                x += size.width + itemSpacing
+            }
+            y += row.height + rowSpacing
+        }
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func arrange(in width: CGFloat, sizes: [CGSize]) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for (index, size) in sizes.enumerated() {
+            let needed = current.indices.isEmpty ? size.width : current.width + itemSpacing + size.width
+            if current.indices.isEmpty == false, needed > width {
+                rows.append(current)
+                current = Row()
+            }
+            current.width = current.indices.isEmpty ? size.width : current.width + itemSpacing + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+        }
+        if current.indices.isEmpty == false {
+            rows.append(current)
+        }
+        return rows
+    }
+}
+
+/// The inline marker on an edited message; lowercase, as on desktop.
+enum TimelineEditedMarker {
+    static var text: String { String(localized: "(edited)") }
+}
+
+enum TimelineReplyQuoteCopy {
+    static var openHint: String { String(localized: "Shows the original message") }
+    static var openAction: String { String(localized: "Go to original message") }
+}
+
+/// "2 hours ago", "yesterday": the age of a thread's newest reply.
+enum TimelineRelativeTime {
+    static func text(for date: Date, now: Date = Date()) -> String {
+        let elapsed = now.timeIntervalSince(date)
+        if elapsed < 60 {
+            return String(localized: "just now")
+        }
+        return date.formatted(.relative(presentation: .named, unitsStyle: .wide))
+    }
+}
+
+/// "Go to original message" as the row's custom action, for a reply whose
+/// quote can be followed.
+private struct OpenReplyTargetAccessibilityAction: ViewModifier {
+    let targetEventID: String?
+    let onOpen: ((String) -> Void)?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let targetEventID, targetEventID.isEmpty == false, let onOpen {
+            content.accessibilityAction(named: Text(TimelineReplyQuoteCopy.openAction)) {
+                onOpen(targetEventID)
+            }
+        } else {
+            content
+        }
     }
 }
 
@@ -9394,6 +9834,7 @@ private struct ComposerView: View {
     var currentUserID = ""
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The room's members, loaded the first time "@" is typed.
     @State private var mentionMembers: [RoomMemberSummary]?
     @State private var typingNotifier: ComposerTypingNotifier?
@@ -9413,7 +9854,7 @@ private struct ComposerView: View {
     @State private var draftPublishTask: Task<Void, Never>?
     @State private var composerFieldHeight: CGFloat = {
         #if canImport(UIKit)
-            ComposerTextMetrics.singleLineHeight(font: UIFont.preferredFont(forTextStyle: .callout))
+            ComposerTextMetrics.singleLineHeight(font: ComposerTextMetrics.font)
         #else
             34
         #endif
@@ -9691,25 +10132,43 @@ private struct ComposerView: View {
         .accessibilityIdentifier("ComposerFormattingToggle")
     }
 
-    @ViewBuilder
+    /// A fixed 44 pt slot, so the field's width never jumps; the button
+    /// scales and fades in with the first character and out with the last.
     private var sendButton: some View {
-        if canSubmit {
-            Button(action: submitMessage) {
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 34, height: 34)
-                    .background(sendButtonTint)
-                    .foregroundStyle(Color.white)
-                    .clipShape(Circle())
+        ZStack {
+            if canSubmit {
+                Button(action: submitMessage) {
+                    ZStack {
+                        Circle()
+                            .fill(sendButtonTint)
+                            .frame(width: 34, height: 34)
+                        if isSending {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(Color.white)
+                        } else {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Color.white)
+                        }
+                    }
                     .frame(width: 44, height: 44)
+                }
+                .buttonStyle(SynaraTactileButtonStyle())
+                .contentShape(Rectangle())
+                .disabled(isSending)
+                .accessibilityLabel(editTarget == nil ? "Send" : "Save edit")
+                .accessibilityHint(composerSendAccessibilityHint)
+                .accessibilityIdentifier("ComposerSendButton")
+                .transition(
+                    reduceMotion
+                        ? .opacity
+                        : .scale(scale: 0.8).combined(with: .opacity)
+                )
             }
-            .buttonStyle(SynaraTactileButtonStyle())
-            .contentShape(Rectangle())
-            .disabled(isSending)
-            .accessibilityLabel(editTarget == nil ? "Send" : "Save edit")
-            .accessibilityHint(composerSendAccessibilityHint)
-            .accessibilityIdentifier("ComposerSendButton")
         }
+        .frame(width: 44, height: 44)
+        .animation(.easeOut(duration: 0.15), value: canSubmit)
     }
 
     private func composerInputSurface(showsFormattingToggle: Bool, showsAttachment: Bool = false) -> some View {
@@ -9876,16 +10335,14 @@ private struct ComposerView: View {
 
     private func updateComposerFieldHeight() {
         #if canImport(UIKit)
-            let singleLineHeight = ComposerTextMetrics.singleLineHeight(
-                font: UIFont.preferredFont(forTextStyle: .callout)
-            )
+            let singleLineHeight = ComposerTextMetrics.singleLineHeight(font: ComposerTextMetrics.font)
             if currentText.isEmpty, isComposerFocused == false {
                 composerFieldHeight = singleLineHeight
                 return
             }
 
             let lineCount = max(1, currentText.components(separatedBy: .newlines).count)
-            let estimatedLineHeight = UIFont.preferredFont(forTextStyle: .callout).lineHeight
+            let estimatedLineHeight = ComposerTextMetrics.font.lineHeight
             let estimatedHeight = ceil(estimatedLineHeight * CGFloat(lineCount))
                 + ComposerTextMetrics.textContainerInset.top
                 + ComposerTextMetrics.textContainerInset.bottom

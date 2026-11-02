@@ -526,6 +526,8 @@ private func synaraMessageBubbleTextColor(for variant: SynaraMessageBubbleVarian
 extension SynaraMessageBubble where Content == AnyView {
     init(
         text: String,
+        /// A quiet marker after the body, such as "(edited)".
+        trailingMarker: String? = nil,
         alignment: SynaraMessageBubbleAlignment,
         variant: SynaraMessageBubbleVariant = .standard,
         isGrouped: Bool = false,
@@ -547,8 +549,14 @@ extension SynaraMessageBubble where Content == AnyView {
         self.onDiscardFailedSend = onDiscardFailedSend
         self.encryptionShield = encryptionShield
         self.content = {
-            AnyView(
-                Text(SynaraPlainTextLinks.attributedText(text, shortensLinks: shortensLinks))
+            var body = Text(SynaraPlainTextLinks.attributedText(text, shortensLinks: shortensLinks))
+            if let trailingMarker {
+                body = body + Text(" ") + Text(trailingMarker)
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundColor(SynaraColor.tertiaryText)
+            }
+            return AnyView(
+                body
                     .font(SynaraTypography.messageBody)
                     .foregroundStyle(synaraMessageBubbleTextColor(for: variant))
                     .lineSpacing(SynaraTypography.messageLineSpacing)
