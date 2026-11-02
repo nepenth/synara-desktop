@@ -3,9 +3,12 @@ import React, {
   FormEventHandler,
   useCallback,
   useEffect,
+  useId,
   useState,
 } from 'react';
-import { Box, Button, Chip, Icon, Icons, Input, Spinner, Text, color } from 'folds';
+import { Box, Button, Chip, Icon, Icons, Input, Spinner, Text } from 'folds';
+import { InlineMessage } from '../../../components/inline-message';
+import { SettingsSection } from '../../../components/settings-layout';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
@@ -23,11 +26,7 @@ export function IgnoredUserList() {
 }
 
 function InlineError({ message }: { message: string }) {
-  return (
-    <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
-      {message}
-    </Text>
-  );
+  return <InlineMessage tone="critical">{message}</InlineMessage>;
 }
 
 function NativeIgnoreUserInput({ onIgnore }: { onIgnore: (userId: string) => Promise<void> }) {
@@ -36,6 +35,7 @@ function NativeIgnoreUserInput({ onIgnore }: { onIgnore: (userId: string) => Pro
   const alive = useAlive();
   const [ignoreState, ignore] = useAsyncCallback(onIgnore);
   const ignoring = ignoreState.status === AsyncStatus.Loading;
+  const inputId = useId();
 
   const handleChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
     setUserId(evt.currentTarget.value);
@@ -64,10 +64,15 @@ function NativeIgnoreUserInput({ onIgnore }: { onIgnore: (userId: string) => Pro
 
   return (
     <Box direction="Column" gap="100">
-      <Box as="form" onSubmit={handleSubmit} gap="200" aria-disabled={ignoring}>
-        <Box grow="Yes" direction="Column">
+      <Box as="form" onSubmit={handleSubmit} gap="200" alignItems="End" aria-disabled={ignoring}>
+        <Box grow="Yes" direction="Column" gap="100">
+          <Text as="label" size="L400" priority="300" htmlFor={inputId}>
+            User ID
+          </Text>
           <Input
+            id={inputId}
             required
+            placeholder="@name:example.org"
             name="userIdInput"
             value={userId}
             onChange={handleChange}
@@ -129,20 +134,14 @@ function NativeIgnoredUserList() {
   );
 
   return (
-    <Box direction="Column" gap="100">
-      <Box alignItems="Center" justifyContent="SpaceBetween" gap="200">
-        <Text size="L400">Blocked Users</Text>
-      </Box>
+    <SettingsSection title="Blocked users" description="Blocked users can't message or invite you.">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
         direction="Column"
         gap="400"
       >
-        <SettingTile
-          title="Select User"
-          description="Prevent receiving messages or invites from a user by adding their user ID."
-        >
+        <SettingTile title="Block a user">
           <Box direction="Column" gap="300">
             <NativeIgnoreUserInput onIgnore={handleIgnore} />
             {loadState.status === AsyncStatus.Loading && userList.length === 0 && (
@@ -168,7 +167,9 @@ function NativeIgnoredUserList() {
             )}
             {userList.length > 0 && (
               <Box direction="Inherit" gap="100">
-                <Text size="L400">Users</Text>
+                <Text size="L400" priority="300">
+                  Blocked
+                </Text>
                 <Box wrap="Wrap" gap="200">
                   {userList.map((userId) => (
                     <NativeIgnoredUserChip
@@ -183,7 +184,7 @@ function NativeIgnoredUserList() {
           </Box>
         </SettingTile>
       </SequenceCard>
-    </Box>
+    </SettingsSection>
   );
 }
 

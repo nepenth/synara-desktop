@@ -172,7 +172,7 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
 
   return devices.length > 0 ? (
     <>
-      <SettingsSection title="Others">
+      <SettingsSection title="Other sessions">
         {authMetadata && (
           <SequenceCard
             className={SequenceCardStyle}
@@ -181,8 +181,8 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
             gap="400"
           >
             <SettingTile
-              title="Device Dashboard"
-              description="Manage your devices on OIDC dashboard."
+              title="Session dashboard"
+              description="Manage your sessions on your account page."
               after={
                 <Button
                   size="300"
@@ -260,11 +260,11 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
           >
             <Box grow="Yes" direction="Column" gap="200">
               <Text size="T200">
-                <b>Log out of selected devices. ({deleted.size} selected)</b>
+                <b>
+                  Log out {deleted.size} {deleted.size === 1 ? 'session' : 'sessions'}
+                </b>
               </Text>
-              {deleteFailed && (
-                <Text size="T200">Failed to log out devices. Please try again.</Text>
-              )}
+              {deleteFailed && <Text size="T200">Couldn't log out those sessions. Try again.</Text>}
               {challenge?.authenticationFailed && (
                 <Text size="T200">
                   Authentication was not completed. Check your password and try again.
@@ -302,7 +302,7 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
                   disabled={working}
                   before={working && <Spinner variant="Critical" fill="Solid" size="100" />}
                 >
-                  <Text size="B300">Authenticate</Text>
+                  <Text size="B300">Continue</Text>
                 </Button>
               ) : (
                 challenge === undefined && (
@@ -315,7 +315,7 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
                     before={working && <Spinner variant="Critical" fill="Solid" size="100" />}
                     onClick={() => void startDelete()}
                   >
-                    <Text size="B300">Log Out</Text>
+                    <Text size="B300">Log out</Text>
                   </Button>
                 )
               )}

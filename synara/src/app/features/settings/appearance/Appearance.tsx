@@ -9,7 +9,6 @@ import {
   Box,
   Button,
   Chip,
-  color,
   config,
   Icon,
   Icons,
@@ -42,7 +41,12 @@ import {
 import { stopPropagation } from '../../../utils/keyboard';
 import { useMessageLayoutItems } from '../../../hooks/useMessageLayout';
 import { useMessageSpacingItems } from '../../../hooks/useMessageSpacing';
-import { SequenceCardStyle, SettingsQuietControl, SettingsThemeSwatch } from '../styles.css';
+import {
+  SequenceCardStyle,
+  SettingsQuietControl,
+  SettingsThemeSwatch,
+  SettingsThemeSwatchOutline,
+} from '../styles.css';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { normalizeAccentColor, themeDefaultAccentColor } from '../../../utils/themeAccent';
 import { MESSAGE_TEXT_TONES, type MessageTextTone } from '../../../utils/messageTextTone';
@@ -89,12 +93,15 @@ const ThemeSelector = as<'div', ThemeSelectorProps>(
   )
 );
 
-function SelectTheme({ disabled }: { disabled?: boolean }) {
-  const themes = useThemes();
+function SelectTheme({ kind, disabled }: { kind: ThemeKind; disabled?: boolean }) {
+  const allThemes = useThemes();
+  const themes = allThemes.filter((theme) => theme.kind === kind);
   const themeNames = useThemeNames();
   const [themeId, setThemeId] = useSetting(settingsAtom, 'themeId');
   const [menuCords, setMenuCords] = useState<RectCords>();
-  const selectedTheme = themes.find((theme) => theme.id === themeId) ?? LightTheme;
+  const selectedTheme =
+    themes.find((theme) => theme.id === themeId) ??
+    (kind === ThemeKind.Dark ? DarkTheme : LightTheme);
 
   const handleThemeMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setMenuCords(evt.currentTarget.getBoundingClientRect());
@@ -189,7 +196,7 @@ function SystemThemePreferences() {
   return (
     <>
       <SettingTile
-        title="Light Theme"
+        title="Light theme"
         description={
           themeKind === ThemeKind.Light
             ? 'Used while your system is in light mode. Active now.'
@@ -240,7 +247,7 @@ function SystemThemePreferences() {
         }
       />
       <SettingTile
-        title="Dark Theme"
+        title="Dark theme"
         description={
           themeKind === ThemeKind.Dark
             ? 'Used while your system is in dark mode. Active now.'
@@ -353,17 +360,150 @@ function ThemeRampPreview({ baseColor, kind }: { baseColor: string; kind: ThemeK
         <Box key={label} direction="Column" gap="100" alignItems="Center">
           <div
             aria-hidden
+            className={SettingsThemeSwatchOutline}
             style={{
               width: toRem(28),
               height: toRem(36),
-              borderRadius: toRem(4),
+              borderRadius: config.radii.R300,
               backgroundColor: fill,
-              boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.18)',
             }}
           />
-          <Text size="T200">{label}</Text>
+          <Text size="T200" priority="300">
+            {label}
+          </Text>
         </Box>
       ))}
+    </Box>
+  );
+}
+
+type AppearanceMode = 'system' | 'light' | 'dark';
+
+const APPEARANCE_MODES: Array<{ mode: AppearanceMode; label: string }> = [
+  { mode: 'system', label: 'System' },
+  { mode: 'light', label: 'Light' },
+  { mode: 'dark', label: 'Dark' },
+];
+
+/** One quiet segmented group, the same pattern as Thread display. */
+function SegmentedChoice<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <Box gap="100" role="group" aria-label={label}>
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          className={SettingsQuietControl}
+          size="300"
+          radii="300"
+          variant="Secondary"
+          fill={value === option.value ? 'Soft' : 'None'}
+          aria-pressed={value === option.value}
+          before={
+            <Icon
+              size="100"
+              src={Icons.Check}
+              aria-hidden
+              style={{ visibility: value === option.value ? 'visible' : 'hidden' }}
+            />
+          }
+          onClick={() => onChange(option.value)}
+        >
+          <Text size="B300">{option.label}</Text>
+        </Button>
+      ))}
+    </Box>
+  );
+}
+
+/** Swatches, the colour well, the hex field and Reset, left-aligned under the row copy. */
+function ColorControls({
+  value,
+  presets,
+  onChange,
+  onReset,
+  canReset,
+  wellLabel,
+  hexLabel,
+  resetLabel,
+}: {
+  value: string;
+  presets?: ReadonlyArray<{ id: string; label: string; hex: string }>;
+  onChange: (hex: string) => void;
+  onReset: () => void;
+  canReset: boolean;
+  wellLabel: string;
+  hexLabel: string;
+  resetLabel: string;
+}) {
+  return (
+    <Box gap="200" wrap="Wrap" alignItems="Center">
+      {presets && presets.length > 0 && (
+        <Box gap="100" wrap="Wrap" alignItems="Center">
+          {presets.map((preset) => {
+            const selected = value === preset.hex;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                className={SettingsThemeSwatch}
+                aria-label={preset.label}
+                aria-pressed={selected}
+                onClick={() => onChange(preset.hex)}
+                style={{ background: preset.hex }}
+              />
+            );
+          })}
+        </Box>
+      )}
+      <Box gap="100" alignItems="Center">
+        <input
+          type="color"
+          className={SettingsThemeSwatchOutline}
+          value={value}
+          onChange={(evt) => onChange(evt.currentTarget.value)}
+          aria-label={wellLabel}
+          style={{
+            width: toRem(28),
+            height: toRem(28),
+            padding: 0,
+            border: 0,
+            borderRadius: config.radii.R300,
+            background: 'transparent',
+            cursor: 'pointer',
+          }}
+        />
+        <Input
+          size="300"
+          radii="300"
+          variant="Secondary"
+          outlined
+          value={value}
+          onChange={(evt) => onChange(evt.currentTarget.value)}
+          aria-label={hexLabel}
+          style={{ width: toRem(108), fontFamily: 'var(--font-mono)' }}
+        />
+        <Button
+          className={SettingsQuietControl}
+          size="300"
+          radii="300"
+          variant="Secondary"
+          fill="None"
+          onClick={onReset}
+          disabled={!canReset}
+        >
+          <Text size="B300">{resetLabel}</Text>
+        </Button>
+      </Box>
     </Box>
   );
 }
@@ -371,13 +511,39 @@ function ThemeRampPreview({ baseColor, kind }: { baseColor: string; kind: ThemeK
 function Appearance() {
   const { t } = useTranslation();
   const activeTheme = useTheme();
+  const themes = useThemes();
   const [systemTheme, setSystemTheme] = useSetting(settingsAtom, 'useSystemTheme');
+  const [themeId, setThemeId] = useSetting(settingsAtom, 'themeId');
+  const [lightThemeId] = useSetting(settingsAtom, 'lightThemeId');
+  const [darkThemeId] = useSetting(settingsAtom, 'darkThemeId');
   const [monochromeMode, setMonochromeMode] = useSetting(settingsAtom, 'monochromeMode');
   const [customAccentColor, setCustomAccentColor] = useSetting(settingsAtom, 'customAccentColor');
   const [themeBaseColor, setThemeBaseColor] = useSetting(settingsAtom, 'themeBaseColor');
   const accentColor =
     normalizeAccentColor(customAccentColor) ?? themeDefaultAccentColor(activeTheme.kind);
   const baseColor = normalizeThemeBaseColor(themeBaseColor) ?? DEFAULT_THEME_BASE_COLOR;
+
+  const chosenTheme = themes.find((theme) => theme.id === themeId) ?? LightTheme;
+  const mode: AppearanceMode = systemTheme
+    ? 'system'
+    : chosenTheme.kind === ThemeKind.Dark
+      ? 'dark'
+      : 'light';
+
+  const chooseMode = (next: AppearanceMode) => {
+    if (next === 'system') {
+      setSystemTheme(true);
+      return;
+    }
+    setSystemTheme(false);
+    const kind = next === 'dark' ? ThemeKind.Dark : ThemeKind.Light;
+    if (chosenTheme.kind !== kind) {
+      // Keep the theme already picked for that side of the system switch.
+      const preferred = next === 'dark' ? darkThemeId : lightThemeId;
+      const fallback = next === 'dark' ? DarkTheme : LightTheme;
+      setThemeId(themes.find((theme) => theme.id === preferred)?.id ?? fallback.id);
+    }
+  };
 
   return (
     <SettingsSection title="Theme">
@@ -388,161 +554,90 @@ function Appearance() {
         gap="400"
       >
         <SettingTile
-          title="System Theme"
-          description="Choose between light and dark theme based on system preference."
-          after={<Switch variant="Primary" value={systemTheme} onChange={setSystemTheme} />}
+          title="Appearance"
+          description="Follow the system setting, or keep Synara light or dark."
+          after={
+            <SegmentedChoice
+              label="Appearance"
+              value={mode}
+              options={APPEARANCE_MODES.map(({ mode: value, label }) => ({ value, label }))}
+              onChange={chooseMode}
+            />
+          }
         />
-        {systemTheme && <SystemThemePreferences />}
+        {mode === 'system' ? (
+          <SystemThemePreferences />
+        ) : (
+          <SettingTile
+            title="Theme"
+            description={mode === 'dark' ? 'Which dark theme to use.' : 'Which light theme to use.'}
+            after={<SelectTheme kind={mode === 'dark' ? ThemeKind.Dark : ThemeKind.Light} />}
+          />
+        )}
       </SequenceCard>
 
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
-          title="Theme"
-          description="Theme to use when system theme is not enabled."
-          after={<SelectTheme disabled={systemTheme} />}
-        />
-      </SequenceCard>
-
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-        <SettingTile
-          title="Monochrome Mode"
+          title="Monochrome mode"
           description="Render the interface in greyscale, keeping only the accent color."
           after={<Switch variant="Primary" value={monochromeMode} onChange={setMonochromeMode} />}
         />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
-          title={t('modernization.settings.base_color.title', 'Base Color')}
+          title={t('modernization.settings.base_color.title', 'Base color')}
           description={t(
             'modernization.settings.base_color.description',
-            'Tint for rail, room list, and chat. Use a swatch, the color well, or paste a hex value. Lightness is mapped to stacked greys, not used as a fill.'
+            'Tints the rail, room list and chat. Lightness is mapped to the stacked greys, not used as a fill.'
           )}
-          after={
-            <Box direction="Column" gap="200" style={{ minWidth: toRem(220) }} alignItems="End">
-              <ThemeRampPreview baseColor={baseColor} kind={activeTheme.kind} />
-              <Box gap="100" wrap="Wrap" alignItems="Center" justifyContent="End">
-                {THEME_BASE_PRESETS.map((preset) => {
-                  const selected = baseColor === preset.hex;
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      className={SettingsThemeSwatch}
-                      aria-label={preset.label}
-                      aria-pressed={selected}
-                      onClick={() => setThemeBaseColor(preset.hex)}
-                      style={{ background: preset.hex }}
-                    />
-                  );
-                })}
-                <input
-                  type="color"
-                  value={baseColor}
-                  onChange={(evt) => {
-                    const next = normalizeThemeBaseColor(evt.currentTarget.value);
-                    if (next) setThemeBaseColor(next);
-                  }}
-                  aria-label={t('modernization.settings.base_color.aria_label', 'Theme base color')}
-                  style={{
-                    width: toRem(28),
-                    height: toRem(28),
-                    padding: 0,
-                    border: `1px solid ${color.Surface.ContainerLine}`,
-                    borderRadius: toRem(4),
-                    background: 'transparent',
-                    cursor: 'pointer',
-                  }}
-                />
-              </Box>
-              <Box gap="100" alignItems="Center">
-                <Input
-                  size="300"
-                  radii="300"
-                  value={baseColor}
-                  onChange={(evt) => {
-                    const next = normalizeThemeBaseColor(evt.currentTarget.value);
-                    if (next) setThemeBaseColor(next);
-                  }}
-                  aria-label="Theme base color hex"
-                  style={{ width: toRem(108) }}
-                />
-                <Button
-                  className={SettingsQuietControl}
-                  size="300"
-                  radii="300"
-                  variant="Secondary"
-                  fill="None"
-                  onClick={() => setThemeBaseColor(undefined)}
-                  disabled={!themeBaseColor}
-                >
-                  <Text size="B300">{t('modernization.settings.base_color.reset', 'Reset')}</Text>
-                </Button>
-              </Box>
-            </Box>
-          }
-        />
+          after={<ThemeRampPreview baseColor={baseColor} kind={activeTheme.kind} />}
+        >
+          <Box style={{ paddingTop: config.space.S100 }}>
+            <ColorControls
+              value={baseColor}
+              presets={THEME_BASE_PRESETS}
+              onChange={(hex) => {
+                const next = normalizeThemeBaseColor(hex);
+                if (next) setThemeBaseColor(next);
+              }}
+              onReset={() => setThemeBaseColor(undefined)}
+              canReset={!!themeBaseColor}
+              wellLabel={t('modernization.settings.base_color.aria_label', 'Theme base color')}
+              hexLabel="Theme base color hex"
+              resetLabel={t('modernization.settings.base_color.reset', 'Reset')}
+            />
+          </Box>
+        </SettingTile>
       </SequenceCard>
 
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
-          title={t('modernization.settings.accent_color.title', 'Accent Color')}
+          title={t('modernization.settings.accent_color.title', 'Accent color')}
           description={t(
             'modernization.settings.accent_color.description',
-            'Buttons, links, and selected items. The window background is Base Color above. Theme default until you pick a custom color.'
+            'Buttons, links and selected items. Theme default until you pick a color.'
           )}
           after={
-            <Box direction="Column" gap="200" style={{ minWidth: toRem(180) }} alignItems="End">
-              <Chip as="span" variant="Primary" radii="Pill">
-                <Text size="B300">Sample</Text>
-              </Chip>
-              <Box gap="100" alignItems="Center">
-                <input
-                  type="color"
-                  value={accentColor}
-                  onChange={(evt) => {
-                    const next = normalizeAccentColor(evt.currentTarget.value);
-                    if (next) setCustomAccentColor(next);
-                  }}
-                  aria-label={t(
-                    'modernization.settings.accent_color.aria_label',
-                    'Custom accent color'
-                  )}
-                  style={{
-                    width: toRem(28),
-                    height: toRem(28),
-                    padding: 0,
-                    border: `1px solid ${color.Surface.ContainerLine}`,
-                    borderRadius: toRem(4),
-                    background: 'transparent',
-                    cursor: 'pointer',
-                  }}
-                />
-                <Input
-                  size="300"
-                  radii="300"
-                  value={accentColor}
-                  onChange={(evt) => {
-                    const next = normalizeAccentColor(evt.currentTarget.value);
-                    if (next) setCustomAccentColor(next);
-                  }}
-                  aria-label="Accent color hex"
-                  style={{ width: toRem(108) }}
-                />
-                <Button
-                  className={SettingsQuietControl}
-                  size="300"
-                  radii="300"
-                  variant="Secondary"
-                  fill="None"
-                  onClick={() => setCustomAccentColor(undefined)}
-                  disabled={!customAccentColor}
-                >
-                  <Text size="B300">{t('modernization.settings.accent_color.reset', 'Reset')}</Text>
-                </Button>
-              </Box>
-            </Box>
+            <Chip as="span" variant="Primary" radii="Pill">
+              <Text size="B300">Sample</Text>
+            </Chip>
           }
-        />
+        >
+          <Box style={{ paddingTop: config.space.S100 }}>
+            <ColorControls
+              value={accentColor}
+              onChange={(hex) => {
+                const next = normalizeAccentColor(hex);
+                if (next) setCustomAccentColor(next);
+              }}
+              onReset={() => setCustomAccentColor(undefined)}
+              canReset={!!customAccentColor}
+              wellLabel={t('modernization.settings.accent_color.aria_label', 'Custom accent color')}
+              hexLabel="Accent color hex"
+              resetLabel={t('modernization.settings.accent_color.reset', 'Reset')}
+            />
+          </Box>
+        </SettingTile>
       </SequenceCard>
     </SettingsSection>
   );
@@ -558,7 +653,7 @@ function ThreadDisplaySetting() {
 
   return (
     <SettingTile
-      title="Thread Display"
+      title="Thread display"
       description="Open threads inline beneath their first message, in a side panel beside the room, or in place of the room."
       after={
         <Box gap="100" role="group" aria-label="Thread display">
@@ -597,7 +692,7 @@ function TextAndZoom() {
     <SettingsSection title="Text">
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
-          title="Message Text"
+          title="Message text"
           description="Adjust message prose brightness without changing navigation, metadata, or code colors."
           after={
             <Box gap="100" role="group" aria-label="Message text brightness">
@@ -636,7 +731,7 @@ function TextAndZoom() {
 
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
-          title="Page Zoom"
+          title="Page zoom"
           description="Scale the whole interface, from 75% to 200%. Press Enter to apply."
           after={<PageZoomInput />}
         />
@@ -813,15 +908,15 @@ function MessageDisplay() {
     <SettingsSection title="Messages">
       {!isNativeMatrixSession() && (
         <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-          <SettingTile title="Message Layout" after={<SelectMessageLayout />} />
+          <SettingTile title="Message layout" after={<SelectMessageLayout />} />
         </SequenceCard>
       )}
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-        <SettingTile title="Message Spacing" after={<SelectMessageSpacing />} />
+        <SettingTile title="Message spacing" after={<SelectMessageSpacing />} />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
-          title="Legacy Username Color"
+          title="Legacy username color"
           description="Color sender names with the legacy per-user palette instead of the theme accent."
           after={
             <Switch

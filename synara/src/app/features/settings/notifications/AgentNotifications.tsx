@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Box, Button, Input, Spinner, Switch, Text } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SettingTile } from '../../../components/setting-tile';
@@ -11,6 +11,7 @@ import {
 } from './nativeAgentNotificationPreferences';
 import { SettingsSection } from '../../../components/settings-layout';
 import { composerErrorMessage } from '../../room/composerSendError';
+import { InlineMessage } from '../../../components/inline-message';
 
 const categories = [
   ['notifyToolActivity', 'Notify for tool activity', 'Messages starting with “🛠 Tool activity”.'],
@@ -26,26 +27,25 @@ export function AgentNotifications() {
   const [draft, setDraft] = useState<AgentNotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
   const [agentId, setAgentId] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const dirtyRef = useRef(false);
+  const [message, setMessage] = useState<{ tone: 'success' | 'critical'; text: string }>();
   const savingRef = useRef(false);
+  const agentIdInput = useId();
 
   const refresh = useCallback(async () => {
-    if (dirtyRef.current || savingRef.current) return;
+    if (savingRef.current) return;
     setLoading(true);
     try {
       const next = await loadAgentNotificationPreferences();
-      if (!dirtyRef.current && !savingRef.current) setDraft(next);
-      setMessage(null);
+      if (!savingRef.current) setDraft(next);
     } catch (error) {
-      setMessage(
-        composerErrorMessage(
+      setMessage({
+        tone: 'critical',
+        text: composerErrorMessage(
           error,
           'Synara could not load your agent notification settings. Try again.'
-        )
-      );
+        ),
+      });
     } finally {
       setLoading(false);
     }
@@ -65,7 +65,7 @@ export function AgentNotifications() {
         else unsubscribe = stop;
       })
       .catch(() => {
-        /* Explicit refresh remains available. */
+        /* Focus refresh remains available. */
       });
     return () => {
       disposed = true;
@@ -74,30 +74,30 @@ export function AgentNotifications() {
     };
   }, [refresh]);
 
-  const edit = (next: AgentNotificationPreferences) => {
-    dirtyRef.current = true;
-    setDirty(true);
-    setMessage(null);
-    setDraft(next);
-  };
-
-  const save = async () => {
-    if (!draft || savingRef.current) return;
+  /**
+   * Every change saves to the account at once, like the rest of Settings. The
+   * controls keep the last saved state when a write fails, so a failed save
+   * never looks saved.
+   */
+  const save = async (next: AgentNotificationPreferences) => {
+    if (savingRef.current) return;
+    const previous = draft;
     savingRef.current = true;
     setSaving(true);
-    setMessage(null);
+    setMessage(undefined);
+    setDraft(next);
     try {
-      setDraft(await saveAgentNotificationPreferences(draft));
-      dirtyRef.current = false;
-      setDirty(false);
-      setMessage('Saved to your account.');
+      setDraft(await saveAgentNotificationPreferences(next));
+      setMessage({ tone: 'success', text: 'Saved to your account.' });
     } catch (error) {
-      setMessage(
-        composerErrorMessage(
+      setDraft(previous);
+      setMessage({
+        tone: 'critical',
+        text: composerErrorMessage(
           error,
           'Synara could not save your agent notification settings. Try again.'
-        )
-      );
+        ),
+      });
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -105,7 +105,10 @@ export function AgentNotifications() {
   };
 
   return (
-    <SettingsSection title="Agent Notifications">
+    <SettingsSection
+      title="Agent notifications"
+      description="Changes save to your account and apply on every Synara client."
+    >
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
@@ -114,9 +117,9 @@ export function AgentNotifications() {
       >
         <SettingTile
           title="Agent accounts"
-          description="Add each agent’s full Matrix user ID. These rules apply only to the listed agents and sync with your account across Synara clients. Once you add an agent, only listed agents can raise urgent approval alerts, even in muted rooms; with no agents listed, approval alerts follow each room’s notification settings."
+          description="Add each agent’s full Matrix user ID. These rules apply only to the listed agents. Once you add an agent, only listed agents can raise urgent approval alerts, even in muted rooms; with no agents listed, approval alerts follow each room’s notification settings."
         >
-          {loading && <Spinner size="100" />}
+          {loading && !draft && <Spinner size="100" />}
           {draft && (
             <Box direction="Column" gap="200">
               {draft.agentUserIds.map((id) => (
@@ -131,7 +134,7 @@ export function AgentNotifications() {
                     fill="None"
                     disabled={saving || loading}
                     onClick={() =>
-                      edit({
+                      void save({
                         ...draft,
                         agentUserIds: draft.agentUserIds.filter((item) => item !== id),
                       })
@@ -143,25 +146,29 @@ export function AgentNotifications() {
                 </Box>
               ))}
               {draft.agentUserIds.length === 0 && (
-                <Text size="T200">
+                <Text size="T200" priority="300">
                   No agents selected. All message categories continue to notify.
                 </Text>
               )}
               <Box
                 as="form"
                 gap="200"
+                alignItems="End"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const id = agentId.trim();
                   if (id && !draft.agentUserIds.includes(id))
-                    edit({ ...draft, agentUserIds: [...draft.agentUserIds, id] });
+                    void save({ ...draft, agentUserIds: [...draft.agentUserIds, id] });
                   setAgentId('');
                 }}
               >
-                <Box grow="Yes">
+                <Box grow="Yes" direction="Column" gap="100">
+                  <Text as="label" size="L400" priority="300" htmlFor={agentIdInput}>
+                    Agent Matrix user ID
+                  </Text>
                   <Input
-                    aria-label="Agent Matrix user ID"
-                    placeholder="@hermes:example.org"
+                    id={agentIdInput}
+                    placeholder="@agent:example.org"
                     value={agentId}
                     onChange={(event) => setAgentId(event.currentTarget.value)}
                     readOnly={saving || loading}
@@ -189,52 +196,30 @@ export function AgentNotifications() {
               description={description}
               after={
                 <Switch
+                  variant="Primary"
                   aria-label={title}
                   value={draft[key]}
                   disabled={saving || loading}
-                  onChange={(value) => edit({ ...draft, [key]: value })}
+                  onChange={(value) => void save({ ...draft, [key]: value })}
                 />
               }
             />
           ))}
-        <Text size="T200">
+        <Text size="T200" priority="300">
           Approval requests from listed agents remain eligible for urgent alerts. Turning a category
           off keeps its messages in the conversation. On iOS, encrypted background alerts may still
           appear as generic activity unless the installed build supports Apple’s Notification
           Filtering capability.
         </Text>
-        <Box gap="200">
-          <Button
-            className={SettingsQuietControl}
-            size="400"
-            variant="Secondary"
-            fill="Soft"
-            disabled={!dirty || saving || loading}
-            onClick={() => {
-              void save();
-            }}
-          >
-            <Text size="T300">{saving ? 'Saving…' : 'Save to account'}</Text>
-          </Button>
-          <Button
-            className={SettingsQuietControl}
-            size="400"
-            variant="Secondary"
-            fill="None"
-            disabled={dirty || saving || loading}
-            onClick={() => {
-              void refresh();
-            }}
-          >
-            <Text size="T300">Refresh</Text>
-          </Button>
-        </Box>
-        {dirty && <Text size="T200">Unsaved changes.</Text>}
-        {message && (
-          <Text size="T200" role="status">
-            {message}
-          </Text>
+        {saving && (
+          <Box gap="200" alignItems="Center" role="status">
+            <Spinner size="100" variant="Secondary" />
+            <Text size="T200" priority="300">
+              Saving…
+            </Text>
+          </Box>
         )}
+        {!saving && message && <InlineMessage tone={message.tone}>{message.text}</InlineMessage>}
       </SequenceCard>
     </SettingsSection>
   );

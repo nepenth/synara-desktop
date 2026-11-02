@@ -18,11 +18,12 @@ import {
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
-  Header,
   config,
   Spinner,
 } from 'folds';
-import { Modal, Dialog } from '../../../components/modal-dialog';
+import { Modal } from '../../../components/modal-dialog';
+import { ConfirmDialog } from '../../../components/confirm-dialog';
+import { InlineMessage } from '../../../components/inline-message';
 import FocusTrap from '../../../components/FocusTrap';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
@@ -154,7 +155,9 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
     };
   }, [imageFile, handleRemoveUpload]);
 
+  const [removingAvatar, setRemovingAvatar] = useState(false);
   const handleRemoveAvatar = async () => {
+    setRemovingAvatar(true);
     try {
       const result = await setOwnAvatarNative('');
       if (result === 'legacy') {
@@ -166,6 +169,8 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
     } catch (error) {
       setAlertRemove(false);
       setNativeUploadError(profileWriteErrorMessage(error));
+    } finally {
+      setRemovingAvatar(false);
     }
   };
 
@@ -229,11 +234,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
         </Box>
       )}
 
-      {nativeUploadError && (
-        <Text size="T300" role="alert" style={{ color: 'var(--folds-color-Critical-Main)' }}>
-          {nativeUploadError}
-        </Text>
-      )}
+      {nativeUploadError && <InlineMessage tone="critical">{nativeUploadError}</InlineMessage>}
 
       {imageFileURL && (
         <Overlay open={false} backdrop={<OverlayBackdrop />}>
@@ -258,57 +259,18 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
         </Overlay>
       )}
 
-      <Overlay open={alertRemove} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
-          <FocusTrap
-            focusTrapOptions={{
-              initialFocus: false,
-              onDeactivate: () => setAlertRemove(false),
-              clickOutsideDeactivates: true,
-              escapeDeactivates: stopPropagation,
-            }}
-          >
-            <Dialog variant="Surface">
-              <Header
-                style={{
-                  padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
-                  borderBottomWidth: config.borderWidth.B300,
-                }}
-                variant="Surface"
-                size="500"
-              >
-                <Box grow="Yes">
-                  <Text size="H4">Remove Avatar</Text>
-                </Box>
-                <IconButton
-                  className={SettingsQuietControl}
-                  variant="Surface"
-                  fill="None"
-                  size="300"
-                  onClick={() => setAlertRemove(false)}
-                  radii="300"
-                  aria-label="Close"
-                >
-                  <Icon src={Icons.Cross} />
-                </IconButton>
-              </Header>
-              <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
-                <Box direction="Column" gap="200">
-                  <Text priority="400">Are you sure you want to remove profile avatar?</Text>
-                </Box>
-                <Button
-                  className={SettingsQuietControl}
-                  variant="Critical"
-                  fill="Soft"
-                  onClick={handleRemoveAvatar}
-                >
-                  <Text size="B400">Remove</Text>
-                </Button>
-              </Box>
-            </Dialog>
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
+      {alertRemove && (
+        <ConfirmDialog
+          title="Remove your avatar?"
+          description="People see your initials instead until you upload a new picture."
+          confirmLabel="Remove"
+          busyLabel="Removing…"
+          tone="critical"
+          busy={removingAvatar}
+          onConfirm={() => void handleRemoveAvatar()}
+          onCancel={() => setAlertRemove(false)}
+        />
+      )}
     </SettingTile>
   );
 }

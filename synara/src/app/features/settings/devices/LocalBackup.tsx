@@ -16,6 +16,7 @@ import {
 } from '../../room-keys/nativeRoomKeys';
 import { SettingsSection } from '../../../components/settings-layout';
 import { composerErrorMessage } from '../../room/composerSendError';
+import { InlineMessage } from '../../../components/inline-message';
 
 function NativeExportKeys() {
   const alive = useAlive();
@@ -51,7 +52,9 @@ function NativeExportKeys() {
             {(match, doMatch, passRef, confPassRef) => (
               <>
                 <Box grow="Yes" direction="Column" gap="100">
-                  <Text size="L400">New Password</Text>
+                  <Text size="L400" priority="300">
+                    Password
+                  </Text>
                   <PasswordInput
                     ref={passRef}
                     name="passwordInput"
@@ -65,7 +68,9 @@ function NativeExportKeys() {
                   />
                 </Box>
                 <Box grow="Yes" direction="Column" gap="100">
-                  <Text size="L400">Confirm Password</Text>
+                  <Text size="L400" priority="300">
+                    Confirm password
+                  </Text>
                   <PasswordInput
                     ref={confPassRef}
                     style={{ color: match ? undefined : color.Critical.Main }}
@@ -97,20 +102,18 @@ function NativeExportKeys() {
           </Button>
         </Box>
         {result && (
-          <Text size="T200">
+          <InlineMessage tone="success">
             Exported {result.keysProcessed} keys from {result.roomsTouched} rooms to{' '}
             {result.fileLabel} in Downloads.
-          </Text>
+          </InlineMessage>
         )}
         {exportState.status === AsyncStatus.Error && (
-          <Text size="T200" style={{ color: color.Critical.Main }}>
-            <b>
-              {composerErrorMessage(
-                exportState.error,
-                'Synara could not export your room keys. Try again.'
-              )}
-            </b>
-          </Text>
+          <InlineMessage tone="critical">
+            {composerErrorMessage(
+              exportState.error,
+              'Synara could not export your room keys. Try again.'
+            )}
+          </InlineMessage>
         )}
       </Box>
     </SettingTile>
@@ -122,8 +125,8 @@ function NativeExportKeysTile() {
   return (
     <>
       <SettingTile
-        title="Export Messages Data"
-        description="Save a password-protected copy of room keys directly to Downloads."
+        title="Export message keys"
+        description="Save a password-protected copy of your room keys to Downloads."
         after={
           <Button
             type="button"
@@ -179,7 +182,9 @@ function NativeImportKeys({
       <Box as="form" onSubmit={handleSubmit} direction="Column" gap="100">
         <Box gap="200" alignItems="End">
           <Box grow="Yes" direction="Column" gap="100">
-            <Text size="L400">Password</Text>
+            <Text size="L400" priority="300">
+              Password
+            </Text>
             <PasswordInput
               name="passwordInput"
               size="400"
@@ -201,7 +206,7 @@ function NativeImportKeys({
             before={importing ? <Spinner size="200" variant="Secondary" fill="Soft" /> : undefined}
           >
             <Text as="span" size="B400">
-              Decrypt and Import
+              Decrypt and import
             </Text>
           </Button>
         </Box>
@@ -219,14 +224,12 @@ function NativeImportKeys({
           </Box>
         )}
         {importState.status === AsyncStatus.Error && (
-          <Text size="T200" style={{ color: color.Critical.Main }}>
-            <b>
-              {composerErrorMessage(
-                importState.error,
-                'Synara could not import your room keys. Try again.'
-              )}
-            </b>
-          </Text>
+          <InlineMessage tone="critical">
+            {composerErrorMessage(
+              importState.error,
+              'Synara could not import your room keys. Try again.'
+            )}
+          </InlineMessage>
         )}
       </Box>
     </SettingTile>
@@ -255,7 +258,7 @@ function NativeImportKeysTile() {
   return (
     <>
       <SettingTile
-        title="Import Messages Data"
+        title="Import message keys"
         description="Choose an encrypted room-key file. Synara decrypts and imports it on this device."
         after={
           selection ? (
@@ -293,17 +296,13 @@ function NativeImportKeysTile() {
               }
             >
               <Text as="span" size="B300">
-                Choose File
+                Choose file
               </Text>
             </Button>
           )
         }
       />
-      {selectionError && (
-        <Text size="T200" style={{ color: color.Critical.Main }}>
-          <b>{selectionError}</b>
-        </Text>
-      )}
+      {selectionError && <InlineMessage tone="critical">{selectionError}</InlineMessage>}
       {selection && (
         <NativeImportKeys selection={selection} onDone={() => setSelection(undefined)} />
       )}
@@ -313,7 +312,10 @@ function NativeImportKeysTile() {
 
 export function LocalBackup() {
   return (
-    <SettingsSection title="Local Backup">
+    <SettingsSection
+      title="Export & import keys"
+      description="A password-protected file of your room keys, for moving encrypted history by hand."
+    >
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"

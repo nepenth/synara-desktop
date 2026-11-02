@@ -136,7 +136,7 @@ test('the verification dialog can always be closed when cancelling fails', () =>
   );
   assert.match(source, /setCloseFailed\(true\)/);
   assert.match(source, /VERIFICATION_CLOSE_FAILED_COPY/);
-  assert.match(source, /Close Anyway/);
+  assert.match(source, /Close anyway/);
   assert.match(source, /hiddenFlowIds\.current\.add\(flowId\)/);
 });
 

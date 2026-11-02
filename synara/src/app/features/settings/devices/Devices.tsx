@@ -1,5 +1,5 @@
 import React from 'react';
-import { Badge, Box, Button, Text, Spinner } from 'folds';
+import { Box, Button, Text, Spinner } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
@@ -39,22 +39,45 @@ function DevicesPlaceholder() {
 type DevicesProps = {
   requestClose: () => void;
 };
-export function Devices({ requestClose }: DevicesProps) {
-  const nativeSession = isNativeMatrixSession();
-  const crossSigning = useCrossSigning();
-  const crossSigningActive = crossSigning.active;
-  const [deviceSnapshot, refreshDeviceList, deviceLoadState] = useDeviceList();
-  const devices = deviceSnapshot?.devices;
 
-  const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
+const useDeviceSnapshotState = () => {
+  const crossSigning = useCrossSigning();
+  const [deviceSnapshot, refreshDeviceList, deviceLoadState] = useDeviceList();
+  const [currentDevice, otherDevices] = useSplitCurrentDevice(deviceSnapshot?.devices);
   const verificationStatus = resolveDeviceVerificationStatus(deviceSnapshot);
-  const unverifiedDeviceCount =
-    otherDevices?.filter((device) => device.trust === 'unverified').length ?? 0;
   // The verification prompt needs an authoritative snapshot; before the first
   // one lands we show the loading placeholder rather than a false "could not
   // check" failure, and a rejected snapshot gets its own retryable card.
   const snapshotFailed = deviceSnapshot === undefined && deviceLoadState.error !== undefined;
   const snapshotPending = deviceSnapshot === undefined && !snapshotFailed;
+  return {
+    crossSigning,
+    deviceSnapshot,
+    refreshDeviceList,
+    deviceLoadState,
+    currentDevice,
+    otherDevices,
+    verificationStatus,
+    snapshotFailed,
+    snapshotPending,
+  };
+};
+
+/** Security & recovery: verification of this session, key backup, recovery, identity. */
+export function SecurityRecovery({ requestClose }: DevicesProps) {
+  const nativeSession = isNativeMatrixSession();
+  const {
+    crossSigning,
+    deviceSnapshot,
+    refreshDeviceList,
+    deviceLoadState,
+    otherDevices,
+    verificationStatus,
+    snapshotFailed,
+  } = useDeviceSnapshotState();
+  const crossSigningActive = crossSigning.active;
+  const unverifiedDeviceCount =
+    otherDevices?.filter((device) => device.trust === 'unverified').length ?? 0;
   const offerCurrentVerification =
     deviceSnapshot !== undefined &&
     canOfferNativeDeviceVerification(crossSigning.nativeStatus) &&
@@ -62,8 +85,12 @@ export function Devices({ requestClose }: DevicesProps) {
   const canStartCurrentVerification = canStartCurrentDeviceVerification(deviceSnapshot);
 
   return (
-    <SettingsPage title="Devices" requestClose={requestClose}>
-      <SettingsSection title="Security">
+    <SettingsPage
+      title="Security & recovery"
+      description="Verification and key backup protect your encrypted history."
+      requestClose={requestClose}
+    >
+      <SettingsSection title="Verification">
         <SequenceCard
           className={SequenceCardStyle}
           variant="SurfaceVariant"
@@ -71,8 +98,8 @@ export function Devices({ requestClose }: DevicesProps) {
           gap="400"
         >
           <SettingTile
-            title="Device Verification"
-            description="To verify device identity and grant access to encrypted messages."
+            title="Verify this session"
+            description="Verify this session so other devices trust it and it can read your encrypted history."
             after={
               <>
                 <EnableVerification
@@ -92,19 +119,6 @@ export function Devices({ requestClose }: DevicesProps) {
               </>
             }
           />
-          {nativeSession && (
-            <SettingTile
-              title="Message history for new sessions"
-              description="New sessions read older encrypted messages from your key backup. Sessions don't hand room keys to each other, because a forwarded key can't prove who sent the message. Keep key backup on and verify new logins."
-              after={
-                <Badge variant="Secondary" fill="Soft" radii="Pill" outlined>
-                  <Text as="span" size="L400">
-                    Key backup
-                  </Text>
-                </Badge>
-              }
-            />
-          )}
           {snapshotFailed && (
             <InfoCard
               variant="Critical"
@@ -138,13 +152,6 @@ export function Devices({ requestClose }: DevicesProps) {
               onVerified={() => void refreshDeviceList()}
             />
           )}
-          {nativeSession && crossSigningActive && (
-            <SettingTile
-              title={IDENTITY_RESET_COPY.title}
-              description={IDENTITY_RESET_COPY.settingsDescription}
-              after={<IdentityResetButton />}
-            />
-          )}
         </SequenceCard>
         {nativeSession && (
           <SequenceCard
@@ -153,10 +160,18 @@ export function Devices({ requestClose }: DevicesProps) {
             direction="Column"
             gap="400"
           >
-            <X509IdentityCard />
+            <SettingTile
+              title="Message history for new sessions"
+              description="New sessions read older encrypted messages from your key backup. Sessions don't hand room keys to each other, because a forwarded key can't prove who sent the message. Keep key backup on and verify new logins."
+            />
           </SequenceCard>
         )}
-        {nativeSession && (
+      </SettingsSection>
+      {nativeSession && (
+        <SettingsSection
+          title="Recovery"
+          description="Key backup and a recovery key let a new session read your history."
+        >
           <SequenceCard
             className={SequenceCardStyle}
             variant="SurfaceVariant"
@@ -166,9 +181,56 @@ export function Devices({ requestClose }: DevicesProps) {
             <NativeSecretStorageTile />
             <BackupRestoreTile />
           </SequenceCard>
-        )}
-      </SettingsSection>
-      <SettingsSection title="Current">
+        </SettingsSection>
+      )}
+      {nativeSession && (
+        <SettingsSection title="Certificate identities">
+          <SequenceCard
+            className={SequenceCardStyle}
+            variant="SurfaceVariant"
+            direction="Column"
+            gap="400"
+          >
+            <X509IdentityCard />
+          </SequenceCard>
+        </SettingsSection>
+      )}
+      {nativeSession && crossSigningActive && (
+        <SettingsSection
+          title="Danger zone"
+          description="Changes here cannot be undone."
+          tone="critical"
+        >
+          <SequenceCard
+            className={SequenceCardStyle}
+            variant="SurfaceVariant"
+            direction="Column"
+            gap="400"
+          >
+            <SettingTile
+              title={IDENTITY_RESET_COPY.title}
+              description={IDENTITY_RESET_COPY.settingsDescription}
+              after={<IdentityResetButton />}
+            />
+          </SequenceCard>
+        </SettingsSection>
+      )}
+    </SettingsPage>
+  );
+}
+
+/** Sessions: this session, the account's other sessions, and key export/import. */
+export function Devices({ requestClose }: DevicesProps) {
+  const { currentDevice, otherDevices, refreshDeviceList, verificationStatus, snapshotPending } =
+    useDeviceSnapshotState();
+
+  return (
+    <SettingsPage
+      title="Sessions"
+      description="Every login to your account. Log out a session to revoke it on the homeserver."
+      requestClose={requestClose}
+    >
+      <SettingsSection title="This session">
         {currentDevice ? (
           <SequenceCard
             className={SequenceCardStyle}

@@ -1,17 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Box,
-  Button,
-  Chip,
-  Icon,
-  IconSrc,
-  Icons,
-  Spinner,
-  Text,
-  color,
-  config,
-  toRem,
-} from 'folds';
+import { Box, Button, Icon, IconSrc, Icons, Spinner, Text, color, config, toRem } from 'folds';
+import { InlineMessage } from '../inline-message';
 import {
   AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
   AGENT_APPROVAL_REACTION_APPROVE_ONCE,
@@ -51,27 +40,29 @@ type ApprovalAction = {
   variant: 'Primary' | 'Critical' | 'Secondary';
 };
 
+// Rendered left to right: Deny sits apart on the left, the two approvals on
+// the right with Approve once as the primary.
 const APPROVAL_ACTIONS: ApprovalAction[] = [
-  {
-    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
-    key: AGENT_APPROVAL_REACTION_APPROVE_ONCE,
-    label: 'Approve once',
-    icon: Icons.Check,
-    variant: 'Primary',
-  },
-  {
-    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS,
-    key: AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
-    label: 'Approve always',
-    icon: Icons.CheckTwice,
-    variant: 'Primary',
-  },
   {
     actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_DENY,
     key: AGENT_APPROVAL_REACTION_DENY,
     label: 'Deny',
     icon: Icons.Cross,
     variant: 'Critical',
+  },
+  {
+    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS,
+    key: AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
+    label: 'Approve always',
+    icon: Icons.CheckTwice,
+    variant: 'Secondary',
+  },
+  {
+    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+    key: AGENT_APPROVAL_REACTION_APPROVE_ONCE,
+    label: 'Approve once',
+    icon: Icons.Check,
+    variant: 'Primary',
   },
 ];
 
@@ -176,14 +167,15 @@ export function AgentApprovalCard({
         padding: config.space.S400,
       }}
     >
-      <Box justifyContent="SpaceBetween" alignItems="Start" gap="300">
-        <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0 }}>
+      <Box direction="Column" gap="100" style={{ minWidth: 0 }}>
+        {appearance === 'inbox' ? (
+          <Text size="T300" className={css.PromptTitle}>
+            {prompt.title}
+          </Text>
+        ) : (
           <Text size="H5">{prompt.title}</Text>
-          <Text priority="400">{prompt.body}</Text>
-        </Box>
-        <Chip as="span" variant="Critical" radii="Pill" outlined>
-          <Text size="L400">Critical</Text>
-        </Chip>
+        )}
+        <Text priority="400">{prompt.body}</Text>
       </Box>
 
       {prompt.command && !isResolved && (
@@ -208,31 +200,34 @@ export function AgentApprovalCard({
 
       <Box direction="Column" gap="200">
         {confirmApproveAlways && (
-          <Box
-            direction="Column"
-            gap="200"
-            style={{
-              border: `${config.borderWidth.B300} solid ${color.Critical.Main}`,
-              borderRadius: config.radii.R300,
-              padding: config.space.S300,
-              backgroundColor: color.Critical.Container,
-            }}
-          >
+          <Box direction="Column" gap="200" className={css.ConfirmAlways}>
             <Text size="T300" priority="400">
-              Approve always permanently trusts this command pattern. Confirm only if you intend to
-              allow it without future prompts.
+              This trusts the command pattern permanently. The agent runs matching commands without
+              asking again.
             </Text>
-            <Box gap="200" wrap="Wrap">
+            <Box gap="200" wrap="Wrap" justifyContent="End">
+              <Button
+                type="button"
+                size="300"
+                radii="300"
+                variant="Secondary"
+                fill="Soft"
+                disabled={Boolean(busyKey || sentKey)}
+                onClick={() => setConfirmApproveAlways(false)}
+              >
+                <Text size="B300">Cancel</Text>
+              </Button>
               <Button
                 ref={confirmRef}
                 type="button"
                 size="300"
-                variant="Critical"
+                radii="300"
+                variant="Primary"
                 fill="Solid"
                 disabled={disabled}
                 before={
                   busyKey === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS ? (
-                    <Spinner size="100" variant="Critical" />
+                    <Spinner size="100" variant="Primary" fill="Solid" />
                   ) : undefined
                 }
                 onClick={() =>
@@ -245,47 +240,47 @@ export function AgentApprovalCard({
               >
                 <Text size="B300">Confirm approve always</Text>
               </Button>
-              <Button
-                type="button"
-                size="300"
-                variant="Secondary"
-                fill="Soft"
-                disabled={Boolean(busyKey || sentKey)}
-                onClick={() => setConfirmApproveAlways(false)}
-              >
-                <Text size="B300">Cancel</Text>
-              </Button>
             </Box>
           </Box>
         )}
 
         {!isResolved && (
-          <Box gap="200" wrap="Wrap">
+          <Box gap="200" wrap="Wrap" alignItems="Center">
             {APPROVAL_ACTIONS.map((action) => {
               const isAlways = action.key === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS;
+              const isDeny = action.key === AGENT_APPROVAL_REACTION_DENY;
+              const isOnce = action.key === AGENT_APPROVAL_REACTION_APPROVE_ONCE;
               const hideWhileConfirmingAlways = confirmApproveAlways && isAlways;
               if (hideWhileConfirmingAlways) return null;
 
               return (
-                <Button
-                  key={action.key}
-                  ref={isAlways ? approveAlwaysRef : undefined}
-                  type="button"
-                  size="300"
-                  variant={action.variant}
-                  fill={action.key === AGENT_APPROVAL_REACTION_APPROVE_ONCE ? 'Solid' : 'Soft'}
-                  disabled={disabled}
-                  before={
-                    busyKey === action.key ? (
-                      <Spinner size="100" variant={action.variant} />
-                    ) : (
-                      <Icon size="100" src={action.icon} />
-                    )
-                  }
-                  onClick={() => handleReact(action)}
-                >
-                  <Text size="B300">{action.label}</Text>
-                </Button>
+                <React.Fragment key={action.key}>
+                  <Button
+                    ref={isAlways ? approveAlwaysRef : undefined}
+                    type="button"
+                    size="300"
+                    radii="300"
+                    variant={action.variant}
+                    fill={isOnce ? 'Solid' : isDeny ? 'None' : 'Soft'}
+                    outlined={isDeny}
+                    disabled={disabled}
+                    before={
+                      busyKey === action.key ? (
+                        <Spinner
+                          size="100"
+                          variant={action.variant}
+                          fill={isOnce ? 'Solid' : 'Soft'}
+                        />
+                      ) : (
+                        <Icon size="100" src={action.icon} />
+                      )
+                    }
+                    onClick={() => handleReact(action)}
+                  >
+                    <Text size="B300">{action.label}</Text>
+                  </Button>
+                  {isDeny && <span className={css.ActionSpacer} aria-hidden />}
+                </React.Fragment>
               );
             })}
           </Box>
@@ -297,14 +292,22 @@ export function AgentApprovalCard({
           </Text>
         )}
         {target?.canSendReaction === false && (
-          <Text size="T200" style={{ color: color.Critical.Main }}>
+          <InlineMessage tone="critical" role="status">
             You do not have permission to react in this room.
-          </Text>
+          </InlineMessage>
         )}
         {!isResolved && (
-          <Text size="T200" priority="300">
-            To approve for this session, open the message and reply <code>!approve session</code>.
-          </Text>
+          <details className={css.MoreWays}>
+            <summary className={css.MoreWaysSummary}>
+              <Text as="span" size="T200" priority="300">
+                More ways to approve
+              </Text>
+            </summary>
+            <Text size="T200" priority="300">
+              To approve for this session only, open the message and reply{' '}
+              <code>!approve session</code>.
+            </Text>
+          </details>
         )}
         {isResolved && (
           <Box direction="Column" gap="100">
@@ -324,11 +327,7 @@ export function AgentApprovalCard({
             )}
           </Box>
         )}
-        {error && (
-          <Text role="alert" size="T200" style={{ color: color.Critical.Main }}>
-            {error}
-          </Text>
-        )}
+        {error && <InlineMessage tone="critical">{error}</InlineMessage>}
       </Box>
     </Box>
   );

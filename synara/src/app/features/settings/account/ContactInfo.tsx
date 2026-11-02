@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useId, useState } from 'react';
 import { Box, Text, Chip, Button, Input, Spinner, Icon, Icons } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
@@ -12,6 +12,7 @@ import {
   nativeThreepidSnapshot,
 } from './nativeThreepid';
 import { SettingsSection } from '../../../components/settings-layout';
+import { InlineMessage } from '../../../components/inline-message';
 
 export function ContactInformation() {
   return <NativeContactInformation />;
@@ -22,7 +23,9 @@ function NativeContactInformation() {
   const [emailDraft, setEmailDraft] = useState('');
   const [password, setPassword] = useState('');
   const [needsPassword, setNeedsPassword] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ tone: 'info' | 'success' | 'critical'; text: string }>();
+  const emailId = useId();
+  const passwordId = useId();
 
   const refresh = useCallback(async () => {
     setEmails(await nativeThreepidSnapshot());
@@ -30,7 +33,7 @@ function NativeContactInformation() {
 
   useEffect(() => {
     refresh().catch(() => {
-      setMessage('Contact addresses could not be loaded.');
+      setMessage({ tone: 'critical', text: 'Contact addresses could not be loaded.' });
     });
   }, [refresh]);
 
@@ -52,12 +55,12 @@ function NativeContactInformation() {
       const add = await nativeThreepidAddEmail();
       if (add.status === 'authenticationRequired') {
         setNeedsPassword(true);
-        setMessage('Enter your account password to confirm this email.');
+        setMessage({ tone: 'info', text: 'Enter your account password to confirm this email.' });
         return;
       }
       setEmailDraft('');
       setNeedsPassword(false);
-      setMessage('Email attached.');
+      setMessage({ tone: 'success', text: 'Email attached.' });
       await refresh();
     }, [emailDraft, refresh])
   );
@@ -66,13 +69,13 @@ function NativeContactInformation() {
     useCallback(async () => {
       const add = await nativeThreepidAddEmailPassword(password);
       if (add.status !== 'ok') {
-        setMessage('Could not confirm this email.');
+        setMessage({ tone: 'critical', text: 'Could not confirm this email.' });
         return;
       }
       setPassword('');
       setEmailDraft('');
       setNeedsPassword(false);
-      setMessage('Email attached.');
+      setMessage({ tone: 'success', text: 'Email attached.' });
       await refresh();
     }, [password, refresh])
   );
@@ -83,14 +86,14 @@ function NativeContactInformation() {
     passwordState.status === AsyncStatus.Loading;
 
   return (
-    <SettingsSection title="Contact Information">
+    <SettingsSection title="Contact">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"
         direction="Column"
         gap="400"
       >
-        <SettingTile title="Email Address" description="Email address attached to your account.">
+        <SettingTile title="Email" description="Email addresses attached to your account.">
           <Box direction="Column" gap="300">
             <Box wrap="Wrap" gap="200">
               {emails.map((address) => (
@@ -109,9 +112,13 @@ function NativeContactInformation() {
                 </Chip>
               ))}
             </Box>
-            <Box gap="200">
-              <Box grow="Yes" direction="Column">
+            <Box gap="200" alignItems="End">
+              <Box grow="Yes" direction="Column" gap="100">
+                <Text as="label" size="L400" priority="300" htmlFor={emailId}>
+                  Add an email
+                </Text>
                 <Input
+                  id={emailId}
                   value={emailDraft}
                   onChange={(evt) => setEmailDraft(evt.currentTarget.value)}
                   variant="Secondary"
@@ -137,15 +144,18 @@ function NativeContactInformation() {
               </Button>
             </Box>
             {needsPassword && (
-              <Box gap="200">
-                <Box grow="Yes" direction="Column">
+              <Box gap="200" alignItems="End">
+                <Box grow="Yes" direction="Column" gap="100">
+                  <Text as="label" size="L400" priority="300" htmlFor={passwordId}>
+                    Account password
+                  </Text>
                   <Input
+                    id={passwordId}
                     type="password"
                     value={password}
                     onChange={(evt) => setPassword(evt.currentTarget.value)}
                     variant="Secondary"
                     radii="300"
-                    placeholder="Account password"
                     readOnly={busy}
                   />
                 </Box>
@@ -166,7 +176,7 @@ function NativeContactInformation() {
                 </Button>
               </Box>
             )}
-            {message && <Text size="T200">{message}</Text>}
+            {message && <InlineMessage tone={message.tone}>{message.text}</InlineMessage>}
           </Box>
         </SettingTile>
       </SequenceCard>
