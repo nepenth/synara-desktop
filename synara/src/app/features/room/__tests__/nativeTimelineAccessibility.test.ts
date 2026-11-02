@@ -43,6 +43,28 @@ test('the timeline is a labelled region with a polite arrivals log (D58)', () =>
     /t\('modernization\.nav\.direct_messages', 'Direct messages'\)/
   );
   assert.match(read('pages/client/SidebarNav.tsx'), /<Sidebar as="nav" aria-label="Spaces">/);
+  // Wave 3 rail: places only. Home, the spaces, then Activity, Approvals and
+  // the account; create/join/explore are in the list's "+" menu and search is
+  // the list's search field (and ⌘K).
+  const rail = read('pages/client/SidebarNav.tsx');
+  assert.doesNotMatch(rail, /DirectTab|ExploreTab|CreateTab|SearchTab/);
+  const order = [
+    '<HomeTab />',
+    '<SpaceTabs',
+    '<InboxTab />',
+    '<ApprovalsTab />',
+    '<SettingsTab />',
+  ];
+  const at = order.map((tag) => rail.indexOf(tag));
+  assert.ok(
+    at.every((index, i) => index >= 0 && (i === 0 || index > at[i - 1])),
+    String(at)
+  );
+  const addMenu = read('pages/client/home/Home.tsx');
+  for (const key of ['create_room', 'join_room', 'new_message', 'explore_rooms', 'create_space']) {
+    assert.match(addMenu, new RegExp(`modernization\\.nav\\.${key}`), key);
+  }
+  assert.match(read('components/nav/NavSearchField.tsx'), /searchModalAtom/);
 });
 
 test('navigation rows mark the current page, never aria-selected on a plain div (D58)', () => {
@@ -52,10 +74,10 @@ test('navigation rows mark the current page, never aria-selected on a plain div 
     /<NavItem\b[^>]*aria-selected=/.test(readFileSync(path, 'utf8'))
   );
   assert.deepEqual(offenders, []);
-  // Home and Direct rows come from RoomNavItem and the search entry from
-  // NavSearchField; both carry aria-current themselves.
+  // Home and Direct rows come from RoomNavItem, which carries aria-current
+  // itself. NavSearchField opens the global search dialog, not a page.
+  assert.match(read('components/nav/NavSearchField.tsx'), /aria-haspopup="dialog"/);
   for (const path of [
-    'components/nav/NavSearchField.tsx',
     'pages/client/explore/Explore.tsx',
     'pages/client/inbox/Inbox.tsx',
     'pages/client/space/Space.tsx',

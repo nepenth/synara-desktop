@@ -169,3 +169,59 @@ test('links, user colours and avatar initials are AA on every surface', () => {
     }
   });
 });
+
+// Wave 3 room-list hierarchy: read names secondary, unread primary, muted
+// tertiary; the selected row is Primary.OnContainer on Primary.Container.
+const PRIMARY_CONTAINER: Record<ThemeRampKind, { fill: string; on: string }> = {
+  light: { fill: '#C4D0E9', on: '#0D3076' },
+  dark: { fill: '#1F3A63', on: '#DCE7FB' },
+};
+
+test('the colours.css.ts Primary container pair is the one checked here', () => {
+  const colors = readFileSync('src/colors.css.ts', 'utf8');
+  KINDS.forEach((kind) => {
+    const { fill, on } = PRIMARY_CONTAINER[kind];
+    assert.match(colors, new RegExp(`Container: '${fill}',[\\s\\S]{0,160}OnContainer: '${on}'`));
+  });
+});
+
+test('room-list reading roles are AA on the list and its hover tint (muted included)', () => {
+  KINDS.forEach((kind) =>
+    THEME_BASE_PRESETS.forEach((preset) => {
+      const ramp = deriveThemeSurfaceRamp(preset.hex, kind);
+      const list = { rest: ramp.surface.Container, hover: ramp.surface.ContainerHover };
+      Object.entries(list).forEach(([state, surface]) => {
+        (['primary', 'secondary', 'tertiary'] as const).forEach((role) => {
+          const ratio = contrast(hexRgb(ramp.content[role]), hexRgb(surface));
+          assert.ok(ratio >= 4.5, `${preset.id} ${kind} ${state}: ${role} ${ratio.toFixed(2)}`);
+        });
+        // The unread gutter marker (primary) is a graphic: 3:1.
+        assert.ok(contrast(hexRgb(ramp.content.primary), hexRgb(surface)) >= 3);
+      });
+      // Each step down the hierarchy is darker/lighter than the one above it.
+      const surface = hexRgb(list.rest);
+      const [p, s, t] = (['primary', 'secondary', 'tertiary'] as const).map((role) =>
+        contrast(hexRgb(ramp.content[role]), surface)
+      );
+      assert.ok(p > s && s >= t, `${preset.id} ${kind}: ${p} > ${s} >= ${t}`);
+    })
+  );
+});
+
+test('the selected row is AA and visibly stronger than hover on every list surface', () => {
+  KINDS.forEach((kind) => {
+    const { fill, on } = PRIMARY_CONTAINER[kind];
+    const name = contrast(hexRgb(on), hexRgb(fill));
+    assert.ok(name >= 7, `${kind}: selected name ${name.toFixed(2)}`);
+    THEME_BASE_PRESETS.forEach((preset) => {
+      const ramp = deriveThemeSurfaceRamp(preset.hex, kind);
+      const list = hexRgb(ramp.surface.Container);
+      const selected = contrast(hexRgb(fill), list);
+      const hover = contrast(hexRgb(ramp.surface.ContainerHover), list);
+      assert.ok(selected > hover, `${preset.id} ${kind}: selected ${selected} vs hover ${hover}`);
+      // Tertiary state glyphs left on a selected row would still read as graphics.
+      const glyph = contrast(hexRgb(ramp.content.tertiary), hexRgb(fill));
+      assert.ok(glyph >= 3, `${preset.id} ${kind}: tertiary on selected ${glyph.toFixed(2)}`);
+    });
+  });
+});

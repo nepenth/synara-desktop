@@ -20,7 +20,7 @@ Desktop session logged in
   → client.account().account_data::<DirectEventContent>()
   → matrix_mdirect_snapshot (poll)
   → mDirectAtom PUT
-  → DirectTab / useDirectRooms / navigate filters
+  → useDirectRooms (Home list Direct messages section) / navigate filters
 ```
 
 Disqualifying deviations: binding `ClientEvent.AccountData` for `m.direct`;

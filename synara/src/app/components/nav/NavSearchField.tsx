@@ -1,36 +1,39 @@
-import React, { MouseEventHandler } from 'react';
+import React from 'react';
 import { Icon, Icons } from 'folds';
+import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { searchModalAtom } from '../../state/searchModal';
+import { KeySymbol } from '../../utils/key-symbol';
+import { isMacOS } from '../../utils/user-agent';
 import * as css from './styles.css';
-
-type NavSearchFieldProps = {
-  /** Opens message search for this pane. */
-  onOpen: MouseEventHandler<HTMLButtonElement>;
-  /** True while that search page is the open route. */
-  selected?: boolean;
-  /** Field text; defaults to "Search messages". */
-  label?: string;
-};
 
 /**
  * The pane's single search entry (Slack's search bar): a field-shaped button
- * under the pane header. Message search for Home or a space lives behind it;
- * the quick switcher keeps ⌘K.
+ * under the pane header. It opens the global search (the quick switcher, also
+ * ⌘K / Ctrl+K), which jumps to rooms, people and spaces and offers message
+ * search, create, join and explore as actions. Since wave 3 it replaces the
+ * rail's Search item, so every pane opens the same surface.
  */
-export function NavSearchField({ onOpen, selected, label }: NavSearchFieldProps) {
+export function NavSearchField() {
   const { t } = useTranslation();
-  const text = label ?? t('modernization.nav.search_messages', 'Search messages');
+  const [opened, setOpened] = useAtom(searchModalAtom);
+  const shortcut = isMacOS() ? `${KeySymbol.Command}K` : 'Ctrl K';
   return (
     <div className={css.NavSearchFieldRow}>
       <button
         type="button"
         className={css.NavSearchField}
-        onClick={onOpen}
-        aria-current={selected ? 'page' : undefined}
+        onClick={() => setOpened(true)}
+        aria-haspopup="dialog"
+        aria-expanded={opened}
+        aria-keyshortcuts={isMacOS() ? 'Meta+K' : 'Control+K'}
         data-testid="nav-search-field"
       >
-        <Icon size="100" src={Icons.Search} filled={selected} />
-        <span className={css.NavSearchFieldLabel}>{text}</span>
+        <Icon size="100" src={Icons.Search} filled={opened} />
+        <span className={css.NavSearchFieldLabel}>{t('modernization.nav.search', 'Search')}</span>
+        <kbd className={css.NavSearchFieldShortcut} aria-hidden="true">
+          {shortcut}
+        </kbd>
       </button>
     </div>
   );

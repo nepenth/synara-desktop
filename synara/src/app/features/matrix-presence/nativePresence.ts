@@ -405,7 +405,8 @@ export const createNativePresenceSubscription = async (
   return dispose;
 };
 
-export const useNativeUserPresence = (userId: string): UserPresence | undefined => {
+/** Live presence for `userId`; `undefined` while unknown, unavailable or with no user. */
+export const useNativeUserPresence = (userId: string | undefined): UserPresence | undefined => {
   const [presence, setPresence] = useState<UserPresence>();
   const dependencies = useMemo<NativePresenceDependencies>(
     () => ({
@@ -417,6 +418,7 @@ export const useNativeUserPresence = (userId: string): UserPresence | undefined 
 
   useEffect(() => {
     setPresence(undefined);
+    if (!userId) return undefined;
     let dispose: (() => void) | undefined;
     let active = true;
     void createNativePresenceSubscription(userId, dependencies, (nextPresence) => {

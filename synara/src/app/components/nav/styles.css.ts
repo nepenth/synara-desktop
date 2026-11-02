@@ -45,10 +45,11 @@ const getVariant = (variant: ContainerColor): ComplexStyleRule => ({
 });
 
 /**
- * Rows are flat (Slack): hover is a surface tint, the selected row is the
- * stronger selected tint plus the 3px accent bar. No border or shadow, so a
- * dense list never "lifts" under the pointer. `prefers-contrast: more` adds a
- * solid edge to the selected row instead.
+ * Rows are flat (Slack): hover is a neutral surface tint; the selected row is
+ * anchored by the Primary container fill with its on-container text, clearly
+ * stronger than hover (wave 3), and keeps that fill under the pointer. No
+ * border or shadow, so a dense list never "lifts". `prefers-contrast: more`
+ * adds a solid edge to the selected row.
  */
 const NavItemBase = style({
   position: 'relative',
@@ -65,17 +66,6 @@ const NavItemBase = style({
   transition: 'background-color 140ms ease-out',
 
   selectors: {
-    '&::before': {
-      content: '',
-      position: 'absolute',
-      left: 0,
-      top: toRem(7),
-      bottom: toRem(7),
-      width: toRem(3),
-      borderRadius: `0 ${toRem(3)} ${toRem(3)} 0`,
-      background: color.Primary.Main,
-      opacity: 0,
-    },
     '&:hover, &:focus-visible': {
       backgroundColor: ContainerHover,
     },
@@ -86,10 +76,8 @@ const NavItemBase = style({
       backgroundColor: ContainerActive,
     },
     '&[data-selected=true]': {
-      backgroundColor: 'var(--synara-selected-surface)',
-    },
-    '&[data-selected=true]::before': {
-      opacity: 1,
+      backgroundColor: color.Primary.Container,
+      color: color.Primary.OnContainer,
     },
     // Primary, not ContainerLine: the line tone matches the hover fill (~1.2:1).
     [`&:has(.${NavLink}:focus-visible)`]: {
@@ -142,8 +130,8 @@ export const NavItem = recipe({
 export type RoomSelectorVariants = RecipeVariants<typeof NavItem>;
 
 /**
- * One type scale with the timeline: 15px names on a 20px line, read rows W500,
- * unread rows W700 (the sender-name weight). Rows stay 32px.
+ * One type scale with the timeline: 15px names on a 20px line. Read rows are
+ * W400 so they recede; unread and selected rows are W600. Rows stay 32px.
  */
 export const NavItemContent = style({
   paddingLeft: config.space.S200,
@@ -155,14 +143,14 @@ export const NavItemContent = style({
   alignItems: 'center',
   fontSize: toRem(15),
   lineHeight: toRem(20),
-  fontWeight: config.fontWeight.W500,
+  fontWeight: config.fontWeight.W400,
 
   selectors: {
     '&:hover': {
       textDecoration: 'unset',
     },
     [`.${NavItemBase}[data-highlight=true] &, .${NavItemBase}[data-selected=true] &`]: {
-      fontWeight: config.fontWeight.W700,
+      fontWeight: config.fontWeight.W600,
     },
   },
 });
@@ -192,9 +180,10 @@ export const NavItemOptions = style({
 });
 
 /**
- * Section header: one full-width 28px row per section. The label sits in the
- * row's glyph column; the collapse chevron and the right-hand controls are
- * hover-revealed (or shown while collapsed / while a menu is open).
+ * Section header: one full-width 28px caption row per section. The chevron
+ * sits in the rows' glyph column and is always shown (it turns when the
+ * section collapses); the label lines up with the room names. The right-hand
+ * controls (sort) are hover-revealed, or shown while their menu is open.
  */
 export const NavSectionHeader = style({
   position: 'relative',
@@ -208,12 +197,17 @@ export const NavSectionHeader = style({
   color: 'var(--synara-content-secondary)',
 });
 
+/** Space above every section but the first, so groups read as groups. */
+export const NavSectionHeaderSpaced = style({
+  marginTop: config.space.S500,
+});
+
 export const NavSectionToggle = style([
   DefaultReset,
   {
     display: 'flex',
     alignItems: 'center',
-    gap: config.space.S100,
+    gap: config.space.S200,
     flexGrow: 1,
     minWidth: 0,
     height: toRem(28),
@@ -251,24 +245,33 @@ export const NavSectionStatic = style([
   },
 ]);
 
+/** Caption style: 12px semibold, sentence case, a touch of tracking. */
 export const NavSectionLabel = style({
-  fontSize: toRem(14),
-  lineHeight: toRem(20),
+  fontSize: toRem(12),
+  lineHeight: toRem(16),
   fontWeight: config.fontWeight.W600,
-  letterSpacing: '-0.005em',
+  letterSpacing: '0.02em',
   minWidth: 0,
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
 });
 
+/** The rows' 18px glyph column, so the chevron centres over the glyphs. */
+export const NavSectionChevronSlot = style({
+  width: toRem(18),
+  flexShrink: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+});
+
 export const NavSectionChevron = style({
   flexShrink: 0,
-  opacity: 0,
-  transition: 'opacity 140ms ease-out',
+  transition: 'transform 140ms ease-out',
   selectors: {
-    [`.${NavSectionHeader}:hover &, .${NavSectionHeader}:focus-within &, &[data-closed=true]`]: {
-      opacity: 1,
+    '&[data-closed=true]': {
+      transform: 'rotate(-90deg)',
     },
   },
   '@media': {
@@ -347,7 +350,7 @@ export const NavSearchField = style([
         outline: `${config.borderWidth.B600} solid ${color.Primary.Main}`,
         outlineOffset: `calc(-1 * ${config.borderWidth.B600})`,
       },
-      '&[aria-current=page]': {
+      '&[aria-expanded=true]': {
         borderColor: color.Primary.Main,
         color: 'var(--synara-content-primary)',
       },
@@ -363,6 +366,28 @@ export const NavSearchField = style([
 export const NavSearchFieldRow = style({
   padding: `${config.space.S200} ${config.space.S200} 0 ${config.space.S200}`,
   flexShrink: 0,
+});
+
+/** The ⌘K hint at the field's end, tertiary like the placeholder. */
+export const NavSearchFieldShortcut = style({
+  flexShrink: 0,
+  fontFamily: 'inherit',
+  fontSize: toRem(11),
+  lineHeight: toRem(16),
+  color: 'var(--synara-content-tertiary)',
+});
+
+/**
+ * The pane header's title (the homeserver or space name): 15px semibold, so a
+ * typical host name fits, middle-truncated so its end stays readable.
+ */
+export const NavPaneTitle = style({
+  flex: '0 1 auto',
+  minWidth: 0,
+  fontSize: toRem(15),
+  lineHeight: toRem(20),
+  fontWeight: config.fontWeight.W600,
+  color: 'var(--synara-content-heading)',
 });
 
 export const NavSearchFieldLabel = style({

@@ -9,6 +9,7 @@ const tests = [
   'src/app/styles/__tests__/quietDepthSourceGuard.test.ts',
   'src/app/components/__tests__/roomAvatarSourceGuard.test.ts',
   'src/app/components/__tests__/roomGlyph.test.ts',
+  'src/app/components/__tests__/middleTruncation.test.ts',
   'src/app/components/__tests__/avatarLadder.test.ts',
   'src/app/components/__tests__/backupRestoreEnrolment.test.ts',
   'src/app/components/__tests__/joinRulesSwitcherSourceGuard.test.ts',

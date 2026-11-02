@@ -1,6 +1,8 @@
-// Production rail tabs and snapshot bindings; only native IPC data is synthetic.
-// `homePane` adds the production Home pane, the one list of rooms and DMs
-// (NAV-12), mounted across `/home/` and `/direct/` routes as in the app router.
+// The production Home rail tab and snapshot bindings; only native IPC data is
+// synthetic. Since wave 3 the rail has no Direct messages tab: DMs are a
+// section of the one Home list (NAV-12) and count in the Home badge. `homePane`
+// adds the production Home pane, mounted across `/home/` and `/direct/` routes
+// as in the app router.
 import React, { useCallback, useState } from 'react';
 import { presentationFor } from './presentation';
 import { Provider } from 'jotai';
@@ -17,7 +19,6 @@ import { useBindMDirectAtom } from '../../src/app/state/mDirectList';
 import { useBindRoomToUnreadAtom } from '../../src/app/state/room/roomToUnread';
 import { useBindRoomToParentsAtom } from '../../src/app/state/room/roomToParents';
 import { HomeTab } from '../../src/app/pages/client/sidebar/HomeTab';
-import { DirectTab } from '../../src/app/pages/client/sidebar/DirectTab';
 import { useDirectRooms } from '../../src/app/pages/client/direct/useDirectRooms';
 import { useHomeRooms } from '../../src/app/pages/client/home/useHomeRooms';
 import { useRoomNavigate } from '../../src/app/hooks/useRoomNavigate';
@@ -186,9 +187,6 @@ function BoundRail() {
       <nav style={{ width: 66, display: 'flex', flexDirection: 'column', gap: 24 }}>
         <div data-testid="home-rail">
           <HomeTab />
-        </div>
-        <div data-testid="dm-rail">
-          <DirectTab />
         </div>
       </nav>
       {homePane && <HomePaneRoutes />}
