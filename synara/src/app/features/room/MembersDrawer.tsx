@@ -171,7 +171,7 @@ function MemberItem({
       }
     >
       <Box grow="Yes">
-        <Text size="T400" truncate>
+        <Text size="T300" truncate>
           {name}
         </Text>
       </Box>
@@ -252,7 +252,7 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
   const virtualizer = useVirtualizer({
     count: PLTagOrRoomMember.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 40,
+    estimateSize: () => 36,
     overscan: 10,
   });
 
@@ -360,8 +360,8 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
                   style={{ paddingRight: config.space.S200 }}
                   placeholder="Type name..."
                   variant="Surface"
-                  size="400"
-                  radii="400"
+                  size="300"
+                  radii="300"
                   before={<Icon size="50" src={Icons.Search} />}
                   after={
                     result && (
@@ -431,7 +431,7 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
                         ref={virtualizer.measureElement}
                         key={`${room.roomId}-${vItem.index}`}
                         className={classNames(css.MembersGroupLabel, css.DrawerVirtualItem)}
-                        size="L400"
+                        as="span"
                       >
                         {tagOrMember.name}
                       </Text>

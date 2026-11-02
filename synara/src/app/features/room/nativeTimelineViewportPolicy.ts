@@ -277,10 +277,14 @@ const reactionStripHeight = (hint: NativeTimelineRowSizeHint): number =>
 export const estimateNativeTimelineRowSize = (hint: NativeTimelineRowSizeHint): number => {
   const chrome = chromeHeight(hint.grouped);
   switch (hint.kind) {
-    case 'date_separator':
     case 'read_marker':
-    case 'unread_marker':
+      // Drawn as nothing; the row keeps a minimal estimate until measured.
+      return 1;
     case 'timeline_start':
+      // The intro block: glyph, heading and caption.
+      return 148;
+    case 'date_separator':
+    case 'unread_marker':
     case 'pagination':
       return 40;
     case 'membership':
