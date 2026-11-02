@@ -70,6 +70,29 @@ Known gaps after wave 2: the selected space in the iOS title menu carries the ch
 subtitle; locale keys used only by the deleted desktop Direct pane are unused; a Rust push-rules fixture
 string still says "New inbox notification"; the 22 % corner applies to the resized avatars only.
 
+## Wave 3 (after 2.8.0): the room list recedes until something needs you
+
+The user's judgement of the 2.8.0 desktop list: every row had the same weight, glyph and grey, the selected
+row looked like a hover, and the rail duplicated the list header. Applied on both platforms:
+
+- Reading hierarchy: read rows use the secondary name and tertiary glyph at regular weight; unread rows the
+  primary name at 600 with a 3×16 marker at the leading edge; muted rows tertiary (lifted to 4.5:1 on the
+  light desktop list). Red count badges unchanged.
+- Selected row: desktop `Primary.Container` fill with `Primary.OnContainer` text at 600, kept under hover;
+  iPad accent at 16 %. Hover stays a weak neutral tint.
+- Section headers: 12/600 caption in secondary, 0.02 em tracking, always-visible chevron that rotates when
+  collapsed, S500 (desktop) / 16 pt (iOS) above every group but the first.
+- Middle truncation of room names on both platforms (`MiddleTruncatedText` on desktop, `.middle` on iOS);
+  desktop pane titles keep end truncation at 15/600.
+- DM presence dot (8 px/pt, Success online, tertiary offline, hidden when unknown) from Core's presence on
+  both platforms; iOS refreshes on peer-set change, reappear and pull to refresh, with no live subscription.
+- Desktop rail: Home, spaces, Activity, Approvals, account avatar. The Direct messages, Explore, "+" and
+  Search tabs are gone; the Home "+" menu holds Create room · Join room · New message · Explore rooms ·
+  Create space, and the pane search field opens the global switcher (⌘K).
+
+Known gaps: the sticky iOS section header keeps the system translucent background (reads whiter on
+iPhone light); the desktop selected fill and weights also apply to Activity and Explore rows.
+
 ## Deferred (P2 or needs Core work)
 
 Thread summaries with participants and last-reply time (Core `TimelineThreadSummary`), Core-side collapsing of
