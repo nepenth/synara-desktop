@@ -202,8 +202,8 @@ export function ApprovalsView({
       )}
       {filter === 'recent' && (
         <Text size="T300" priority="300">
-          Decisions your account made, synced across devices. Inbox-only expired requests stay here
-          until they age out of recent room activity.
+          Decisions your account made, synced across devices. Expired requests with no recorded
+          decision stay here until they age out of recent room activity.
         </Text>
       )}
       {visible.length === 0 ? (

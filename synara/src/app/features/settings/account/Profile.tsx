@@ -30,7 +30,7 @@ import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { UserProfile, useUserProfile } from '../../../hooks/useUserProfile';
 import { getMxIdLocalPart } from '../../../utils/matrix';
-import { UserAvatar } from '../../../components/user-avatar';
+import { UserAvatar, avatarLadderStyle } from '../../../components/user-avatar';
 import { nameInitials } from '../../../utils/common';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useFilePicker } from '../../../hooks/useFilePicker';
@@ -182,7 +182,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
         </Text>
       }
       after={
-        <Avatar size="500" radii="300">
+        <Avatar style={avatarLadderStyle('hero')}>
           <UserAvatar
             userId={userId}
             src={avatarUrl}

@@ -916,7 +916,7 @@ test('desktop notification payloads include routes for message, later, and agent
   try {
     await showDesktopNotification({
       title: 'Room',
-      body: 'New inbox notification from Alice',
+      body: 'New activity from Alice',
       route,
       dismissKeys: [`room:${roomId}`],
     });
@@ -942,7 +942,7 @@ test('desktop notification payloads include routes for message, later, and agent
       args: {
         notification: {
           title: 'Room',
-          body: 'New inbox notification from Alice',
+          body: 'New activity from Alice',
           route,
           dismissKeys: [`room:${roomId}`],
         },
@@ -1628,7 +1628,7 @@ test('sign-out withdraws posted banners and zeroes the badge and tray', async ()
     await dismissDesktopNotifications(getPostedDesktopDismissKeys());
     await showDesktopNotification({
       title: 'Room',
-      body: 'New inbox notification from Alice',
+      body: 'New activity from Alice',
       dismissKeys: ['room:!room:example.org', 'event:$event:example.org'],
     });
     await showDesktopNotification({

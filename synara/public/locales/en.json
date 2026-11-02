@@ -157,7 +157,7 @@
       "later": "Open Later",
       "later_description": "Saved messages and reminders",
       "notifications": "Open Notifications",
-      "notifications_description": "Mentions and notification inbox",
+      "notifications_description": "Mentions and notifications in Activity",
       "invites": "Open Invites",
       "invites_description": "Room and space invites",
       "message_search": "Message Search",

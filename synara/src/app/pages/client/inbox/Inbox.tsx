@@ -86,12 +86,12 @@ export function Inbox() {
   const notificationsSelected = useInboxNotificationsSelected();
 
   return (
-    <PageNav label="Inbox">
+    <PageNav label="Activity">
       <PageNavHeader>
         <Box grow="Yes" gap="300">
           <Box grow="Yes">
             <Text size="H4" truncate>
-              Inbox
+              Activity
             </Text>
           </Box>
         </Box>

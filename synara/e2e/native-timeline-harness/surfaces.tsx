@@ -38,7 +38,7 @@ function Surfaces() {
   return (
     <ClientConfigProvider value={{}}>
       <NativePermalinkProvider value={onPermalink}>
-        <section aria-label="Inbox message">
+        <section aria-label="Activity message">
           <RenderMessageContent
             displayName="Reader One"
             msgType="m.text"

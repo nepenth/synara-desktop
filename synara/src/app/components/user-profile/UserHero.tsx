@@ -4,7 +4,7 @@ import { Modal } from '../modal-dialog';
 import classNames from 'classnames';
 import FocusTrap from '../FocusTrap';
 import * as css from './styles.css';
-import { UserAvatar } from '../user-avatar';
+import { UserAvatar, avatarLadderStyle } from '../user-avatar';
 import colorMXID from '../../../util/colorMXID';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { BreakWord, LineClamp3 } from '../../styles/Text.css';
@@ -62,7 +62,7 @@ export function UserHero({ userId, avatarUrl, presence, userStatus, inCall }: Us
             as={resolvedAvatarUrl ? 'button' : 'div'}
             onClick={resolvedAvatarUrl ? () => setViewAvatar(resolvedAvatarUrl) : undefined}
             className={css.UserHeroAvatar}
-            size="500"
+            style={avatarLadderStyle('hero')}
           >
             <UserAvatar
               className={css.UserHeroAvatarImg}

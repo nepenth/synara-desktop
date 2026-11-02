@@ -29,9 +29,9 @@ test('the timeline is a labelled region with a polite arrivals log (D58)', () =>
   assert.match(read('components/page/Page.tsx'), /as=\{label \? 'nav' : 'div'\}/);
   // Room-list panes name the landmark from the translated section noun.
   for (const [path, pattern] of [
+    // Home is the one list of rooms and DMs (NAV-12); `/direct/` routes share it.
     ['pages/client/home/Home.tsx', /<PageNav label=\{roomsLabel\}>/],
-    ['pages/client/direct/Direct.tsx', /<PageNav label=\{label\}>/],
-    ['pages/client/inbox/Inbox.tsx', /<PageNav label="Inbox">/],
+    ['pages/client/inbox/Inbox.tsx', /<PageNav label="Activity">/],
     ['pages/client/explore/Explore.tsx', /<PageNav label="Explore">/],
     ['pages/client/space/Space.tsx', /<PageNav label=\{roomsLabel\}>/],
   ] as const) {
@@ -39,7 +39,7 @@ test('the timeline is a labelled region with a polite arrivals log (D58)', () =>
   }
   assert.match(read('pages/client/home/Home.tsx'), /t\('modernization\.nav\.rooms', 'Rooms'\)/);
   assert.match(
-    read('pages/client/direct/Direct.tsx'),
+    read('pages/client/home/Home.tsx'),
     /t\('modernization\.nav\.direct_messages', 'Direct messages'\)/
   );
   assert.match(read('pages/client/SidebarNav.tsx'), /<Sidebar as="nav" aria-label="Spaces">/);
@@ -140,10 +140,6 @@ test('settings controls have names (B8a follow-up)', () => {
     read('pages/client/home/Home.tsx'),
     /aria-label=\{t\('modernization\.nav\.home_options', 'Home options'\)\}/
   );
-  assert.match(
-    read('pages/client/direct/Direct.tsx'),
-    /aria-label=\{t\('modernization\.nav\.direct_messages_options', 'Direct messages options'\)\}/
-  );
   assert.match(read('pages/client/space/Space.tsx'), /aria-label=\{`\$\{spaceName\} options`\}/);
   // Every folds Switch is named: by SettingTile when it is the tile's `after`,
   // otherwise by its own aria-label.
@@ -178,7 +174,6 @@ test('room lists show loading until their first readback (D29)', () => {
   );
   for (const [path, key, label] of [
     ['pages/client/home/Home.tsx', 'loading_rooms', 'Loading rooms…'],
-    ['pages/client/direct/Direct.tsx', 'loading_direct_messages', 'Loading direct messages…'],
     ['pages/client/space/Space.tsx', 'loading_space', 'Loading space…'],
   ]) {
     assert.match(

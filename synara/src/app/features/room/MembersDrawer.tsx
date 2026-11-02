@@ -47,7 +47,7 @@ import { useSetSetting, useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { millify } from '../../plugins/millify';
 import { ScrollTopContainer } from '../../components/scroll-top-container';
-import { UserAvatar } from '../../components/user-avatar';
+import { UserAvatar, avatarLadderStyle } from '../../components/user-avatar';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
 import { useRoomMembers, type RoomMemberListItem } from '../../hooks/useRoomMembers';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
@@ -153,7 +153,7 @@ function MemberItem({
       radii="400"
       onClick={onClick}
       before={
-        <Avatar size="200">
+        <Avatar style={avatarLadderStyle('list')}>
           <UserAvatar
             userId={member.userId}
             src={avatarUrl ?? undefined}

@@ -4,6 +4,7 @@ import FocusTrap from '../../components/FocusTrap';
 import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
 import { useSpace } from '../../hooks/useSpace';
 import { RoomAvatar } from '../../components/room-avatar';
+import { avatarLadderStyle } from '../../components/user-avatar';
 import { nameInitials } from '../../utils/common';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { RoomTopicViewer } from '../../components/room-topic-viewer';
@@ -27,7 +28,7 @@ export function LobbyHero() {
   return (
     <PageHero
       icon={
-        <Avatar size="500">
+        <Avatar style={avatarLadderStyle('hero')}>
           <RoomAvatar
             roomId={space.roomId}
             src={avatarUrl}

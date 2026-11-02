@@ -40,15 +40,17 @@
      the composer and rail included (utils/__tests__/a11yContrast.test.ts). */
   --tc-link: hsl(213deg 100% 35%);
 
-  /* user mxid colors */
-  --mx-uc-1: hsl(208, 100%, 31%);
-  --mx-uc-2: hsl(302, 100%, 30%);
-  --mx-uc-3: hsl(163, 100%, 19%);
-  --mx-uc-4: hsl(343, 100%, 34%);
-  --mx-uc-5: hsl(24, 100%, 28%);
-  --mx-uc-6: hsl(181, 100%, 19%);
-  --mx-uc-7: hsl(242, 100%, 45%);
-  --mx-uc-8: hsl(94, 100%, 19%);
+  /* User colours: the iOS SynaraAvatarPalette hues in iOS order, so util/colorMXID's
+     FNV-1a bucket gives a person the same colour on every device. iOS saturation
+     (34 %) and lightness (37 %), darkened per hue only as far as AA needs. */
+  --mx-uc-1: hsl(212, 34%, 34%);
+  --mx-uc-2: hsl(248, 34%, 37%);
+  --mx-uc-3: hsl(285, 34%, 37%);
+  --mx-uc-4: hsl(330, 34%, 37%);
+  --mx-uc-5: hsl(8, 34%, 36%);
+  --mx-uc-6: hsl(28, 34%, 31%);
+  --mx-uc-7: hsl(140, 34%, 27%);
+  --mx-uc-8: hsl(195, 34%, 30%);
 
   --font-emoji: 'Twemoji_DISABLED';
   /* The platform UI font: San Francisco, then Segoe UI Variable (WebView2's
@@ -111,14 +113,16 @@
 .butter-theme {
   --tc-link: hsl(213deg 100% 80%);
 
-  --mx-uc-1: hsl(208, 42%, 75%);
-  --mx-uc-2: hsl(301, 42%, 80%);
-  --mx-uc-3: hsl(163, 42%, 70%);
-  --mx-uc-4: hsl(343, 42%, 76%);
-  --mx-uc-5: hsl(24, 42%, 70%);
-  --mx-uc-6: hsl(181, 42%, 60%);
-  --mx-uc-7: hsl(243, 42%, 82%);
-  --mx-uc-8: hsl(94, 42%, 80%);
+  /* Same iOS hues and saturation, lifted only as far as AA needs for
+     names and dark initials on every dark surface. */
+  --mx-uc-1: hsl(212, 34%, 69%);
+  --mx-uc-2: hsl(248, 34%, 74%);
+  --mx-uc-3: hsl(285, 34%, 72%);
+  --mx-uc-4: hsl(330, 34%, 72%);
+  --mx-uc-5: hsl(8, 34%, 71%);
+  --mx-uc-6: hsl(28, 34%, 66%);
+  --mx-uc-7: hsl(140, 34%, 60%);
+  --mx-uc-8: hsl(195, 34%, 64%);
 
   --synara-content-heading: #eef0f3;
   --synara-content-primary: #c6c9ce;

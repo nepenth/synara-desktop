@@ -19,7 +19,7 @@ import {
 import * as css from './ReactionViewer.css';
 import { Reaction } from '../../../components/message';
 import { getHexcodeForEmoji, getShortcodeFor } from '../../../plugins/emoji';
-import { UserAvatar } from '../../../components/user-avatar';
+import { UserAvatar, avatarLadderStyle } from '../../../components/user-avatar';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useOpenUserRoomProfile } from '../../../state/hooks/userRoomProfile';
 import { getMouseEventCords } from '../../../utils/dom';
@@ -174,7 +174,7 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
                         );
                       }}
                       before={
-                        <Avatar size="200">
+                        <Avatar style={avatarLadderStyle('list')}>
                           <UserAvatar
                             userId={senderId}
                             alt={reactionSenderName(senderId, senderNames)}

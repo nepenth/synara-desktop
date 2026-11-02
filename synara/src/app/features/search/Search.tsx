@@ -205,10 +205,10 @@ export function Search({ requestClose }: SearchProps) {
         label: t('modernization.quick_switcher.notifications', 'Open Notifications'),
         description: t(
           'modernization.quick_switcher.notifications_description',
-          'Mentions and notification inbox'
+          'Mentions and notifications in Activity'
         ),
         icon: Icons.Bell,
-        aliases: ['notifications', 'mentions', 'inbox'],
+        aliases: ['notifications', 'mentions', 'activity', 'inbox'],
         run: () => navigate(getInboxNotificationsPath()),
       },
       {
