@@ -1078,8 +1078,8 @@ private extension AppDeepLink {
             return .room(id: id, eventID: eventID)
         case .settings:
             return .settings
-        case .notifications:
-            return .notifications
+        case .activity:
+            return .activity
         case .later:
             return .later
         }

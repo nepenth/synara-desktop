@@ -102,7 +102,7 @@ final class AppRouteTests: XCTestCase {
     }
 
     func testTabsExposeExpectedDestinations() {
-        XCTAssertEqual(AppTab.allCases.map(\.rawValue), ["rooms", "later", "notifications", "settings"])
+        XCTAssertEqual(AppTab.allCases.map(\.rawValue), ["rooms", "later", "activity", "settings"])
     }
 
     func testSheetDestinationHasStableIdentifier() {
@@ -176,8 +176,15 @@ final class AppRouteTests: XCTestCase {
         let opened = router.open(url: url, sessionIsSignedIn: true)
 
         XCTAssertTrue(opened)
-        XCTAssertEqual(router.selectedTab, .notifications)
-        XCTAssertTrue(router.notificationsPath.isEmpty)
+        XCTAssertEqual(router.selectedTab, .activity)
+        XCTAssertTrue(router.activityPath.isEmpty)
+    }
+
+    func testDeepLinkAcceptsActivityAndLegacyNotificationsSlugs() throws {
+        for link in ["synara://activity", "synara://notifications", "synara://host/activity", "synara://inbox/notifications"] {
+            let url = try XCTUnwrap(URL(string: link))
+            XCTAssertEqual(AppDeepLink(url: url), .activity, link)
+        }
     }
 
     func testRouterCanCarryRoomTitleFromRoomList() {
@@ -205,24 +212,24 @@ final class AppRouteTests: XCTestCase {
 
     func testRouterRoutesRoomOnActiveNotificationsTabStack() {
         let router = AppRouter()
-        router.selectedTab = .notifications
+        router.selectedTab = .activity
 
         router.route(to: .room(id: "!roomid:example.org", title: "Alerts"))
 
-        XCTAssertEqual(router.selectedTab, .notifications)
-        XCTAssertEqual(router.notificationsPath, [.room(id: "!roomid:example.org", title: "Alerts")])
+        XCTAssertEqual(router.selectedTab, .activity)
+        XCTAssertEqual(router.activityPath, [.room(id: "!roomid:example.org", title: "Alerts")])
         XCTAssertTrue(router.roomsPath.isEmpty)
     }
 
     func testRouterPopsSelectedTabToRoot() {
         let router = AppRouter()
-        router.selectedTab = .notifications
+        router.selectedTab = .activity
         router.route(to: .room(id: "!roomid:example.org", title: "Alerts"))
         router.roomsPath = [.room(id: "!other:example.org", title: "Other")]
 
         router.popSelectedTabToRoot()
 
-        XCTAssertTrue(router.notificationsPath.isEmpty)
+        XCTAssertTrue(router.activityPath.isEmpty)
         XCTAssertEqual(router.roomsPath, [.room(id: "!other:example.org", title: "Other")])
     }
 

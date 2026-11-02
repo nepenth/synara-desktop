@@ -1174,29 +1174,29 @@ final class SynaraUITests: XCTestCase {
         add(attachment)
     }
 
-    func testNotificationsInboxShowsUnreadRooms() {
-        let app = launchSignedInNotificationsApp()
+    func testActivityInboxShowsUnreadRooms() {
+        let app = launchSignedInActivityApp()
 
-        XCTAssertTrue(app.staticTexts["Notifications"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["NotificationsRow-!project:matrix.org"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Activity"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["ActivityRow-!project:matrix.org"].waitForExistence(timeout: 10))
 
         let unreadRoomsDisclosure = app.buttons["Unread rooms"]
         if unreadRoomsDisclosure.waitForExistence(timeout: 2) {
             tap(unreadRoomsDisclosure)
-            XCTAssertTrue(app.buttons["NotificationsRow-!general:matrix.org"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["ActivityRow-!general:matrix.org"].waitForExistence(timeout: 5))
         }
     }
 
     func testAccessibilityNotificationFinalRowCanScrollAboveAndReceiveTap() {
-        let app = launchSignedInNotificationsApp(
+        let app = launchSignedInActivityApp(
             contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL"
         )
-        let disclosure = identifiedElement(in: app, "NotificationsUnreadRoomsDisclosure")
-        let inbox = app.collectionViews["NotificationsInboxList"]
+        let disclosure = identifiedElement(in: app, "ActivityUnreadRoomsDisclosure")
+        let inbox = app.collectionViews["ActivityInboxList"]
         XCTAssertTrue(revealForExistence(disclosure, in: inbox))
         tap(disclosure)
 
-        let row = app.buttons["NotificationsRow-!general:matrix.org"]
+        let row = app.buttons["ActivityRow-!general:matrix.org"]
         XCTAssertTrue(revealForDirectHit(row, in: inbox, app: app))
         assertAboveFloatingTabBar(row, app: app)
         row.tap()
@@ -2951,11 +2951,11 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
-    private func launchSignedInNotificationsApp(contentSizeCategory: String? = nil) -> XCUIApplication {
+    private func launchSignedInActivityApp(contentSizeCategory: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
-        app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "notifications"
+        app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "activity"
         launch(app, contentSizeCategory: contentSizeCategory)
         return app
     }

@@ -27,7 +27,7 @@ final class SynaraCanvasLayoutTests: XCTestCase {
 
     func testConversationTabsUseSplitCanvasAndSettingsDoesNot() {
         XCTAssertTrue(AppTab.rooms.usesConversationCanvas)
-        XCTAssertTrue(AppTab.notifications.usesConversationCanvas)
+        XCTAssertTrue(AppTab.activity.usesConversationCanvas)
         XCTAssertTrue(AppTab.later.usesConversationCanvas)
         XCTAssertFalse(AppTab.settings.usesConversationCanvas)
     }

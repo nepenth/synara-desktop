@@ -343,28 +343,6 @@
     "%lld" : {
 
     },
-    "%lld channels" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld channel"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld channels"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "%lld chars" : {
       "localizations" : {
         "en" : {
@@ -716,6 +694,9 @@
     "Active" : {
 
     },
+    "Activity" : {
+
+    },
     "Add Agent" : {
 
     },
@@ -1019,9 +1000,6 @@
     "Changes save to your account as you make them. Some encrypted alerts may still show as generic activity, even with previews hidden." : {
 
     },
-    "Channels" : {
-
-    },
     "Chat" : {
 
     },
@@ -1225,9 +1203,6 @@
     "Could Not Load Later" : {
 
     },
-    "Could Not Load Notifications" : {
-
-    },
     "Could Not Load Rooms" : {
 
     },
@@ -1267,6 +1242,9 @@
     "Could not load Later account data." : {
 
     },
+    "Could not load activity" : {
+
+    },
     "Could not log out" : {
 
     },
@@ -1303,10 +1281,13 @@
     "Could not update the room invite. Try again." : {
 
     },
-    "Couldn't mark this channel as read." : {
+    "Couldn't mark this room as read." : {
 
     },
     "Couldn't restore this session. Log out and sign in again." : {
+
+    },
+    "Couldn't save this message to Later. Try again." : {
 
     },
     "Couldn't update this identity change." : {
@@ -2828,6 +2809,9 @@
     "Save status" : {
 
     },
+    "Save to Later" : {
+
+    },
     "Saved" : {
 
     },
@@ -2838,6 +2822,9 @@
 
     },
     "Saved message" : {
+
+    },
+    "Saved to Later" : {
 
     },
     "Saved to your account." : {
@@ -2889,9 +2876,6 @@
 
     },
     "Select Text" : {
-
-    },
-    "Select a Notification" : {
 
     },
     "Select a Room" : {
@@ -3009,6 +2993,9 @@
 
     },
     "Shows the replies." : {
+
+    },
+    "Shows the rooms of every space" : {
 
     },
     "Sign In" : {
@@ -3580,9 +3567,6 @@
 
     },
     "Verify from another device" : {
-
-    },
-    "Verify this device" : {
 
     },
     "Version" : {

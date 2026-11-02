@@ -80,7 +80,7 @@ struct RootShellView: View {
         TabView(selection: $router.selectedTab) {
             tab(.rooms, session: authenticatedSession)
             tab(.later, session: authenticatedSession)
-            tab(.notifications, session: authenticatedSession)
+            tab(.activity, session: authenticatedSession)
             tab(.settings, session: authenticatedSession)
         }
         #if canImport(UIKit)

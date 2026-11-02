@@ -941,10 +941,23 @@ enum SynaraRadius {
     static let control: CGFloat = 8
     static let composer: CGFloat = 22
 
-    /// People are rounded squares (rooms keep their own tiles).
+    /// Avatars are rounded squares at 22 % of their side, on every size of
+    /// the ladder (`SynaraAvatarSize`), matching desktop (review-2 DS-11).
+    static let avatarFraction: CGFloat = 0.22
+
     static func avatar(_ size: CGFloat) -> CGFloat {
-        (size * 0.22).rounded()
+        (size * avatarFraction).rounded()
     }
+}
+
+/// The shared avatar ladder (review-2 DS-11): 20 row glyph, 24 dense,
+/// 28 lists and the reaction viewer, 36-40 timeline, 44 profile row, 64 hero.
+enum SynaraAvatarSize {
+    static let rowGlyph: CGFloat = 20
+    static let dense: CGFloat = 24
+    static let list: CGFloat = 28
+    static let profileRow: CGFloat = 44
+    static let hero: CGFloat = 64
 }
 
 enum SynaraDepthLevel: String, CaseIterable {
@@ -1322,7 +1335,7 @@ struct SynaraAvatar: View {
     let tint: Color
     var size: CGFloat
 
-    init(title: String, systemImage: String? = nil, tint: Color = SynaraColor.accent, size: CGFloat = 38) {
+    init(title: String, systemImage: String? = nil, tint: Color = SynaraColor.accent, size: CGFloat = SynaraAvatarSize.profileRow) {
         self.title = title
         self.systemImage = systemImage
         self.tint = tint
@@ -1330,7 +1343,7 @@ struct SynaraAvatar: View {
     }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: SynaraRadius.avatar(size), style: .continuous)
 
         ZStack {
             shape
@@ -1689,7 +1702,7 @@ struct SynaraSkeletonRow: View {
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
             if showsAvatar {
-                SynaraSkeletonBlock(width: 42, height: 42, cornerRadius: 11)
+                SynaraSkeletonBlock(width: 42, height: 42, cornerRadius: SynaraRadius.avatar(42))
             }
 
             VStack(alignment: .leading, spacing: SynaraSpacing.small) {
@@ -1874,5 +1887,53 @@ struct SynaraDesignTokenGallery_Previews: PreviewProvider {
                 .preferredColorScheme(.dark)
                 .previewDisplayName("Dark")
         }
+    }
+}
+
+/// A short confirmation ("Saved to Later") that floats over the bottom of
+/// its content and leaves on its own after two seconds. VoiceOver hears it
+/// as an announcement. Errors stay in alerts; this is for quiet successes.
+struct SynaraTransientNotice: ViewModifier {
+    @Binding var message: String?
+    var systemImage: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .bottom) {
+                if let message {
+                    Label(message, systemImage: systemImage)
+                        .font(SynaraTypography.supporting.weight(.semibold))
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .padding(.horizontal, SynaraSpacing.large)
+                        .padding(.vertical, SynaraSpacing.small)
+                        .background(SynaraColor.elevatedSurface, in: Capsule())
+                        .synaraDepth(.floating, shape: Capsule())
+                        .padding(.bottom, SynaraSpacing.medium)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .accessibilityIdentifier("SynaraTransientNotice")
+                        .task(id: message) {
+                            try? await Task.sleep(nanoseconds: 2_000_000_000)
+                            guard Task.isCancelled == false else { return }
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                                self.message = nil
+                            }
+                        }
+                }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: message)
+            .onChange(of: message) { message in
+                #if canImport(UIKit)
+                if let message {
+                    UIAccessibility.post(notification: .announcement, argument: message)
+                }
+                #endif
+            }
+    }
+}
+
+extension View {
+    func synaraTransientNotice(_ message: Binding<String?>, systemImage: String) -> some View {
+        modifier(SynaraTransientNotice(message: message, systemImage: systemImage))
     }
 }

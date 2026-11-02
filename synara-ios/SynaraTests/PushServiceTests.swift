@@ -286,7 +286,7 @@ final class PushServiceTests: XCTestCase {
         )
 
         let notifications = service.route(from: ["route": "synara://notifications"])
-        XCTAssertEqual(notifications, .notifications)
+        XCTAssertEqual(notifications, .activity)
 
         let later = service.route(from: ["route": "https://synara.app/r/%2Finbox%2Flater"])
         XCTAssertEqual(later, .later)

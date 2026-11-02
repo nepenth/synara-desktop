@@ -597,6 +597,8 @@ struct RoomTimelineView: View {
     @State private var agentActionMessage: String?
     @State private var roomNotesActionMessage: String?
     @State private var timelineActionMessage: String?
+    /// "Saved to Later", shown briefly over the timeline.
+    @State private var laterNotice: String?
     @State private var reportTarget: TimelineItem?
     @State private var redactConfirmation = TimelineRedactConfirmation<TimelineItem>()
     @State private var reportReason = ""
@@ -716,6 +718,7 @@ struct RoomTimelineView: View {
                 }
             )
             timelineContent
+                .synaraTransientNotice($laterNotice, systemImage: "bookmark.fill")
             if let eventRouteNotice {
                 TimelineEventRouteNoticeBanner(message: eventRouteNotice) {
                     self.eventRouteNotice = nil
@@ -1204,6 +1207,7 @@ struct RoomTimelineView: View {
                                     quickReactions: quickReactions,
                                     onReport: { beginReport(item) },
                                     onForward: { forwardTarget = item },
+                                    onSaveToLater: saveToLaterAction(for: item),
                                     onPollVote: { answerIDs in
                                         await performAction(
                                             .pollVote(answerIDs: answerIDs),
@@ -1561,6 +1565,7 @@ struct RoomTimelineView: View {
                 quickReactions: quickReactions,
                 onReport: { beginReport(eventRow.item) },
                 onForward: { forwardTarget = eventRow.item },
+                onSaveToLater: saveToLaterAction(for: eventRow.item),
                 onPollVote: { answerIDs in
                     await performAction(
                         .pollVote(answerIDs: answerIDs),
@@ -1907,6 +1912,30 @@ struct RoomTimelineView: View {
             "trace=\(timelineTraceID) elapsedMs=\(elapsedMilliseconds) event=\(name)\(suffix)",
             category: .timeline
         )
+    }
+
+    /// Save to Later for a message the homeserver has (nil otherwise), as
+    /// desktop's "Save for later" (review-2 DS-9).
+    private func saveToLaterAction(for item: TimelineItem) -> (() -> Void)? {
+        guard let eventID = LaterItemIdentity.savableEventID(for: item) else {
+            return nil
+        }
+        return { saveToLater(eventID: eventID) }
+    }
+
+    private func saveToLater(eventID: String) {
+        let later = environment.later
+        let roomID = roomID
+        Task { @MainActor in
+            switch await later.saveItem(roomID: roomID, eventID: eventID) {
+            case .success:
+                SynaraHaptics.trigger(.success)
+                laterNotice = String(localized: "Saved to Later")
+            case .failure(let error):
+                timelineActionMessage = error.errorDescription
+                    ?? String(localized: "Couldn't save this message to Later. Try again.")
+            }
+        }
     }
 
     private func pinToNotes(_ item: TimelineItem) {
@@ -4755,6 +4784,7 @@ struct ThreadTimelineView: View {
     @State private var focusedReplyEarlierPages = 0
     @State private var notesActionMessage: String?
     @State private var timelineActionMessage: String?
+    @State private var laterNotice: String?
     @State private var reportTarget: TimelineItem?
     @State private var redactConfirmation = TimelineRedactConfirmation<TimelineItem>()
     @State private var reportReason = ""
@@ -4780,6 +4810,7 @@ struct ThreadTimelineView: View {
             )
 
             threadContent
+                .synaraTransientNotice($laterNotice, systemImage: "bookmark.fill")
 
             ComposerView(
                 roomID: roomID,
@@ -5059,6 +5090,7 @@ struct ThreadTimelineView: View {
             quickReactions: quickReactions,
             onReport: { beginReport(item) },
             onForward: { forwardTarget = item },
+            onSaveToLater: saveToLaterAction(for: item),
             onPollVote: { answerIDs in
                 await performAction(
                     .pollVote(answerIDs: answerIDs),
@@ -5342,6 +5374,30 @@ struct ThreadTimelineView: View {
             return error
         } catch {
             return .failed
+        }
+    }
+
+    /// Save to Later for a message the homeserver has (nil otherwise), as
+    /// desktop's "Save for later" (review-2 DS-9).
+    private func saveToLaterAction(for item: TimelineItem) -> (() -> Void)? {
+        guard let eventID = LaterItemIdentity.savableEventID(for: item) else {
+            return nil
+        }
+        return { saveToLater(eventID: eventID) }
+    }
+
+    private func saveToLater(eventID: String) {
+        let later = environment.later
+        let roomID = roomID
+        Task { @MainActor in
+            switch await later.saveItem(roomID: roomID, eventID: eventID) {
+            case .success:
+                SynaraHaptics.trigger(.success)
+                laterNotice = String(localized: "Saved to Later")
+            case .failure(let error):
+                timelineActionMessage = error.errorDescription
+                    ?? String(localized: "Couldn't save this message to Later. Try again.")
+            }
         }
     }
 
@@ -7383,6 +7439,8 @@ private struct TimelineRow: View {
     @ObservedObject var quickReactions: TimelineQuickReactionStore
     let onReport: () -> Void
     let onForward: () -> Void
+    /// Saves the message to Later; nil where it cannot be saved.
+    var onSaveToLater: (() -> Void)? = nil
     let onPollVote: ([String]) async -> Bool
     let onDeclineCall: () async -> Bool
     let onPinToNotes: () -> Void
@@ -7566,8 +7624,8 @@ private struct TimelineRow: View {
     }
 
     /// The long-press menu, in the desktop action rail's order: React,
-    /// Reply, Reply in Thread, Edit, Forward, then Copy, Select Text, Pin,
-    /// and the destructive actions behind a divider.
+    /// Reply, Reply in Thread, Edit, Forward, Save to Later, then Copy,
+    /// Select Text, Pin, and the destructive actions behind a divider.
     @ViewBuilder
     private var messageActions: some View {
         if isOutgoing, OutgoingSendPolicy.canDiscard(item) {
@@ -7593,6 +7651,11 @@ private struct TimelineRow: View {
         if availability.canForward {
             Button("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
                 .accessibilityIdentifier("TimelineItemForward-\(item.eventID)")
+        }
+        if let onSaveToLater {
+            // Later's glyph on both clients (DS-7, DS-9).
+            Button("Save to Later", systemImage: "bookmark", action: onSaveToLater)
+                .accessibilityIdentifier("TimelineItemSaveToLater-\(item.eventID)")
         }
         if let copyPayload = TimelineMessageCopy.payload(for: item) {
             Button("Copy", systemImage: "doc.on.doc") {
@@ -7655,9 +7718,9 @@ private struct TimelineRow: View {
                 if threadParticipants.isEmpty == false {
                     HStack(spacing: -6) {
                         ForEach(threadParticipants.prefix(3)) { participant in
-                            TimelineAvatar(senderID: participant.userID, avatarURL: participant.avatarURL, size: 20)
+                            TimelineAvatar(senderID: participant.userID, avatarURL: participant.avatarURL, size: SynaraAvatarSize.rowGlyph)
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: SynaraRadius.avatar(20), style: .continuous)
+                                    RoundedRectangle(cornerRadius: SynaraRadius.avatar(SynaraAvatarSize.rowGlyph), style: .continuous)
                                         .strokeBorder(SynaraColor.surface, lineWidth: 1.5)
                                 }
                         }
@@ -8155,6 +8218,7 @@ private struct TimelineRow: View {
             replyCount: replyCount,
             canCopy: TimelineMessageCopy.payload(for: item) != nil,
             canPinToNotes: TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes,
+            canSaveToLater: onSaveToLater != nil,
             reactions: item.reactions,
             ownReactions: item.reactionOwnership,
             quickReactions: quickReactions.keys,
@@ -8188,6 +8252,8 @@ private struct TimelineRow: View {
             isSelectingText = true
         case .forward:
             onForward()
+        case .saveToLater:
+            onSaveToLater?()
         case .pinToNotes:
             onPinToNotes()
         case .declineCall:
@@ -9355,7 +9421,7 @@ private struct TimelineReactionsSheet: View {
         List {
             ForEach(group.reactors) { reactor in
                 HStack(spacing: SynaraSpacing.medium) {
-                    TimelineAvatar(senderID: reactor.userID, avatarURL: reactor.avatarURL, size: 36)
+                    TimelineAvatar(senderID: reactor.userID, avatarURL: reactor.avatarURL, size: SynaraAvatarSize.list)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(reactor.title)
                             .font(SynaraTypography.emphasis)
@@ -10504,7 +10570,7 @@ private struct ComposerMentionSuggestions: View {
                     onPick(member)
                 } label: {
                     HStack(spacing: SynaraSpacing.medium) {
-                        TimelineAvatar(senderID: member.userID, avatarURL: nil, size: 30)
+                        TimelineAvatar(senderID: member.userID, avatarURL: nil, size: SynaraAvatarSize.list)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(member.title)
                                 .font(SynaraTypography.emphasis)
@@ -11200,7 +11266,7 @@ private struct InlineThreadReplyRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: SynaraSpacing.small) {
-            TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: 22)
+            TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: SynaraAvatarSize.dense)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
                     Text(item.senderDisplayName)

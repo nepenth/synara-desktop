@@ -130,7 +130,7 @@ struct RoomListView: View {
                                 roomSection(RoomListSectionKey.space(group.space.id), title: group.space.name, rooms: group.rooms)
                             }
 
-                            roomSection(RoomListSectionKey.channels, title: String(localized: "Channels"), rooms: ungroupedChannelRooms)
+                            roomSection(RoomListSectionKey.channels, title: String(localized: "Rooms"), rooms: ungroupedChannelRooms)
                         }
 
                         roomSection(RoomListSectionKey.directs, title: String(localized: "Direct messages"), rooms: directRooms)
@@ -853,20 +853,37 @@ private struct RoomListHeader: View {
     private var titleMenu: some View {
         Menu {
             if spaces.isEmpty == false {
-                Section {
-                    Button {
-                        selectedSpaceID = nil
-                    } label: {
-                        menuItem(String(localized: "All spaces"), isSelected: selectedSpaceID == nil)
+                // Inside a space, the way back to every room comes first and
+                // reads as a way back, not as one more checkable row.
+                if selectedSpaceID != nil {
+                    Section {
+                        Button {
+                            selectedSpaceID = nil
+                        } label: {
+                            Label(String(localized: "All spaces"), systemImage: "arrow.uturn.backward")
+                        }
+                        .accessibilityHint("Shows the rooms of every space")
+                        .accessibilityIdentifier("SpaceFilter-all")
                     }
-                    .accessibilityIdentifier("SpaceFilter-all")
+                }
+
+                Section {
+                    if selectedSpaceID == nil {
+                        Button {
+                            selectedSpaceID = nil
+                        } label: {
+                            menuItem(String(localized: "All spaces"), isSelected: true)
+                        }
+                        .accessibilityIdentifier("SpaceFilter-all")
+                    }
 
                     ForEach(spaces) { space in
                         Button {
                             selectedSpaceID = space.id
                         } label: {
-                            menuItem(spaceTitle(space), isSelected: selectedSpaceID == space.id)
+                            spaceMenuItem(space, isSelected: selectedSpaceID == space.id)
                         }
+                        .accessibilityLabel(spaceAccessibilityLabel(space))
                         .accessibilityIdentifier("SpaceFilter-\(space.id)")
                     }
                 } header: {
@@ -916,9 +933,30 @@ private struct RoomListHeader: View {
         }
     }
 
-    private func spaceTitle(_ space: SpaceSummary) -> String {
+    /// The space name with its unread count as the menu row's subtitle.
+    @ViewBuilder
+    private func spaceMenuItem(_ space: SpaceSummary, isSelected: Bool) -> some View {
         let unread = unreadCountsBySpaceID[space.id] ?? 0
-        return unread > 0 ? "\(space.name) · \(unread)" : space.name
+        if isSelected {
+            Label {
+                Text(space.name)
+                if unread > 0 {
+                    Text(String(localized: "\(unread) unread"))
+                }
+            } icon: {
+                Image(systemName: "checkmark")
+            }
+        } else {
+            Text(space.name)
+            if unread > 0 {
+                Text(String(localized: "\(unread) unread"))
+            }
+        }
+    }
+
+    private func spaceAccessibilityLabel(_ space: SpaceSummary) -> String {
+        let unread = unreadCountsBySpaceID[space.id] ?? 0
+        return unread > 0 ? String(localized: "\(space.name), \(unread) unread") : space.name
     }
 }
 

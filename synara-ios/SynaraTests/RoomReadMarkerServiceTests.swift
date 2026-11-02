@@ -35,7 +35,7 @@ final class RoomReadMarkerServiceTests: XCTestCase {
     func testExplicitMarkReadFailureCopyIsFixedAndOnlyForMissingReadback() {
         XCTAssertEqual(
             ExplicitRoomReadReceipt.failureMessage(acknowledgedEventID: nil),
-            "Couldn't mark this channel as read."
+            "Couldn't mark this room as read."
         )
         XCTAssertNil(ExplicitRoomReadReceipt.failureMessage(acknowledgedEventID: "$event:example.org"))
     }

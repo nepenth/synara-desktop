@@ -282,9 +282,9 @@ struct RejectedAuthenticationRetirer {
 }
 
 enum ExplicitRoomReadReceipt {
-    static let failureCopy = String(localized: "Couldn't mark this channel as read.")
+    static let failureCopy = String(localized: "Couldn't mark this room as read.")
 
-    /// Fixed copy for the channel menu when explicit mark-read did not publish
+    /// Fixed copy for the room menu when explicit mark-read did not publish
     /// a fully-read marker. Nil means the mark-read landed.
     static func failureMessage(acknowledgedEventID: String?) -> String? {
         acknowledgedEventID == nil ? failureCopy : nil
@@ -2214,6 +2214,21 @@ final class SharedCoreLaterService: LaterServicing {
             return .success(true)
         } catch {
             return .failure(.networkFailure)
+        }
+    }
+
+    func saveItem(roomID: String, eventID: String) async -> Result<Void, LaterInboxError> {
+        guard case .signedIn = host.sessionStore.currentState else {
+            return .failure(.noSession)
+        }
+        do {
+            _ = try await SharedCoreLater.laterUpsert(
+                core: host.core,
+                item: SharedCoreLater.savedItem(roomID: roomID, eventID: eventID)
+            )
+            return .success(())
+        } catch {
+            return .failure(.saveFailed)
         }
     }
 }

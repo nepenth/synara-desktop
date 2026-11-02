@@ -908,12 +908,12 @@ struct NotificationsInboxSections: Equatable {
 }
 
 struct TabBadgeCounts: Equatable {
-    var notifications: Int = 0
+    var activity: Int = 0
     var rooms: Int = 0
 
     static func make(from rooms: [RoomSummary]) -> TabBadgeCounts {
         TabBadgeCounts(
-            notifications: NotificationBadgeSummary.notificationsTabBadgeCount(from: rooms),
+            activity: NotificationBadgeSummary.notificationsTabBadgeCount(from: rooms),
             rooms: NotificationBadgeSummary.roomsTabBadgeCount(from: rooms)
         )
     }

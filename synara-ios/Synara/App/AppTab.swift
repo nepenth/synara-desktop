@@ -1,6 +1,6 @@
 import SwiftUI
 
-private struct NotificationsTabView: View {
+private struct ActivityTabView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: RoomListState = .idle
     @State private var isUnreadRoomsExpanded = false
@@ -19,11 +19,11 @@ private struct NotificationsTabView: View {
                     }
                 }
                 .listStyle(.plain)
-                .accessibilityIdentifier("NotificationsLoading")
+                .accessibilityIdentifier("ActivityLoading")
             case .empty:
                 caughtUpEmptyState
             case .failed(let message):
-                SynaraErrorState(title: String(localized: "Could Not Load Notifications"), message: message) {
+                SynaraErrorState(title: String(localized: "Could not load activity"), message: message) {
                     loadInbox()
                 }
             case .loaded(let rooms):
@@ -41,10 +41,10 @@ private struct NotificationsTabView: View {
                     .padding(SynaraSpacing.medium)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(SynaraColor.secondarySurface)
-                    .accessibilityIdentifier("NotificationsMembershipErrorText")
+                    .accessibilityIdentifier("ActivityMembershipErrorText")
             }
         }
-        .navigationTitle("Notifications")
+        .navigationTitle("Activity")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 NavigationLink {
@@ -54,7 +54,7 @@ private struct NotificationsTabView: View {
                 }
                 .accessibilityLabel("Approvals")
                 .accessibilityHint("Review pending and recent agent approvals")
-                .accessibilityIdentifier("NotificationsApprovalsButton")
+                .accessibilityIdentifier("ActivityApprovalsButton")
             }
         }
         .task {
@@ -131,12 +131,12 @@ private struct NotificationsTabView: View {
                                 isUnreadRoomsExpanded.toggle()
                             }
                         }
-                        .accessibilityIdentifier("NotificationsUnreadRoomsDisclosure")
+                        .accessibilityIdentifier("ActivityUnreadRoomsDisclosure")
                     }
                 }
             }
             .listStyle(.plain)
-            .accessibilityIdentifier("NotificationsInboxList")
+            .accessibilityIdentifier("ActivityInboxList")
         }
     }
 
@@ -172,7 +172,7 @@ private struct NotificationsTabView: View {
         }
         .listRowInsets(EdgeInsets(top: 1, leading: SynaraSpacing.small, bottom: 1, trailing: SynaraSpacing.small))
         .accessibilityHint("Review pending and recent agent approvals")
-        .accessibilityIdentifier("NotificationsApprovalsRow")
+        .accessibilityIdentifier("ActivityApprovalsRow")
     }
 
     private func notificationsRow(_ room: RoomSummary) -> some View {
@@ -188,7 +188,7 @@ private struct NotificationsTabView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .listRowInsets(EdgeInsets(top: 1, leading: SynaraSpacing.small, bottom: 1, trailing: SynaraSpacing.small))
-        .accessibilityIdentifier("NotificationsRow-\(room.id)")
+        .accessibilityIdentifier("ActivityRow-\(room.id)")
     }
 
     /// An invited room has no timeline to open yet, so the invites section
@@ -243,7 +243,7 @@ private struct NotificationsTabView: View {
         .listRowInsets(EdgeInsets(top: 1, leading: SynaraSpacing.small, bottom: 1, trailing: SynaraSpacing.small))
         .accessibilityLabel("\(item.title) in \(item.roomName)")
         .accessibilityHint("Opens the room to review this agent action")
-        .accessibilityIdentifier("NotificationsAgentRow-\(item.roomID)")
+        .accessibilityIdentifier("ActivityAgentRow-\(item.roomID)")
     }
 
     private func loadInbox() {
@@ -275,7 +275,7 @@ private struct NotificationsTabView: View {
     }
 }
 
-/// Why a room is in the Notifications inbox. An agent approval prompt is
+/// Why a room is in the Activity inbox. An agent approval prompt is
 /// labeled as one even when the push rules also highlighted it.
 enum NotificationsInboxReason: Equatable {
     case approval
@@ -427,14 +427,14 @@ private struct OptionalTabBadge: ViewModifier {
 enum AppTab: String, CaseIterable, Identifiable {
     case rooms
     case later
-    case notifications
+    case activity
     case settings
 
     var id: String { rawValue }
 
     var usesConversationCanvas: Bool {
         switch self {
-        case .rooms, .later, .notifications:
+        case .rooms, .later, .activity:
             return true
         case .settings:
             return false
@@ -445,8 +445,8 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .rooms:
             return String(localized: "Select a Room")
-        case .notifications:
-            return String(localized: "Select a Notification")
+        case .activity:
+            return String(localized: "Select an Item")
         case .later:
             return String(localized: "Select an Item")
         case .settings:
@@ -458,7 +458,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .rooms:
             return "bubble.left.and.bubble.right"
-        case .notifications:
+        case .activity:
             return "bell"
         case .later:
             return "bookmark"
@@ -471,7 +471,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .rooms:
             return String(localized: "Pick a conversation. The room list stays open beside it.")
-        case .notifications:
+        case .activity:
             return String(localized: "Open a mention, invite, or unread room. The inbox stays visible.")
         case .later:
             return String(localized: "Open a saved message. Your Later list stays visible.")
@@ -485,8 +485,8 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .rooms:
             RoomListView()
-        case .notifications:
-            NotificationsTabView()
+        case .activity:
+            ActivityTabView()
         case .later:
             LaterListView()
         case .settings:
@@ -501,10 +501,12 @@ enum AppTab: String, CaseIterable, Identifiable {
             Label("Rooms", systemImage: "bubble.left.and.bubble.right")
                 .accessibilityIdentifier("RoomsTab")
                 .modifier(OptionalTabBadge(count: badgeCounts.rooms))
-        case .notifications:
-            Label("Notifications", systemImage: "bell")
-                .accessibilityIdentifier("NotificationsTab")
-                .modifier(OptionalTabBadge(count: badgeCounts.notifications))
+        case .activity:
+            // "Activity", not "Notifications", so the inbox tab is not
+            // confused with Settings > Notifications (review-2 IOSS-14).
+            Label("Activity", systemImage: "bell")
+                .accessibilityIdentifier("ActivityTab")
+                .modifier(OptionalTabBadge(count: badgeCounts.activity))
         case .later:
             // The bookmark is Later's glyph on desktop too (DS-7).
             Label("Later", systemImage: "bookmark")
