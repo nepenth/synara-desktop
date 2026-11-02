@@ -7,13 +7,15 @@ import { joinPathComponent } from '../pathUtils';
  * Cold start and "nothing selected" open the last room of a navigation scope
  * (Slack), not the Welcome page. `navToActivePath` already records the last
  * route per scope; this reads that store outside React (a route loader) and
- * accepts only room routes under the scope's base path. Utility routes
- * (create, join, search) and the base path itself are not restored.
+ * accepts only room routes under the scope's base path(s). Utility routes
+ * (create, join, search) and the base path itself are not restored. Home is
+ * one list of rooms and DMs (NAV-12), so it passes both `/home/` and
+ * `/direct/` and restores whichever was open last.
  */
 export const lastActiveRoomPath = (
   activePaths: ReadonlyMap<string, Path> | Record<string, Path> | undefined,
   navId: string,
-  basePath: string,
+  basePath: string | readonly string[],
   utilitySegments: readonly string[]
 ): string | undefined => {
   const stored =
@@ -21,8 +23,11 @@ export const lastActiveRoomPath = (
       ? activePaths.get(navId)
       : (activePaths as Record<string, Path> | undefined)?.[navId];
   if (!stored || typeof stored.pathname !== 'string') return undefined;
-  const base = basePath.endsWith('/') ? basePath : `${basePath}/`;
-  if (!stored.pathname.startsWith(base)) return undefined;
+  const bases = (typeof basePath === 'string' ? [basePath] : basePath).map((path) =>
+    path.endsWith('/') ? path : `${path}/`
+  );
+  const base = bases.find((path) => stored.pathname.startsWith(path));
+  if (!base) return undefined;
   const rest = stored.pathname.slice(base.length);
   const [first] = rest.split('/');
   if (!first) return undefined;

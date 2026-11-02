@@ -1,10 +1,11 @@
 // Production room rows and section headers with a 56-room list: unread,
 // mentions, muted, private, favourites, DMs and long names. Only native IPC
-// data is synthetic. Visual proof for NAV-2/3/4/7/8/9.
+// data is synthetic. Visual proof for NAV-2/3/4/7/8/9, and for NAV-12: the
+// one list's sections in order Favorites, Rooms, Direct messages.
 import React, { useCallback, useState } from 'react';
 import { Provider } from 'jotai';
 import { MemoryRouter } from 'react-router-dom';
-import { configClass, varsClass } from 'folds';
+import { color, configClass, varsClass } from 'folds';
 import { darkTheme, synaraLightTheme as lightTheme } from '../../src/colors.css';
 import { presentationFor } from './presentation';
 import {
@@ -58,6 +59,18 @@ const special: RoomSummary[] = [
   }),
   room('!dm-read:example.test', 'Bob', { isDirect: true, directUserId: '@bob:example.test' }),
   room('!many:example.test', 'firehose', { unreadCount: 250, highlightCount: 143 }),
+  room('!dm-mention:example.test', 'Carol', {
+    isDirect: true,
+    directUserId: '@carol:example.test',
+    unreadCount: 1,
+    highlightCount: 1,
+  }),
+  room('!dm-muted:example.test', 'Dave', {
+    isDirect: true,
+    directUserId: '@dave:example.test',
+    unreadCount: 6,
+    notificationMode: 'mute',
+  }),
 ];
 const filler: RoomSummary[] = Array.from({ length: 46 }, (_, index) =>
   room(`!room-${index}:example.test`, `project-${String(index + 1).padStart(2, '0')}`, {
@@ -115,11 +128,24 @@ function BoundRows({
   useBindRoomToUnreadAtom();
   const { orderedRoomIds, rooms: summaries } = useNativeRoomListSnapshot();
   const [closed, setClosed] = useState(false);
+  const [directsClosed, setDirectsClosed] = useState(false);
   const [selected, setSelected] = useState('!fav:example.test');
   const favorites = orderedRoomIds.filter(
     (roomId) => summaries.find((s) => s.roomId === roomId)?.isFavorite
   );
-  const rest = orderedRoomIds.filter((roomId) => !favorites.includes(roomId));
+  const isDirect = (roomId: string) => !!summaries.find((s) => s.roomId === roomId)?.isDirect;
+  const rest = orderedRoomIds.filter((roomId) => !favorites.includes(roomId) && !isDirect(roomId));
+  const directs = orderedRoomIds.filter(
+    (roomId) => !favorites.includes(roomId) && isDirect(roomId)
+  );
+  // A collapsed section keeps its unread and selected rows (Slack).
+  const keptWhenClosed = (roomId: string) => {
+    const s = summaries.find((item) => item.roomId === roomId);
+    return (
+      roomId === selected ||
+      (!!s && s.notificationMode !== 'mute' && (s.unreadCount > 0 || s.highlightCount > 0))
+    );
+  };
   const row = (roomId: string, favoriteMarker?: boolean) => {
     const nativeRoom = getNativeRoom(roomId);
     if (!nativeRoom) return null;
@@ -134,7 +160,7 @@ function BoundRows({
         <RoomNavItem
           room={nativeRoom}
           selected={selected === roomId}
-          linkPath={`/home/${roomId}/`}
+          linkPath={isDirect(roomId) ? `/direct/${roomId}/` : `/home/${roomId}/`}
           notificationMode={modeFor(summary)}
           favoriteMarker={favoriteMarker}
         />
@@ -154,7 +180,10 @@ function BoundRows({
           width: 256,
           display: 'flex',
           flexDirection: 'column',
-          background: 'var(--synara-room-list-background, #1e1f22)',
+          // The light theme reads on its own container colour, not the dark fallback.
+          background: light
+            ? color.Background.Container
+            : 'var(--synara-room-list-background, #1e1f22)',
         }}
       >
         <NavSearchField onOpen={() => undefined} />
@@ -175,18 +204,23 @@ function BoundRows({
                 </button>
               }
             />
-            {(closed
-              ? rest.filter((roomId) => {
-                  const s = summaries.find((item) => item.roomId === roomId);
-                  return (
-                    roomId === selected ||
-                    (s &&
-                      s.notificationMode !== 'mute' &&
-                      (s.unreadCount > 0 || s.highlightCount > 0))
-                  );
-                })
-              : rest
-            ).map((roomId) => row(roomId, true))}
+            {(closed ? rest.filter(keptWhenClosed) : rest).map((roomId) => row(roomId, true))}
+          </NavCategory>
+          <NavCategory>
+            <NavSectionHeader
+              label="Direct messages"
+              closed={directsClosed}
+              categoryId="direct|direct"
+              onToggle={() => setDirectsClosed((value) => !value)}
+              actions={
+                <button type="button" aria-label="Sort Direct messages" aria-expanded={false}>
+                  sort
+                </button>
+              }
+            />
+            {(directsClosed ? directs.filter(keptWhenClosed) : directs).map((roomId) =>
+              row(roomId)
+            )}
           </NavCategory>
         </div>
       </nav>
@@ -196,7 +230,8 @@ function BoundRows({
 
 export function RoomRowsFixture() {
   const [fixtureSession] = useState(installFixtureSession);
-  const light = new URLSearchParams(window.location.search).has('light');
+  const search = new URLSearchParams(window.location.search);
+  const light = search.has('light') || search.get('theme') === 'light';
   return (
     <Provider>
       <MemoryRouter initialEntries={['/home/']}>

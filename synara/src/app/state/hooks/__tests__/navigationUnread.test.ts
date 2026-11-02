@@ -117,12 +117,47 @@ test('read receipts and empty signed-out projection clear aggregate counts', () 
     2
   );
   assert.equal(nativeNavigationScope([dm], none, new Map(), 'direct').unread, undefined);
-  assert.deepEqual(nativeNavigationScope([], none, new Map(), 'direct'), {
-    roomIds: [],
-    unread: undefined,
-  });
-  assert.deepEqual(nativeNavigationScope([], none, new Map(), 'home'), {
-    roomIds: [],
-    unread: undefined,
-  });
+  for (const scope of ['direct', 'home', 'merged'] as const) {
+    assert.deepEqual(nativeNavigationScope([], none, new Map(), scope), {
+      roomIds: [],
+      unread: undefined,
+      attention: 0,
+    });
+  }
+});
+
+test('the merged Home scope is rooms plus DMs with one attention count (NAV-12)', () => {
+  const rooms = [
+    room({ roomId: '!dm', isDirect: true }),
+    room({ roomId: '!dm-mention', isDirect: true }),
+    room({ roomId: '!home' }),
+    room({ roomId: '!home-mention' }),
+    room({ roomId: '!child' }),
+    room({ roomId: '!space-dm', isDirect: true }),
+  ];
+  const rows = attention([
+    { roomId: '!dm', total: 2 },
+    // Mention-only rows can report no plain total; the DM still counts once.
+    { roomId: '!dm-mention', total: 0, highlight: 1 },
+    { roomId: '!home', total: 4 },
+    { roomId: '!home-mention', total: 5, highlight: 2 },
+    { roomId: '!child', total: 8, highlight: 8 },
+    { roomId: '!space-dm', total: 3 },
+  ]);
+  const parents = new Map([
+    ['!child', new Set(['!space'])],
+    ['!space-dm', new Set(['!space'])],
+  ]);
+  const merged = nativeNavigationScope(rooms, rows, parents, 'merged');
+  assert.deepEqual(merged.roomIds, ['!dm', '!dm-mention', '!home', '!home-mention', '!space-dm']);
+  assert.equal(merged.unread?.total, 14);
+  // Red count: room mentions (2) plus unread DM messages (2 + 1 + 3); plain
+  // room unread (!home) adds nothing and space children stay out.
+  assert.equal(merged.attention, 8);
+  const home = nativeNavigationScope(rooms, rows, parents, 'home');
+  const direct = nativeNavigationScope(rooms, rows, parents, 'direct');
+  assert.equal(home.attention, 2);
+  assert.equal(direct.attention, 6);
+  assert.equal(merged.attention, home.attention + direct.attention);
+  assert.deepEqual([...merged.roomIds].sort(), [...home.roomIds, ...direct.roomIds].sort());
 });

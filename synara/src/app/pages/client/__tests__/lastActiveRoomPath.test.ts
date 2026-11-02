@@ -59,12 +59,43 @@ test('utility routes, the base path and other scopes are not restored', () => {
   );
 });
 
+test('the one Home list restores its last room or DM (NAV-12)', () => {
+  const homeBases = ['/home/', '/direct/'];
+  assert.equal(
+    lastActiveRoomPath(
+      new Map([['home', path('/direct/!dm%3Aexample.org/', '', '#e')]]),
+      'home',
+      homeBases,
+      utility
+    ),
+    '/direct/!dm%3Aexample.org/#e'
+  );
+  assert.equal(
+    lastActiveRoomPath(new Map([['home', path('/home/!room/')]]), 'home', homeBases, utility),
+    '/home/!room/'
+  );
+  for (const utilityPath of ['/direct/', '/direct/create/', '/home/join/']) {
+    assert.equal(
+      lastActiveRoomPath(new Map([['home', path(utilityPath)]]), 'home', homeBases, utility),
+      undefined,
+      utilityPath
+    );
+  }
+  assert.equal(
+    lastActiveRoomPath(new Map([['home', path('/space/!s/!r/')]]), 'home', homeBases, utility),
+    undefined
+  );
+});
+
 test('Home and Direct index routes redirect through the last-room loader before Welcome', () => {
   const router = readFileSync('src/app/pages/Router.tsx', 'utf8');
   assert.match(
     router,
-    /lastRoomLoader\('home', HOME_PATH, \[_CREATE_PATH, _JOIN_PATH, _SEARCH_PATH\]\)/
+    /lastRoomLoader\(\s*'home',\s*\[HOME_PATH, DIRECT_PATH\],\s*\[_CREATE_PATH, _JOIN_PATH, _SEARCH_PATH\]\s*\)/
   );
+  // Both routes share the Home pane (one list for rooms and DMs, NAV-12).
+  assert.match(router, /<MobileFriendlyPageNav path=\{\[HOME_PATH, DIRECT_PATH\]\}>\s*<Home \/>/);
+  assert.doesNotMatch(router, /<Direct \/>/);
   assert.match(router, /lastRoomLoader\('direct', DIRECT_PATH, \[_CREATE_PATH\]\)/);
   // Welcome stays as the fallback when no room is remembered.
   assert.match(router, /element=\{<WelcomePage \/>\}/);

@@ -2,6 +2,7 @@ import React, {
   MouseEventHandler,
   forwardRef,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -35,6 +36,8 @@ import {
   NavSectionHeader,
 } from '../../../components/nav';
 import {
+  getDirectCreatePath,
+  getDirectRoomPath,
   getExplorePath,
   getHomeCreatePath,
   getHomeJoinPath,
@@ -49,6 +52,12 @@ import {
   useHomeSearchSelected,
 } from '../../../hooks/router/useHomeSelected';
 import { useHomeRooms } from './useHomeRooms';
+import { useDirectRooms } from '../direct/useDirectRooms';
+import {
+  useDirectCreateSelected,
+  useDirectSelected,
+} from '../../../hooks/router/useDirectSelected';
+import { directSectionRevealAtom } from '../../../state/directSectionReveal';
 import {
   favoriteRoomIdSet,
   partitionHomeRooms,
@@ -100,7 +109,8 @@ type HomeMenuProps = {
 };
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
   const { t } = useTranslation();
-  const { roomIds: orphanRooms, unread } = useNativeNavigationScope('home');
+  // One list (NAV-12): mark its rooms and its DMs read together.
+  const { roomIds: orphanRooms, unread } = useNativeNavigationScope('merged');
 
   const { markRead, markingRead, markReadError } = useMarkRoomsAsRead();
 
@@ -138,7 +148,7 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
 type HomeAddMenuProps = {
   requestClose: () => void;
 };
-/** The "+" menu: the former Create Room / Join with Address utility rows. */
+/** The "+" menu: create, join, new direct message, explore. */
 const HomeAddMenu = forwardRef<HTMLDivElement, HomeAddMenuProps>(({ requestClose }, ref) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -173,6 +183,18 @@ const HomeAddMenu = forwardRef<HTMLDivElement, HomeAddMenuProps>(({ requestClose
             {t('modernization.nav.join_with_address', 'Join with address')}
           </Text>
         </MenuItem>
+        <MenuItem
+          variant="Surface"
+          fill="None"
+          size="300"
+          radii="300"
+          after={<Icon size="100" src={Icons.User} />}
+          onClick={() => go(getDirectCreatePath())}
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            {t('modernization.nav.new_message', 'New message')}
+          </Text>
+        </MenuItem>
       </Box>
       <Line variant="Surface" size="300" />
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
@@ -201,6 +223,7 @@ function HomeHeader() {
   const serverName = homeserverDisplayName(session?.baseUrl, session?.userId);
   const createRoomSelected = useHomeCreateSelected();
   const joinSelected = useHomeJoinSelected();
+  const createDirectSelected = useDirectCreateSelected();
 
   const toggle =
     (
@@ -242,7 +265,9 @@ function HomeHeader() {
               aria-label={t('modernization.nav.add_room', 'Add room')}
               aria-haspopup="menu"
               aria-expanded={!!addAnchor}
-              aria-pressed={!!addAnchor || createRoomSelected || joinSelected}
+              aria-pressed={
+                !!addAnchor || createRoomSelected || joinSelected || createDirectSelected
+              }
               variant="Surface"
               onClick={toggle(setAddAnchor)}
             >
@@ -329,12 +354,34 @@ function HomeEmpty() {
 
 const DEFAULT_CATEGORY_ID = makeNavCategoryId('home', 'room');
 const FAVORITES_CATEGORY_ID = makeNavCategoryId('home', 'favorites');
+/** Same id the former Direct pane used, so its collapsed state carries over. */
+const DIRECT_CATEGORY_ID = makeNavCategoryId('direct', 'direct');
 
+/** A collapsed section keeps its unread and selected rows visible (Slack). */
+const visibleWhenClosed = (
+  roomIds: string[],
+  closed: boolean,
+  hasUnread: (roomId: string) => boolean,
+  selectedRoomId: string | undefined
+): string[] =>
+  closed ? roomIds.filter((rId) => hasUnread(rId) || rId === selectedRoomId) : roomIds;
+
+/**
+ * The one Home list (NAV-12, Slack and iOS): Favorites, Rooms, Direct
+ * messages. It is the nav pane for both `/home/` and `/direct/` routes, so a
+ * DM keeps its own route (and `IsDirectRoomProvider`) while the list, its
+ * scroll position and the rail's Home tab stay put.
+ */
 export function Home() {
+  const directSelected = useDirectSelected();
+  // `home` remembers the last place in this pane, room or DM; `direct` the
+  // last DM, which the Direct rail tab reopens.
   useNavToActivePathMapper('home');
+  useNavToActivePathMapper('direct', directSelected);
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const rooms = useHomeRooms();
+  const directs = useDirectRooms();
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
   const navigate = useNavigate();
@@ -343,8 +390,9 @@ export function Home() {
   const selectedRoomId = useSelectedRoom();
   const searchSelected = useHomeSearchSelected();
   const roomListLoaded = useNativeRoomListLoaded();
-  const noRoomToDisplay = rooms.length === 0;
+  const noRoomToDisplay = rooms.length === 0 && directs.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
+  const [revealDirects, setRevealDirects] = useAtom(directSectionRevealAtom);
 
   const nativeRoomList = useNativeRoomListSnapshot();
   const sortStorage = typeof localStorage === 'undefined' ? undefined : localStorage;
@@ -354,48 +402,83 @@ export function Home() {
   const [roomsSort, setRoomsSort] = useState<RoomListSort>(() =>
     readRoomListSort(sortStorage, 'rooms')
   );
+  const [directSort, setDirectSort] = useState<RoomListSort>(() =>
+    readRoomListSort(sortStorage, 'directs')
+  );
   const favoriteIds = useMemo(
     () => favoriteRoomIdSet(nativeRoomList.presentation),
     [nativeRoomList.presentation]
   );
-  const { favoriteRoomIds, remainingRoomIds } = useMemo(
-    () => partitionHomeRooms(rooms, favoriteIds),
-    [rooms, favoriteIds]
-  );
+  // Favorites span rooms and DMs, as on iOS (`RoomListFavorites.sections`).
+  const { favoriteRoomIds, remainingRoomIds, remainingDirectIds } = useMemo(() => {
+    const roomPartition = partitionHomeRooms(rooms, favoriteIds);
+    const directPartition = partitionHomeRooms(directs, favoriteIds);
+    return {
+      favoriteRoomIds: [...roomPartition.favoriteRoomIds, ...directPartition.favoriteRoomIds],
+      remainingRoomIds: roomPartition.remainingRoomIds,
+      remainingDirectIds: directPartition.remainingRoomIds,
+    };
+  }, [rooms, directs, favoriteIds]);
+  const directIdSet = useMemo(() => new Set(directs), [directs]);
 
   const favoritesClosed = closedCategories.has(FAVORITES_CATEGORY_ID);
   const roomsClosed = closedCategories.has(DEFAULT_CATEGORY_ID);
+  const directsClosed = closedCategories.has(DIRECT_CATEGORY_ID);
+  const hasUnread = useCallback((rId: string) => roomToUnread.has(rId), [roomToUnread]);
 
-  // A collapsed section keeps its unread and selected rows visible (Slack).
-  const sortedFavoriteRoomIds = useMemo(() => {
-    const items = sortHomeRoomIds(favoriteRoomIds, nativeRoomList.presentation, favoriteSort);
-    if (favoritesClosed) {
-      return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
-    }
-    return items;
-  }, [
-    favoriteRoomIds,
-    nativeRoomList.presentation,
-    favoriteSort,
-    favoritesClosed,
-    roomToUnread,
-    selectedRoomId,
-  ]);
+  const sortedFavoriteRoomIds = useMemo(
+    () =>
+      visibleWhenClosed(
+        sortHomeRoomIds(favoriteRoomIds, nativeRoomList.presentation, favoriteSort),
+        favoritesClosed,
+        hasUnread,
+        selectedRoomId
+      ),
+    [
+      favoriteRoomIds,
+      nativeRoomList.presentation,
+      favoriteSort,
+      favoritesClosed,
+      hasUnread,
+      selectedRoomId,
+    ]
+  );
 
-  const mainRoomIds = useMemo(() => {
-    const items = sortHomeRoomIds(remainingRoomIds, nativeRoomList.presentation, roomsSort);
-    if (roomsClosed) {
-      return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
-    }
-    return items;
-  }, [
-    remainingRoomIds,
-    nativeRoomList.presentation,
-    roomsSort,
-    roomsClosed,
-    roomToUnread,
-    selectedRoomId,
-  ]);
+  const mainRoomIds = useMemo(
+    () =>
+      visibleWhenClosed(
+        sortHomeRoomIds(remainingRoomIds, nativeRoomList.presentation, roomsSort),
+        roomsClosed,
+        hasUnread,
+        selectedRoomId
+      ),
+    [
+      remainingRoomIds,
+      nativeRoomList.presentation,
+      roomsSort,
+      roomsClosed,
+      hasUnread,
+      selectedRoomId,
+    ]
+  );
+
+  const sortedDirectIds = useMemo(
+    () =>
+      visibleWhenClosed(
+        sortHomeRoomIds(remainingDirectIds, nativeRoomList.presentation, directSort),
+        directsClosed,
+        hasUnread,
+        selectedRoomId
+      ),
+    [
+      remainingDirectIds,
+      nativeRoomList.presentation,
+      directSort,
+      directsClosed,
+      hasUnread,
+      selectedRoomId,
+    ]
+  );
 
   const handleFavoriteSort = (sort: RoomListSort) => {
     setFavoriteSort(sort);
@@ -407,6 +490,11 @@ export function Home() {
     writeRoomListSort(sortStorage, sort, 'rooms');
   };
 
+  const handleDirectSort = (sort: RoomListSort) => {
+    setDirectSort(sort);
+    writeRoomListSort(sortStorage, sort, 'directs');
+  };
+
   const getRoomKey = useCallback((index: number) => mainRoomIds[index], [mainRoomIds]);
   const { virtualizer, listRef, scrollMargin } = useSharedScrollVirtualizer(
     scrollRef,
@@ -416,13 +504,58 @@ export function Home() {
     // Room rows (`RoomSurface`) are 32px.
     32
   );
+  const getDirectKey = useCallback((index: number) => sortedDirectIds[index], [sortedDirectIds]);
+  const {
+    virtualizer: directVirtualizer,
+    listRef: directListRef,
+    scrollMargin: directScrollMargin,
+  } = useSharedScrollVirtualizer(scrollRef, sortedDirectIds.length, getDirectKey, 10, 32);
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
     closedCategories.has(categoryId)
   );
 
+  // Direct rail tab: expand the section, then bring its header to the top.
+  useEffect(() => {
+    if (!revealDirects) return undefined;
+    // Wait for the first room-list snapshot so the section exists.
+    if (noRoomToDisplay && !roomListLoaded) return undefined;
+    if (closedCategories.has(DIRECT_CATEGORY_ID)) {
+      setClosedCategories({ type: 'DELETE', categoryId: DIRECT_CATEGORY_ID });
+      return undefined;
+    }
+    const frame = requestAnimationFrame(() => {
+      const scroller = scrollRef.current;
+      const header = scroller?.querySelector<HTMLElement>(
+        `[data-category-id="${CSS.escape(DIRECT_CATEGORY_ID)}"]`
+      );
+      if (scroller && header) {
+        const top =
+          header.getBoundingClientRect().top -
+          scroller.getBoundingClientRect().top +
+          scroller.scrollTop;
+        scroller.scrollTo({ top: Math.max(0, top - 4) });
+      }
+      setRevealDirects(false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [
+    revealDirects,
+    closedCategories,
+    setClosedCategories,
+    setRevealDirects,
+    noRoomToDisplay,
+    roomListLoaded,
+  ]);
+
   const favoritesLabel = t('modernization.nav.favorites', 'Favorites');
   const roomsLabel = t('modernization.nav.rooms', 'Rooms');
+  const directsLabel = t('modernization.nav.direct_messages', 'Direct messages');
+
+  const roomLinkPath = (roomId: string) => {
+    const idOrAlias = getCanonicalAliasOrRoomId(roomId);
+    return directIdSet.has(roomId) ? getDirectRoomPath(idOrAlias) : getHomeRoomPath(idOrAlias);
+  };
 
   return (
     <PageNav label={roomsLabel}>
@@ -462,7 +595,7 @@ export function Home() {
                       key={roomId}
                       room={room}
                       selected={selected}
-                      linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(roomId))}
+                      linkPath={roomLinkPath(roomId)}
                       notificationMode={getRoomNotificationMode(
                         notificationPreferences,
                         room.roomId
@@ -473,55 +606,109 @@ export function Home() {
               </NavCategory>
             )}
 
-            <NavCategory>
-              <NavSectionHeader
-                label={roomsLabel}
-                closed={roomsClosed}
-                categoryId={DEFAULT_CATEGORY_ID}
-                onToggle={handleCategoryClick}
-                actions={
-                  <RoomListSortMenu
-                    sectionLabel={roomsLabel}
-                    value={roomsSort}
-                    options={sortOptions}
-                    onChange={handleRoomsSort}
-                  />
-                }
-              />
-              <div
-                ref={listRef}
-                style={{
-                  position: 'relative',
-                  height: virtualizer.getTotalSize(),
-                }}
-              >
-                {virtualizer.getVirtualItems().map((vItem) => {
-                  const roomId = mainRoomIds[vItem.index];
-                  const room = getNativeRoom(roomId);
-                  if (!room) return null;
-                  const selected = selectedRoomId === roomId;
+            {remainingRoomIds.length > 0 && (
+              <NavCategory>
+                <NavSectionHeader
+                  label={roomsLabel}
+                  closed={roomsClosed}
+                  categoryId={DEFAULT_CATEGORY_ID}
+                  onToggle={handleCategoryClick}
+                  actions={
+                    <RoomListSortMenu
+                      sectionLabel={roomsLabel}
+                      value={roomsSort}
+                      options={sortOptions}
+                      onChange={handleRoomsSort}
+                    />
+                  }
+                />
+                <div
+                  ref={listRef}
+                  style={{
+                    position: 'relative',
+                    height: virtualizer.getTotalSize(),
+                  }}
+                >
+                  {virtualizer.getVirtualItems().map((vItem) => {
+                    const roomId = mainRoomIds[vItem.index];
+                    const room = getNativeRoom(roomId);
+                    if (!room) return null;
+                    const selected = selectedRoomId === roomId;
 
-                  return (
-                    <VirtualTile
-                      virtualItem={vItem}
-                      scrollMargin={scrollMargin}
-                      key={vItem.key}
-                      ref={virtualizer.measureElement}
-                    >
-                      <RoomNavItem
-                        room={room}
-                        selected={selected}
-                        linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(roomId))}
-                        notificationMode={getRoomNotificationMode(
-                          notificationPreferences,
-                          room.roomId
-                        )}
-                      />
-                    </VirtualTile>
-                  );
-                })}
-              </div>
-            </NavCategory>
+                    return (
+                      <VirtualTile
+                        virtualItem={vItem}
+                        scrollMargin={scrollMargin}
+                        key={vItem.key}
+                        ref={virtualizer.measureElement}
+                      >
+                        <RoomNavItem
+                          room={room}
+                          selected={selected}
+                          linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(roomId))}
+                          notificationMode={getRoomNotificationMode(
+                            notificationPreferences,
+                            room.roomId
+                          )}
+                        />
+                      </VirtualTile>
+                    );
+                  })}
+                </div>
+              </NavCategory>
+            )}
+
+            {remainingDirectIds.length > 0 && (
+              <NavCategory>
+                <NavSectionHeader
+                  label={directsLabel}
+                  closed={directsClosed}
+                  categoryId={DIRECT_CATEGORY_ID}
+                  onToggle={handleCategoryClick}
+                  actions={
+                    <RoomListSortMenu
+                      sectionLabel={directsLabel}
+                      value={directSort}
+                      options={sortOptions}
+                      onChange={handleDirectSort}
+                    />
+                  }
+                />
+                <div
+                  ref={directListRef}
+                  style={{
+                    position: 'relative',
+                    height: directVirtualizer.getTotalSize(),
+                  }}
+                >
+                  {directVirtualizer.getVirtualItems().map((vItem) => {
+                    const roomId = sortedDirectIds[vItem.index];
+                    const room = getNativeRoom(roomId);
+                    if (!room) return null;
+                    const selected = selectedRoomId === roomId;
+
+                    return (
+                      <VirtualTile
+                        virtualItem={vItem}
+                        scrollMargin={directScrollMargin}
+                        key={vItem.key}
+                        ref={directVirtualizer.measureElement}
+                      >
+                        <RoomNavItem
+                          room={room}
+                          selected={selected}
+                          linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(roomId))}
+                          notificationMode={getRoomNotificationMode(
+                            notificationPreferences,
+                            room.roomId
+                          )}
+                        />
+                      </VirtualTile>
+                    );
+                  })}
+                </div>
+              </NavCategory>
+            )}
           </Box>
         </PageNavContent>
       )}

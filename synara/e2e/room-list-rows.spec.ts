@@ -21,12 +21,12 @@ const cssVar = (page: Page, name: string) =>
     name
   );
 
-test('a 56-room list keeps 32px rows, 15px names, bold unread and medium read', async ({
+test('a 56-room list plus DMs keeps 32px rows, 15px names, bold unread and medium read', async ({
   page,
 }) => {
   await open(page);
   const rows = page.getByTestId('room-row');
-  await expect(rows).toHaveCount(56);
+  await expect(rows).toHaveCount(58);
   const heights = await rows.evaluateAll((nodes) =>
     nodes.map((node) => Math.round(node.getBoundingClientRect().height))
   );
@@ -139,10 +139,71 @@ test('collapsing Rooms keeps unread and selected rows visible', async ({ page })
   await open(page);
   await page.getByRole('button', { name: 'Rooms', exact: true }).click();
   const rows = page.getByTestId('room-row');
-  // 1 favourite + mention, unread, private-unread, long, dm, many (muted and read rows hide).
-  await expect(rows).toHaveCount(7);
+  // 1 favourite + mention, unread, private-unread, long, many (muted and read
+  // rows hide) + the 4 DMs, whose section stays open.
+  await expect(rows).toHaveCount(10);
   await expect(row(page, '!muted:example.test')).toHaveCount(0);
   await expect(row(page, '!unread:example.test')).toHaveCount(1);
+});
+
+test('Direct messages is the last section of the one list, with DM badges (NAV-12)', async ({
+  page,
+}) => {
+  await open(page);
+  const favorites = page.getByRole('button', { name: 'Favorites', exact: true });
+  const rooms = page.getByRole('button', { name: 'Rooms', exact: true });
+  const directs = page.getByRole('button', { name: 'Direct messages', exact: true });
+  // Sentence case, same 28px / 14px semibold header as the other sections.
+  await expect(directs).toHaveText('Direct messages');
+  expect(Math.round((await directs.boundingBox())!.height)).toBe(28);
+  await expect(directs.locator('span').first()).toHaveCSS('font-size', '14px');
+  await expect(directs.locator('span').first()).toHaveCSS('font-weight', '600');
+  const top = async (header: typeof directs) => (await header.boundingBox())!.y;
+  expect(await top(favorites)).toBeLessThan(await top(rooms));
+  expect(await top(rooms)).toBeLessThan(await top(directs));
+  // Every DM row sits below the header, after every room row.
+  const lastRoom = (await row(page, '!room-45:example.test').boundingBox())!;
+  for (const id of ['!dm', '!dm-read', '!dm-mention', '!dm-muted']) {
+    const box = (await row(page, `${id}:example.test`).boundingBox())!;
+    expect(box.y).toBeGreaterThan(await top(directs));
+    expect(box.y).toBeGreaterThan(lastRoom.y);
+    expect(Math.round(box.height)).toBe(32);
+  }
+
+  // The hover-revealed sort sits in the header, as for Rooms.
+  await directs.hover();
+  await expect(page.getByRole('button', { name: 'Sort Direct messages' })).toBeVisible();
+
+  // Same row rules as rooms: an unread DM and a DM mention get the red count;
+  // a read DM and a muted DM get none, the muted one keeps its glyph.
+  await expect(row(page, '!dm:example.test').locator('[data-badge-role="mention"]')).toHaveText(
+    '4'
+  );
+  await expect(
+    row(page, '!dm-mention:example.test').locator('[data-badge-role="mention"]')
+  ).toHaveText('1');
+  expect(await weight(row(page, '!dm-mention:example.test'))).toBe('700');
+  await expect(row(page, '!dm-read:example.test').locator('[data-badge-role]')).toHaveCount(0);
+  expect(await weight(row(page, '!dm-read:example.test'))).toBe('500');
+  const muted = row(page, '!dm-muted:example.test');
+  await expect(muted.locator('[data-badge-role]')).toHaveCount(0);
+  await expect(muted.locator('[data-room-state="muted"]')).toHaveCount(1);
+  // DM rows link to their own route.
+  await expect(nameOf(row(page, '!dm:example.test'))).toHaveAttribute(
+    'href',
+    '/direct/!dm:example.test/'
+  );
+
+  // Collapsing keeps the unread DMs only; expanding brings the rest back.
+  await directs.click();
+  await expect(directs).toHaveAttribute('aria-expanded', 'false');
+  await expect(row(page, '!dm:example.test')).toHaveCount(1);
+  await expect(row(page, '!dm-mention:example.test')).toHaveCount(1);
+  await expect(row(page, '!dm-read:example.test')).toHaveCount(0);
+  await expect(row(page, '!dm-muted:example.test')).toHaveCount(0);
+  await directs.click();
+  await expect(directs).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByTestId('room-row')).toHaveCount(58);
 });
 
 test('light theme keeps the same roles', async ({ page }) => {

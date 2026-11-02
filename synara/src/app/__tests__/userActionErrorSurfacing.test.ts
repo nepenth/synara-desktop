@@ -67,7 +67,6 @@ test('mark read and unread report failures in the menu that started them', () =>
     'pages/client/sidebar/DirectTab.tsx',
     'pages/client/sidebar/SpaceTabs.tsx',
     'pages/client/home/Home.tsx',
-    'pages/client/direct/Direct.tsx',
     'pages/client/space/Space.tsx',
   ]) {
     const source = read(path);

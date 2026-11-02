@@ -46,7 +46,7 @@ import {
 } from './pathUtils';
 import { ClientBindAtoms, ClientLayout, ClientRoot } from './client';
 import { Home, HomeJoin, HomeRouteRoomProvider, HomeSearch } from './client/home';
-import { Direct, DirectCreate, DirectRouteRoomProvider } from './client/direct';
+import { DirectCreate, DirectRouteRoomProvider } from './client/direct';
 import { RouteSpaceProvider, Space, SpaceRouteRoomProvider, SpaceSearch } from './client/space';
 import { Explore, FeaturedRooms, PublicRooms } from './client/explore';
 import { Notifications, Inbox, Invites, Later } from './client/inbox';
@@ -83,18 +83,20 @@ import { lastActiveRoomPath, readStoredActivePaths } from './client/lastActiveRo
 /**
  * Home and Direct index routes reopen the scope's last room (NAV-1). Only a
  * brand-new account, or a scope without a remembered room, sees Welcome.
+ * Home is one list of rooms and DMs (NAV-12), so its last place may be a DM.
  */
-const lastRoomLoader = (navId: 'home' | 'direct', basePath: string, utility: string[]) => () => {
-  const session = getActiveSession();
-  if (!session) return null;
-  const target = lastActiveRoomPath(
-    readStoredActivePaths(session.userId),
-    navId,
-    basePath,
-    utility
-  );
-  return target ? redirect(target) : null;
-};
+const lastRoomLoader =
+  (navId: 'home' | 'direct', basePath: string | string[], utility: string[]) => () => {
+    const session = getActiveSession();
+    if (!session) return null;
+    const target = lastActiveRoomPath(
+      readStoredActivePaths(session.userId),
+      navId,
+      basePath,
+      utility
+    );
+    return target ? redirect(target) : null;
+  };
 
 function SettingsRoute() {
   const navigate = useNavigate();
@@ -190,12 +192,15 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
         }
       >
         <Route path={SETTINGS_PATH} element={<SettingsRoute />} />
+        {/*
+          One Home list for rooms and DMs (NAV-12): the pane stays mounted
+          across `/home/` and `/direct/` routes; DMs keep their own route.
+        */}
         <Route
-          path={HOME_PATH}
           element={
             <PageRoot
               nav={
-                <MobileFriendlyPageNav path={HOME_PATH}>
+                <MobileFriendlyPageNav path={[HOME_PATH, DIRECT_PATH]}>
                   <Home />
                 </MobileFriendlyPageNav>
               }
@@ -204,71 +209,64 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
             </PageRoot>
           }
         >
-          {mobile ? null : (
+          <Route path={HOME_PATH}>
+            {mobile ? null : (
+              <Route
+                index
+                loader={lastRoomLoader(
+                  'home',
+                  [HOME_PATH, DIRECT_PATH],
+                  [_CREATE_PATH, _JOIN_PATH, _SEARCH_PATH]
+                )}
+                element={<WelcomePage />}
+              />
+            )}
+            <Route path={_CREATE_PATH} element={<HomeCreateRoom />} />
+            <Route path={_JOIN_PATH} element={<HomeJoin />} />
+            <Route path={_SEARCH_PATH} element={<HomeSearch />} />
             <Route
-              index
-              loader={lastRoomLoader('home', HOME_PATH, [_CREATE_PATH, _JOIN_PATH, _SEARCH_PATH])}
-              element={<WelcomePage />}
-            />
-          )}
-          <Route path={_CREATE_PATH} element={<HomeCreateRoom />} />
-          <Route path={_JOIN_PATH} element={<HomeJoin />} />
-          <Route path={_SEARCH_PATH} element={<HomeSearch />} />
-          <Route
-            path={_ROOM_THREAD_PATH}
-            element={
-              <HomeRouteRoomProvider>
-                <Room />
-              </HomeRouteRoomProvider>
-            }
-          />
-          <Route
-            path={_ROOM_PATH}
-            element={
-              <HomeRouteRoomProvider>
-                <Room />
-              </HomeRouteRoomProvider>
-            }
-          />
-        </Route>
-        <Route
-          path={DIRECT_PATH}
-          element={
-            <PageRoot
-              nav={
-                <MobileFriendlyPageNav path={DIRECT_PATH}>
-                  <Direct />
-                </MobileFriendlyPageNav>
+              path={_ROOM_THREAD_PATH}
+              element={
+                <HomeRouteRoomProvider>
+                  <Room />
+                </HomeRouteRoomProvider>
               }
-            >
-              <Outlet />
-            </PageRoot>
-          }
-        >
-          {mobile ? null : (
-            <Route
-              index
-              loader={lastRoomLoader('direct', DIRECT_PATH, [_CREATE_PATH])}
-              element={<WelcomePage />}
             />
-          )}
-          <Route path={_CREATE_PATH} element={<DirectCreate />} />
-          <Route
-            path={_ROOM_THREAD_PATH}
-            element={
-              <DirectRouteRoomProvider>
-                <Room />
-              </DirectRouteRoomProvider>
-            }
-          />
-          <Route
-            path={_ROOM_PATH}
-            element={
-              <DirectRouteRoomProvider>
-                <Room />
-              </DirectRouteRoomProvider>
-            }
-          />
+            <Route
+              path={_ROOM_PATH}
+              element={
+                <HomeRouteRoomProvider>
+                  <Room />
+                </HomeRouteRoomProvider>
+              }
+            />
+          </Route>
+          <Route path={DIRECT_PATH}>
+            {mobile ? null : (
+              <Route
+                index
+                loader={lastRoomLoader('direct', DIRECT_PATH, [_CREATE_PATH])}
+                element={<WelcomePage />}
+              />
+            )}
+            <Route path={_CREATE_PATH} element={<DirectCreate />} />
+            <Route
+              path={_ROOM_THREAD_PATH}
+              element={
+                <DirectRouteRoomProvider>
+                  <Room />
+                </DirectRouteRoomProvider>
+              }
+            />
+            <Route
+              path={_ROOM_PATH}
+              element={
+                <DirectRouteRoomProvider>
+                  <Room />
+                </DirectRouteRoomProvider>
+              }
+            />
+          </Route>
         </Route>
         <Route
           path={SPACE_PATH}

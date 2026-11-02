@@ -2,7 +2,7 @@ import React, { MouseEventHandler, forwardRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Icon, Icons, Menu, MenuItem, PopOut, RectCords, Text, config, toRem } from 'folds';
 import FocusTrap from '../../../components/FocusTrap';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
 import { getDirectPath, joinPathComponent } from '../../pathUtils';
 import {
@@ -17,6 +17,7 @@ import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
 import { useMarkRoomsAsRead } from '../../../hooks/useMarkRoomsAsRead';
 import { stopPropagation } from '../../../utils/keyboard';
+import { directSectionRevealAtom } from '../../../state/directSectionReveal';
 
 type DirectMenuProps = {
   requestClose: () => void;
@@ -64,8 +65,13 @@ export function DirectTab() {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const directSelected = useDirectSelected();
+  const revealDirects = useSetAtom(directSectionRevealAtom);
 
+  // A filter over the one Home list (NAV-12), not its own pane: reopen the
+  // last DM (or the Home pane at `/direct/`) and bring the Direct messages
+  // section into view, expanded. The Home tab stays the selected tab.
   const handleDirectClick = () => {
+    revealDirects(true);
     const activePath = navToActivePath.get('direct');
     if (activePath && screenSize !== ScreenSize.Mobile) {
       navigate(joinPathComponent(activePath));
@@ -84,7 +90,7 @@ export function DirectTab() {
     });
   };
   return (
-    <SidebarItem active={directSelected}>
+    <SidebarItem>
       <SidebarItemTooltip tooltip="Direct messages">
         {(triggerRef) => (
           <SidebarAvatar
