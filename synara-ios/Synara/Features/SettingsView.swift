@@ -97,7 +97,79 @@ extension View {
     }
 }
 
+/// The Settings pages. On iPhone a row pushes its page; on the iPad split
+/// canvas the list is a sidebar and the selected page fills the detail column.
+enum SettingsPage: String, Hashable, CaseIterable, Identifiable {
+    case account
+    case notifications
+    case appearance
+    case security
+    case richLinks
+    case about
+    case licenses
+    case privacy
+    case support
+
+    var id: String { rawValue }
+}
+
+/// Renders one Settings page; the split canvas' detail column and the phone
+/// `navigationDestination` share it.
+struct SettingsPageView: View {
+    let page: SettingsPage
+    @Environment(\.appEnvironment) private var environment
+
+    var body: some View {
+        switch page {
+        case .account:
+            if case .signedIn(let session) = environment.session.currentState {
+                AccountSettingsView(session: session)
+            } else {
+                Text("Not signed in")
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .synaraSettingsChrome()
+            }
+        case .notifications:
+            NotificationSettingsView()
+        case .appearance:
+            AppearanceSettingsView()
+        case .security:
+            SecuritySettingsView()
+        case .richLinks:
+            RichLinkSettingsView()
+        case .about:
+            AboutSettingsView()
+        case .licenses:
+            LicensesSettingsView()
+        case .privacy:
+            PrivacyPolicySettingsView()
+        case .support:
+            SupportSettingsView()
+        }
+    }
+}
+
+/// One surface for every Settings page and sheet: the theme's settings
+/// plane behind an inline title, so pushing between pages never shifts the
+/// background hue.
+private struct SynaraSettingsChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(.hidden)
+            .background(SynaraChrome.settings.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+extension View {
+    func synaraSettingsChrome() -> some View {
+        modifier(SynaraSettingsChrome())
+    }
+}
+
 struct SettingsView: View {
+    /// Split-canvas selection (iPad). Nil on iPhone, where rows push.
+    var selection: Binding<SettingsPage?>? = nil
     @Environment(\.appEnvironment) private var environment
     @State private var state: SettingsState = .idle
     @State private var logoutAttempt = 0
@@ -105,13 +177,38 @@ struct SettingsView: View {
     @StateObject private var logoutConfirmation = SignOutConfirmationModel()
 
     var body: some View {
-        Form {
+        Group {
+            if let selection {
+                List(selection: selection) {
+                    rows
+                }
+            } else {
+                List {
+                    rows
+                }
+                .navigationDestination(for: SettingsPage.self) { page in
+                    SettingsPageView(page: page)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background {
+            // Continue the settings plane behind translucent system chrome;
+            // RootShellView owns the clear scroll tail above the tab bar.
+            SynaraChrome.settings
+                .ignoresSafeArea()
+        }
+        .navigationTitle("Settings")
+        .accessibilityIdentifier("SettingsScreen")
+    }
+
+    @ViewBuilder
+    private var rows: some View {
             Section {
                 switch environment.session.currentState {
                 case .signedIn(let session):
-                    NavigationLink {
-                        AccountSettingsView(session: session)
-                    } label: {
+                    NavigationLink(value: SettingsPage.account) {
                         SettingsSummaryRow(
                             title: session.userID,
                             subtitle: session.homeserverURL.host ?? session.homeserverURL.absoluteString,
@@ -127,66 +224,50 @@ struct SettingsView: View {
             }
 
             Section("Preferences") {
-                NavigationLink {
-                    NotificationSettingsView()
-                } label: {
+                NavigationLink(value: SettingsPage.notifications) {
                     SettingsNavigationRow(title: String(localized: "Notifications"), systemImage: "bell")
                 }
                 .accessibilityIdentifier("NotificationSettingsLink")
 
-                NavigationLink {
-                    AppearanceSettingsView()
-                } label: {
-                    SettingsNavigationRow(title: String(localized: "Appearance"), systemImage: "textformat.size")
+                NavigationLink(value: SettingsPage.appearance) {
+                    SettingsNavigationRow(title: String(localized: "Appearance"), systemImage: "paintpalette")
                 }
                 .accessibilityIdentifier("AppearanceSettingsLink")
 
-                NavigationLink {
-                    SecuritySettingsView()
-                } label: {
+                NavigationLink(value: SettingsPage.security) {
                     SettingsNavigationRow(title: String(localized: "Security & Recovery"), systemImage: "lock.shield")
                 }
                 .accessibilityIdentifier("SecuritySettingsLink")
 
-                NavigationLink {
-                    RichLinkSettingsView()
-                } label: {
+                NavigationLink(value: SettingsPage.richLinks) {
                     SettingsNavigationRow(title: String(localized: "GIFs & Link Previews"), systemImage: "play.rectangle")
                 }
                 .accessibilityIdentifier("RichLinkSettingsLink")
             }
 
             Section("About") {
-                NavigationLink {
-                    AboutSettingsView()
-                } label: {
+                NavigationLink(value: SettingsPage.about) {
                     SettingsNavigationRow(title: String(localized: "About Synara"), systemImage: "info.circle")
                 }
                 .accessibilityIdentifier("AboutSettingsLink")
 
-                NavigationLink {
-                    LicensesSettingsView()
-                } label: {
+                NavigationLink(value: SettingsPage.licenses) {
                     SettingsNavigationRow(title: String(localized: "Licenses"), systemImage: "doc.text")
                 }
                 .accessibilityIdentifier("LicensesSettingsLink")
 
-                NavigationLink {
-                    PrivacyPolicySettingsView()
-                } label: {
+                NavigationLink(value: SettingsPage.privacy) {
                     SettingsNavigationRow(title: String(localized: "Privacy Policy"), systemImage: "hand.raised")
                 }
                 .accessibilityIdentifier("PrivacyPolicySettingsLink")
 
-                NavigationLink {
-                    SupportSettingsView()
-                } label: {
+                NavigationLink(value: SettingsPage.support) {
                     SettingsNavigationRow(title: String(localized: "Support"), systemImage: "questionmark.circle")
                 }
                 .accessibilityIdentifier("SupportSettingsLink")
             }
 
-            Section("Danger Zone") {
+            Section {
                 Button(role: .destructive) {
                     logoutConfirmation.request(using: environment.sessionCrypto)
                 } label: {
@@ -211,16 +292,6 @@ struct SettingsView: View {
                         .accessibilityIdentifier("LogoutErrorText")
                 }
             }
-        }
-        .scrollContentBackground(.hidden)
-        .background {
-            // Continue the settings plane behind translucent system chrome;
-            // RootShellView owns the clear scroll tail above the tab bar.
-            SynaraChrome.settings
-                .ignoresSafeArea()
-        }
-        .navigationTitle("Settings")
-        .accessibilityIdentifier("SettingsScreen")
     }
 
     private func logout() {
@@ -603,7 +674,7 @@ private struct AccountSettingsView: View {
             await refreshSessionDevices()
         }
         .navigationTitle("Account")
-        .navigationBarTitleDisplayMode(.inline)
+        .synaraSettingsChrome()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -1077,20 +1148,21 @@ final class PushRuleSettingsModel: ObservableObject {
     }
 }
 
+/// Notification preferences, ordered by what a user came to change: the iOS
+/// permission, then the push rules, then agent approvals and privacy. Push
+/// registration and the local delivery log are diagnostics and live on their
+/// own page (`NotificationDiagnosticsSettingsView`), one row from here and
+/// from Support.
 private struct NotificationSettingsView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var notificationStatus: NotificationPermissionStatus = .unavailable
     @State private var isRequestingNotifications = false
-    @State private var isRegisteringPush = false
-    @State private var pushRegistrationStatus = ""
     @State private var showLockScreenMessagePreviews = SynaraSharedConstants.defaultLockScreenMessagePreviews
     @State private var timeSensitiveAgentApprovals = SynaraSharedConstants.defaultTimeSensitiveAgentApprovals
     @State private var approvalNotificationDetails = SynaraSharedConstants.defaultApprovalNotificationDetails
     @State private var approveOnceWithoutUnlock = SynaraSharedConstants.defaultApproveOnceWithoutUnlock
     @StateObject private var pushRuleSettings = PushRuleSettingsModel()
     @State private var keywordDraft = ""
-    @State private var notificationDiagnostics: [SynaraNotificationDiagnosticEntry] = []
-    @State private var notificationDiagnosticReport = ""
 
     var body: some View {
         Form {
@@ -1117,29 +1189,7 @@ private struct NotificationSettingsView: View {
                 .accessibilityIdentifier("NotificationPermissionButton")
             }
 
-            Section {
-                SettingsInfoRow(
-                    title: String(localized: "Status"),
-                    value: pushRegistrationStatus.isEmpty
-                        ? environment.push.registrationStateDescription
-                        : pushRegistrationStatus
-                )
-                Button {
-                    registerPush()
-                } label: {
-                    if isRegisteringPush {
-                        ProgressView()
-                    } else {
-                        Text(environment.push.isRegistered ? "Re-register Push" : "Register Push")
-                    }
-                }
-                .disabled(isRegisteringPush || environment.push.isRegistrationAvailable == false)
-                .accessibilityIdentifier("PushRegistrationButton")
-            } header: {
-                Text("Delivery")
-            } footer: {
-                Text(environment.push.pushGatewayURL == nil ? "Push delivery is unavailable in this build." : "Push delivery is configured for this build.")
-            }
+            pushRuleSections
 
             Section {
                 Toggle("Urgent agent approvals", isOn: $timeSensitiveAgentApprovals)
@@ -1172,6 +1222,10 @@ private struct NotificationSettingsView: View {
                             approveOnceWithoutUnlock: value
                         )
                     }
+                NavigationLink("Agent Notifications") {
+                    AgentNotificationSettingsView()
+                }
+                .accessibilityIdentifier("AgentNotificationSettingsLink")
             } header: {
                 Text("Agent Approvals")
             } footer: {
@@ -1181,13 +1235,6 @@ private struct NotificationSettingsView: View {
                     )
                 )
                 .accessibilityIdentifier("AgentApprovalsFooter")
-            }
-
-            Section {
-                NavigationLink("Agent Notifications") {
-                    AgentNotificationSettingsView()
-                }
-                .accessibilityIdentifier("AgentNotificationSettingsLink")
             }
 
             Section {
@@ -1204,52 +1251,43 @@ private struct NotificationSettingsView: View {
             }
 
             Section {
-                if notificationDiagnostics.isEmpty {
-                    Text("No notification-service activity recorded yet.")
-                        .foregroundStyle(SynaraColor.secondaryText)
-                        .accessibilityIdentifier("NotificationDiagnosticsEmpty")
-                } else {
-                    ForEach(notificationDiagnostics.suffix(24).reversed()) { entry in
-                        LabeledContent(entry.stage) {
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text(entry.timestamp.formatted(date: .omitted, time: .standard))
-                                if let runID = entry.runID {
-                                    Text(String(runID.uuidString.prefix(8)).lowercased())
-                                        .font(.caption2.monospaced())
-                                }
-                            }
-                                .foregroundStyle(SynaraColor.secondaryText)
-                        }
-                        .accessibilityIdentifier("NotificationDiagnostic-\(entry.id.uuidString)")
+                NavigationLink {
+                    NotificationDiagnosticsSettingsView()
+                } label: {
+                    LabeledContent(String(localized: "Diagnostics")) {
+                        Text(environment.push.registrationStateDescription)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .lineLimit(1)
                     }
                 }
-                Button("Refresh Diagnostics") {
-                    reloadNotificationDiagnostics()
-                }
-                .accessibilityIdentifier("RefreshNotificationDiagnosticsButton")
-                Button("Copy Diagnostic Report") {
-                    UIPasteboard.general.string = notificationDiagnosticReport
-                }
-                .disabled(notificationDiagnosticReport.isEmpty)
-                .accessibilityIdentifier("CopyNotificationDiagnosticReportButton")
-                ShareLink(item: notificationDiagnosticReport) {
-                    Text("Share Diagnostic Report")
-                }
-                .disabled(notificationDiagnosticReport.isEmpty)
-                .accessibilityIdentifier("ShareNotificationDiagnosticReportButton")
-                if notificationDiagnostics.isEmpty == false {
-                    Button("Clear Diagnostics", role: .destructive) {
-                        SynaraNotificationDiagnostics.clear()
-                        reloadNotificationDiagnostics()
-                    }
-                    .accessibilityIdentifier("ClearNotificationDiagnosticsButton")
-                }
-            } header: {
-                Text("Local Delivery Diagnostics")
+                .accessibilityIdentifier("NotificationDiagnosticsLink")
             } footer: {
-                Text("If a notification preview goes missing, copy or share this report. It lists the app version, notification settings and recent delivery steps, never message content, Matrix IDs, tokens or account secrets, and stays on this device until you share it.")
+                Text("Push registration and the local delivery log.")
             }
+        }
+        .navigationTitle("Notifications")
+        .synaraSettingsChrome()
+        .accessibilityIdentifier("NotificationSettingsScreen")
+        .task {
+            showLockScreenMessagePreviews = environment.settings.bool(
+                for: SynaraSharedConstants.lockScreenMessagePreviewsKey
+            )
+            timeSensitiveAgentApprovals = environment.settings.bool(
+                for: SynaraSharedConstants.timeSensitiveAgentApprovalsKey
+            )
+            approvalNotificationDetails = environment.settings.bool(
+                for: SynaraSharedConstants.approvalNotificationDetailsKey
+            )
+            approveOnceWithoutUnlock = environment.settings.bool(
+                for: SynaraSharedConstants.approveOnceWithoutUnlockKey
+            )
+            notificationStatus = await environment.notificationPermission.currentStatus()
+            await pushRuleSettings.load(using: environment.matrix)
+        }
+    }
 
+    @ViewBuilder
+    private var pushRuleSections: some View {
             if let pushRules = pushRuleSettings.snapshot {
                 if let message = pushRuleSettings.message {
                     Section {
@@ -1334,46 +1372,6 @@ private struct NotificationSettingsView: View {
                     .accessibilityIdentifier("NotificationAddKeywordButton")
                 }
             }
-        }
-        .navigationTitle("Notifications")
-        .navigationBarTitleDisplayMode(.inline)
-        .accessibilityIdentifier("NotificationSettingsScreen")
-        .task {
-            showLockScreenMessagePreviews = environment.settings.bool(
-                for: SynaraSharedConstants.lockScreenMessagePreviewsKey
-            )
-            timeSensitiveAgentApprovals = environment.settings.bool(
-                for: SynaraSharedConstants.timeSensitiveAgentApprovalsKey
-            )
-            approvalNotificationDetails = environment.settings.bool(
-                for: SynaraSharedConstants.approvalNotificationDetailsKey
-            )
-            approveOnceWithoutUnlock = environment.settings.bool(
-                for: SynaraSharedConstants.approveOnceWithoutUnlockKey
-            )
-            notificationStatus = await environment.notificationPermission.currentStatus()
-            await pushRuleSettings.load(using: environment.matrix)
-            reloadNotificationDiagnostics()
-        }
-    }
-
-    private func reloadNotificationDiagnostics() {
-        notificationDiagnostics = SynaraNotificationDiagnostics.entries()
-        notificationDiagnosticReport = ""
-        Task {
-            let settings = await UNUserNotificationCenter.current().notificationSettings()
-            let context = SynaraNotificationDiagnosticReport.Context.capture(
-                settings: settings,
-                pushRegistrationAvailable: environment.push.isRegistrationAvailable,
-                pushRegistered: environment.push.isRegistered,
-                pushGatewayConfigured: environment.push.pushGatewayURL != nil
-            )
-            notificationDiagnosticReport = SynaraNotificationDiagnosticReport.text(
-                context: context,
-                entries: notificationDiagnostics,
-                sessionRejectedCount: SynaraNotificationDiagnostics.sessionRejectedCount()
-            )
-        }
     }
 
     @ViewBuilder
@@ -1427,6 +1425,131 @@ private struct NotificationSettingsView: View {
         )
     }
 
+    private func requestNotifications() {
+        isRequestingNotifications = true
+        Task {
+            let status = await environment.notificationPermission.requestAuthorization()
+            await MainActor.run {
+                notificationStatus = status
+                isRequestingNotifications = false
+                environment.logger.info("Notification permission status refreshed", category: .push)
+                if status.allowsPushRegistration {
+                    environment.push.beginRegistration()
+                }
+            }
+        }
+    }
+}
+
+/// Push registration and the on-device notification-service log. Reached
+/// from Settings → Notifications → Diagnostics and Settings → Support.
+private struct NotificationDiagnosticsSettingsView: View {
+    @Environment(\.appEnvironment) private var environment
+    @State private var isRegisteringPush = false
+    @State private var pushRegistrationStatus = ""
+    @State private var notificationDiagnostics: [SynaraNotificationDiagnosticEntry] = []
+    @State private var notificationDiagnosticReport = ""
+
+    var body: some View {
+        Form {
+            Section {
+                SettingsInfoRow(
+                    title: String(localized: "Status"),
+                    value: pushRegistrationStatus.isEmpty
+                        ? environment.push.registrationStateDescription
+                        : pushRegistrationStatus
+                )
+                Button {
+                    registerPush()
+                } label: {
+                    if isRegisteringPush {
+                        ProgressView()
+                    } else {
+                        Text(environment.push.isRegistered ? "Re-register Push" : "Register Push")
+                    }
+                }
+                .disabled(isRegisteringPush || environment.push.isRegistrationAvailable == false)
+                .accessibilityIdentifier("PushRegistrationButton")
+            } header: {
+                Text("Delivery")
+            } footer: {
+                Text(environment.push.pushGatewayURL == nil ? "Push delivery is unavailable in this build." : "Push delivery is configured for this build.")
+            }
+
+            Section {
+                if notificationDiagnostics.isEmpty {
+                    Text("No notification-service activity recorded yet.")
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("NotificationDiagnosticsEmpty")
+                } else {
+                    ForEach(notificationDiagnostics.suffix(24).reversed()) { entry in
+                        LabeledContent(entry.stage) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(entry.timestamp.formatted(date: .omitted, time: .standard))
+                                if let runID = entry.runID {
+                                    Text(String(runID.uuidString.prefix(8)).lowercased())
+                                        .font(.caption2.monospaced())
+                                }
+                            }
+                                .foregroundStyle(SynaraColor.secondaryText)
+                        }
+                        .accessibilityIdentifier("NotificationDiagnostic-\(entry.id.uuidString)")
+                    }
+                }
+                Button("Refresh Diagnostics") {
+                    reloadNotificationDiagnostics()
+                }
+                .accessibilityIdentifier("RefreshNotificationDiagnosticsButton")
+                Button("Copy Diagnostic Report") {
+                    UIPasteboard.general.string = notificationDiagnosticReport
+                }
+                .disabled(notificationDiagnosticReport.isEmpty)
+                .accessibilityIdentifier("CopyNotificationDiagnosticReportButton")
+                ShareLink(item: notificationDiagnosticReport) {
+                    Text("Share Diagnostic Report")
+                }
+                .disabled(notificationDiagnosticReport.isEmpty)
+                .accessibilityIdentifier("ShareNotificationDiagnosticReportButton")
+                if notificationDiagnostics.isEmpty == false {
+                    Button("Clear Diagnostics", role: .destructive) {
+                        SynaraNotificationDiagnostics.clear()
+                        reloadNotificationDiagnostics()
+                    }
+                    .accessibilityIdentifier("ClearNotificationDiagnosticsButton")
+                }
+            } header: {
+                Text("Local Delivery Diagnostics")
+            } footer: {
+                Text("If a notification preview goes missing, copy or share this report. It lists the app version, notification settings and recent delivery steps, never message content, Matrix IDs, tokens or account secrets, and stays on this device until you share it.")
+            }
+        }
+        .navigationTitle("Diagnostics")
+        .synaraSettingsChrome()
+        .accessibilityIdentifier("NotificationDiagnosticsScreen")
+        .task {
+            reloadNotificationDiagnostics()
+        }
+    }
+
+    private func reloadNotificationDiagnostics() {
+        notificationDiagnostics = SynaraNotificationDiagnostics.entries()
+        notificationDiagnosticReport = ""
+        Task {
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            let context = SynaraNotificationDiagnosticReport.Context.capture(
+                settings: settings,
+                pushRegistrationAvailable: environment.push.isRegistrationAvailable,
+                pushRegistered: environment.push.isRegistered,
+                pushGatewayConfigured: environment.push.pushGatewayURL != nil
+            )
+            notificationDiagnosticReport = SynaraNotificationDiagnosticReport.text(
+                context: context,
+                entries: notificationDiagnostics,
+                sessionRejectedCount: SynaraNotificationDiagnostics.sessionRejectedCount()
+            )
+        }
+    }
+
     /// APNs and the pusher answer after `beginRegistration` returns, so the
     /// spinner stays until the service's status moves (bounded).
     private func registerPush() {
@@ -1442,21 +1565,6 @@ private struct NotificationSettingsView: View {
             }
             pushRegistrationStatus = push.registrationStateDescription
             isRegisteringPush = false
-        }
-    }
-
-    private func requestNotifications() {
-        isRequestingNotifications = true
-        Task {
-            let status = await environment.notificationPermission.requestAuthorization()
-            await MainActor.run {
-                notificationStatus = status
-                isRequestingNotifications = false
-                environment.logger.info("Notification permission status refreshed", category: .push)
-                if status.allowsPushRegistration {
-                    environment.push.beginRegistration()
-                }
-            }
         }
     }
 }
@@ -1539,10 +1647,8 @@ private struct RichLinkSettingsView: View {
                 Text("Show a long web address as its site and path. Tapping it still opens the full address.")
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(SynaraChrome.settings)
         .navigationTitle("GIFs & Link Previews")
-        .navigationBarTitleDisplayMode(.inline)
+        .synaraSettingsChrome()
         .accessibilityIdentifier("RichLinkSettingsScreen")
         .onAppear {
             inlineGifLinks = environment.settings.bool(for: RichLinkSettings.inlineGifLinksKey)
@@ -1677,10 +1783,8 @@ private struct AppearanceSettingsView: View {
                 Text("Adjust text size in iOS Settings. Synara follows your system accessibility preferences.")
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(SynaraChrome.settings)
         .navigationTitle("Appearance")
-        .navigationBarTitleDisplayMode(.inline)
+        .synaraSettingsChrome()
         .accessibilityIdentifier("AppearanceSettingsScreen")
         .onAppear {
             let stored = environment.settings.string(for: SynaraThemeRamp.storageKey)
@@ -2050,7 +2154,7 @@ private struct SecuritySettingsView: View {
                 .environment(\.appEnvironment, environment)
         }
         .navigationTitle("Security")
-        .navigationBarTitleDisplayMode(.inline)
+        .synaraSettingsChrome()
         .accessibilityIdentifier("SecuritySettingsScreen")
         .task {
             await sessionCrypto.start(store: environment.sessionCrypto)
@@ -2447,7 +2551,7 @@ struct IdentityResetSheet: View {
                 }
             }
             .navigationTitle(IdentityResetCopy.title)
-            .navigationBarTitleDisplayMode(.inline)
+            .synaraSettingsChrome()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(flow.isFinished ? "Close" : "Cancel") {
@@ -2526,7 +2630,7 @@ struct VerifyThisDevicePromptSheet: View {
                 }
             }
             .navigationTitle(showsReset ? IdentityResetCopy.title : VerifyDevicePromptCopy.title)
-            .navigationBarTitleDisplayMode(.inline)
+            .synaraSettingsChrome()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(closeTitle) {
@@ -2769,7 +2873,7 @@ private struct AboutSettingsView: View {
             }
         }
         .navigationTitle("About")
-        .navigationBarTitleDisplayMode(.inline)
+        .synaraSettingsChrome()
         .accessibilityIdentifier("AboutSettingsScreen")
     }
 }
@@ -2796,7 +2900,7 @@ private struct LicensesSettingsView: View {
             }
         }
         .navigationTitle("Licenses")
-        .navigationBarTitleDisplayMode(.inline)
+        .synaraSettingsChrome()
         .accessibilityIdentifier("LicensesSettingsScreen")
     }
 }
@@ -2845,7 +2949,7 @@ private struct PrivacyPolicySettingsView: View {
             }
         }
         .navigationTitle("Privacy")
-        .navigationBarTitleDisplayMode(.inline)
+        .synaraSettingsChrome()
         .accessibilityIdentifier("PrivacyPolicySettingsScreen")
     }
 }
@@ -2865,10 +2969,16 @@ private struct SupportSettingsView: View {
                 SettingsInfoRow(title: String(localized: "Version"), value: AppBuildInfo.version)
                 SettingsInfoRow(title: String(localized: "Build"), value: AppBuildInfo.build)
                 SettingsInfoRow(title: String(localized: "Bundle"), value: AppBuildInfo.bundleIdentifier)
+                NavigationLink {
+                    NotificationDiagnosticsSettingsView()
+                } label: {
+                    SettingsNavigationRow(title: String(localized: "Push delivery"), systemImage: "bell.badge")
+                }
+                .accessibilityIdentifier("SupportNotificationDiagnosticsLink")
             }
         }
         .navigationTitle("Support")
-        .navigationBarTitleDisplayMode(.inline)
+        .synaraSettingsChrome()
         .accessibilityIdentifier("SupportSettingsScreen")
     }
 }

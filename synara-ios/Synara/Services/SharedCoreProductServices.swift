@@ -1274,7 +1274,8 @@ final class SharedCoreRoomListService: RoomListServicing {
                         encryptionStatus: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus),
                         isSpace: $0.isSpace,
                         isLowPriority: $0.isLowPriority,
-                        isAgentRoom: $0.isAgentRoom
+                        isAgentRoom: $0.isAgentRoom,
+                        notificationMode: $0.notificationMode
                     )
                 },
                 invites: invites.map {

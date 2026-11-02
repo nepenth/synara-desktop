@@ -40,9 +40,14 @@ struct RoomSummary: Identifiable, Equatable {
     let directUserId: String?
     /// Authoritative Core tri-state. Security decisions must consume this value.
     let encryptionStatus: SynaraRoomEncryptionStatus
+    /// Core's per-room push override; `.mute` dims the row and flips the
+    /// swipe action to Unmute.
+    let notificationMode: SynaraRoomNotificationMode
 
     /// Legacy display convenience. Unknown never becomes authoritative cleartext.
     var isEncrypted: Bool { encryptionStatus == .encrypted }
+
+    var isMuted: Bool { notificationMode == .mute }
 
     init(
         id: String,
@@ -68,7 +73,8 @@ struct RoomSummary: Identifiable, Equatable {
         activeCallParticipantCount: Int = 0,
         directUserId: String? = nil,
         isEncrypted: Bool? = nil,
-        encryptionStatus: SynaraRoomEncryptionStatus? = nil
+        encryptionStatus: SynaraRoomEncryptionStatus? = nil,
+        notificationMode: SynaraRoomNotificationMode = .default
     ) {
         self.id = id
         self.name = name
@@ -92,6 +98,7 @@ struct RoomSummary: Identifiable, Equatable {
         self.hasActiveCall = hasActiveCall
         self.activeCallParticipantCount = activeCallParticipantCount
         self.directUserId = directUserId
+        self.notificationMode = notificationMode
         if let encryptionStatus {
             self.encryptionStatus = encryptionStatus
         } else if let isEncrypted {
@@ -182,6 +189,25 @@ enum RoomListSortOrder: String, CaseIterable, Identifiable {
         defaults: UserDefaults = .standard
     ) {
         defaults.set(order.rawValue, forKey: section.storageKey)
+    }
+
+    /// One order for the whole list. Reads the shared key first, then any
+    /// per-section key an earlier build wrote, so a stored choice survives.
+    static func storedShared(defaults: UserDefaults = .standard) -> RoomListSortOrder {
+        if let raw = defaults.string(forKey: storageKey),
+           let order = RoomListSortOrder(rawValue: raw) {
+            return order
+        }
+        return stored(for: .rooms, defaults: defaults)
+    }
+
+    /// Writes the shared key and every section key, so the per-section
+    /// readers agree with the single control.
+    static func persistShared(_ order: RoomListSortOrder, defaults: UserDefaults = .standard) {
+        defaults.set(order.rawValue, forKey: storageKey)
+        for section in [RoomListSortSection.favorites, .rooms, .directs] {
+            persist(order, for: section, defaults: defaults)
+        }
     }
 
     var title: String {

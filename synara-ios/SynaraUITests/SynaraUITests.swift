@@ -284,10 +284,15 @@ final class SynaraUITests: XCTestCase {
 
         login(app: app)
 
-        XCTAssertTrue(app.scrollViews["SpaceFilterStrip"].waitForExistence(timeout: 5))
+        // Spaces live in the title menu (review-2 IOSS-2); the item
+        // identifiers are unchanged.
+        XCTAssertTrue(app.buttons["RoomListTitleMenu"].waitForExistence(timeout: 5))
+        tap(app.buttons["RoomListTitleMenu"])
         tap(app.buttons["SpaceFilter-!workspace:matrix.org"])
         XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["SpaceFilter-all"].exists)
+        tap(app.buttons["RoomListTitleMenu"])
+        XCTAssertTrue(app.buttons["SpaceFilter-all"].waitForExistence(timeout: 5))
+        app.buttons["SpaceFilter-all"].tap()
     }
 
     func testRoomManagementPublicDirectorySearchMockFlow() {
@@ -1254,7 +1259,11 @@ final class SynaraUITests: XCTestCase {
         tapSettingsElement(app.buttons["NotificationSettingsLink"], app: app, timeout: 10)
         XCTAssertTrue(app.collectionViews["NotificationSettingsScreen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["NotificationPermissionButton"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["PushRegistrationButton"].exists)
+        // Push registration moved to Notifications → Diagnostics (review-2 IOSS-18).
+        tapSettingsElement(app.buttons["NotificationDiagnosticsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.buttons["PushRegistrationButton"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.collectionViews["NotificationSettingsScreen"].waitForExistence(timeout: 5))
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
         tapSettingsElement(app.buttons["AppearanceSettingsLink"], app: app, timeout: 10)

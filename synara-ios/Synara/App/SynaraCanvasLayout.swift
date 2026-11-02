@@ -80,11 +80,22 @@ extension EnvironmentValues {
     }
 }
 
+/// Column widths shared by every split canvas (Rooms, Later, Notifications,
+/// Settings) so the sidebar edge never moves between tabs.
+enum SynaraSplitColumn {
+    static let minimumWidth: CGFloat = 280
+    static let idealWidth: CGFloat = 320
+    static let maximumWidth: CGFloat = 400
+}
+
 struct SynaraConversationCanvas<List: View>: View {
     let tab: AppTab
     @ObservedObject private var router: AppRouter
     let list: List
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// Bound state, so the sidebar can be collapsed (system toggle or swipe)
+    /// when a wide table or code block needs the width.
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     init(
         tab: AppTab,
@@ -133,9 +144,13 @@ struct SynaraConversationCanvas<List: View>: View {
     }
 
     private var split: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             list
-                .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
+                .navigationSplitViewColumnWidth(
+                    min: SynaraSplitColumn.minimumWidth,
+                    ideal: SynaraSplitColumn.idealWidth,
+                    max: SynaraSplitColumn.maximumWidth
+                )
                 .accessibilityIdentifier("ConversationListColumn")
         } detail: {
             splitDetail
@@ -179,5 +194,50 @@ struct SynaraConversationEmptyPane: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(SynaraChrome.chat)
         .accessibilityIdentifier("ConversationEmptyPane")
+    }
+}
+
+/// Settings on both canvases. Compact width keeps the phone `NavigationStack`;
+/// regular width shows the settings list as a sidebar with the selected page
+/// (Account by default) in the detail column, like desktop's Settings.
+struct SynaraSettingsCanvas: View {
+    @ObservedObject var router: AppRouter
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var selection: SettingsPage? = .account
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+
+    private var layout: SynaraCanvasLayout {
+        SynaraCanvasLayoutPolicy.layout(horizontalSizeClass: horizontalSizeClass)
+    }
+
+    var body: some View {
+        Group {
+            switch layout {
+            case .stacked:
+                NavigationStack(path: router.binding(for: .settings)) {
+                    SettingsView()
+                        .navigationDestination(for: AppRoute.self) { route in
+                            RoutePlaceholderView(route: route)
+                        }
+                }
+            case .split:
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    SettingsView(selection: $selection)
+                        .navigationSplitViewColumnWidth(
+                            min: SynaraSplitColumn.minimumWidth,
+                            ideal: SynaraSplitColumn.idealWidth,
+                            max: SynaraSplitColumn.maximumWidth
+                        )
+                        .accessibilityIdentifier("SettingsListColumn")
+                } detail: {
+                    NavigationStack {
+                        SettingsPageView(page: selection ?? .account)
+                    }
+                    .accessibilityIdentifier("SettingsDetailColumn")
+                }
+                .navigationSplitViewStyle(.balanced)
+            }
+        }
+        .environment(\.synaraCanvasLayout, layout)
     }
 }

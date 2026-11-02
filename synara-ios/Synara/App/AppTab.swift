@@ -71,18 +71,25 @@ private struct NotificationsTabView: View {
     private func notificationsContent(for rooms: [RoomSummary]) -> some View {
         let sections = NotificationsInboxSections.make(from: rooms)
         let agentPendingApprovals = AgentPendingInbox.pendingApprovals(from: rooms)
+        let roomsByID = Dictionary(rooms.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         if NotificationsInboxSections.isCaughtUp(sections: sections, agentPendingCount: agentPendingApprovals.count) {
             caughtUpEmptyState
         } else {
             List {
+                // A labelled way into Approvals; the toolbar glyph stays for
+                // the caught-up state, which has no list.
+                Section {
+                    approvalsRow(pendingCount: agentPendingApprovals.count)
+                }
+
                 if sections.mentions.isEmpty == false {
                     Section {
                         ForEach(sections.mentions) { room in
                             notificationsRow(room)
                         }
                     } header: {
-                        notificationsSectionHeader(String(localized: "Mentions"), count: sections.mentions.count)
+                        RoomListSectionHeader(title: String(localized: "Mentions"), count: sections.mentions.count, identifier: "mentions")
                     }
                 }
 
@@ -92,52 +99,39 @@ private struct NotificationsTabView: View {
                             inviteRow(room)
                         }
                     } header: {
-                        notificationsSectionHeader(String(localized: "Invites"), count: sections.invites.count)
+                        RoomListSectionHeader(title: String(localized: "Invites"), count: sections.invites.count, identifier: "invites")
                     }
                 }
 
                 if agentPendingApprovals.isEmpty == false {
                     Section {
                         ForEach(agentPendingApprovals) { item in
-                            agentPendingRow(item)
+                            agentPendingRow(item, room: roomsByID[item.roomID])
                         }
                     } header: {
-                        notificationsSectionHeader(String(localized: "Agent actions"), count: agentPendingApprovals.count)
+                        RoomListSectionHeader(title: String(localized: "Agent actions"), count: agentPendingApprovals.count, identifier: "agentActions")
                     }
                 }
 
                 if sections.unreadRooms.isEmpty == false {
                     Section {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isUnreadRoomsExpanded.toggle()
-                            }
-                        } label: {
-                            HStack(spacing: SynaraSpacing.small) {
-                                Text("Unread rooms")
-                                    .font(SynaraTypography.body.weight(.medium))
-                                    .foregroundStyle(SynaraColor.primaryText)
-                                Spacer(minLength: SynaraSpacing.small)
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(SynaraColor.secondaryText)
-                                    .rotationEffect(.degrees(isUnreadRoomsExpanded ? 90 : 0))
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Unread rooms")
-                        .accessibilityValue(isUnreadRoomsExpanded ? "Expanded" : "Collapsed")
-                        .accessibilityHint(isUnreadRoomsExpanded ? "Collapses unread rooms" : "Expands unread rooms")
-                        .accessibilityIdentifier("NotificationsUnreadRoomsDisclosure")
-
                         if isUnreadRoomsExpanded {
                             ForEach(sections.unreadRooms) { room in
                                 notificationsRow(room)
                             }
                         }
                     } header: {
-                        notificationsSectionHeader(String(localized: "Messages"), count: sections.unreadRooms.count)
+                        RoomListSectionHeader(
+                            title: String(localized: "Unread rooms"),
+                            count: sections.unreadRooms.count,
+                            isCollapsed: isUnreadRoomsExpanded == false,
+                            identifier: "unreadRooms"
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isUnreadRoomsExpanded.toggle()
+                            }
+                        }
+                        .accessibilityIdentifier("NotificationsUnreadRoomsDisclosure")
                     }
                 }
             }
@@ -154,10 +148,31 @@ private struct NotificationsTabView: View {
         )
     }
 
-    private func notificationsSectionHeader(_ title: String, count: Int) -> some View {
-        Text("\(title) · \(count)")
-            .font(SynaraTypography.supporting)
-            .foregroundStyle(SynaraColor.secondaryText)
+    private func approvalsRow(pendingCount: Int) -> some View {
+        NavigationLink {
+            ApprovalsView()
+        } label: {
+            HStack(spacing: SynaraSpacing.medium) {
+                Image(systemName: "checkmark.shield")
+                    .font(SynaraTypography.body.weight(.semibold))
+                    .foregroundStyle(SynaraColor.accent)
+                    .frame(width: SynaraMetrics.roomGlyph, alignment: .center)
+                    .accessibilityHidden(true)
+                Text("Approvals")
+                    .font(SynaraTypography.body.weight(pendingCount > 0 ? .bold : .regular))
+                    .foregroundStyle(SynaraColor.headingText)
+                Spacer(minLength: SynaraSpacing.small)
+                if pendingCount > 0 {
+                    SynaraUnreadBadge(count: pendingCount, highlighted: true)
+                }
+            }
+            .padding(.horizontal, SynaraSpacing.medium)
+            .padding(.vertical, SynaraMetrics.roomRowVerticalPadding)
+            .frame(minHeight: SynaraMetrics.roomRowMinHeight)
+        }
+        .listRowInsets(EdgeInsets(top: 1, leading: SynaraSpacing.small, bottom: 1, trailing: SynaraSpacing.small))
+        .accessibilityHint("Review pending and recent agent approvals")
+        .accessibilityIdentifier("NotificationsApprovalsRow")
     }
 
     private func notificationsRow(_ room: RoomSummary) -> some View {
@@ -166,11 +181,13 @@ private struct NotificationsTabView: View {
         } label: {
             NotificationsInboxRow(room: room)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, SynaraSpacing.medium)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .listRowInsets(EdgeInsets(top: 1, leading: SynaraSpacing.small, bottom: 1, trailing: SynaraSpacing.small))
         .accessibilityIdentifier("NotificationsRow-\(room.id)")
     }
 
@@ -209,19 +226,21 @@ private struct NotificationsTabView: View {
         }
     }
 
-    private func agentPendingRow(_ item: AgentPendingApprovalItem) -> some View {
+    private func agentPendingRow(_ item: AgentPendingApprovalItem, room: RoomSummary?) -> some View {
         Button {
             environment.router.route(
                 to: .room(id: item.roomID, eventID: item.eventID, title: item.roomName)
             )
         } label: {
-            AgentPendingApprovalRow(item: item)
+            AgentPendingApprovalRow(item: item, room: room)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, SynaraSpacing.medium)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .listRowInsets(EdgeInsets(top: 1, leading: SynaraSpacing.small, bottom: 1, trailing: SynaraSpacing.small))
         .accessibilityLabel("\(item.title) in \(item.roomName)")
         .accessibilityHint("Opens the room to review this agent action")
         .accessibilityIdentifier("NotificationsAgentRow-\(item.roomID)")
@@ -301,17 +320,22 @@ enum NotificationsInboxReason: Equatable {
 private struct NotificationsInboxRow: View {
     let room: RoomSummary
 
+    /// Same badge rule as the Rooms list: red count for a mention or an
+    /// unread direct message, bold name alone for a plain unread channel.
+    private var showsCountBadge: Bool {
+        room.hasHighlight || (room.kind == .directMessage && room.hasUnreadActivity)
+    }
+
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            Text("#")
-                .font(SynaraTypography.body.weight(.semibold))
-                .foregroundStyle(SynaraColor.secondaryText)
-                .frame(width: 24, alignment: .center)
-                .accessibilityHidden(true)
+            SynaraRoomGlyphView(
+                room: room,
+                tint: room.hasUnreadActivity ? SynaraColor.headingText : SynaraColor.secondaryText
+            )
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 Text(room.name)
-                    .font(SynaraTypography.body.weight(room.hasUnreadActivity ? .semibold : .regular))
+                    .font(SynaraTypography.body.weight(room.hasUnreadActivity ? .bold : .regular))
                     .foregroundStyle(SynaraColor.headingText)
                     .lineLimit(1)
 
@@ -334,27 +358,27 @@ private struct NotificationsInboxRow: View {
 
             Spacer(minLength: SynaraSpacing.small)
 
-            SynaraUnreadBadge(count: room.unreadBadgeCount, highlighted: room.hasHighlight)
+            if showsCountBadge {
+                SynaraUnreadBadge(count: room.unreadBadgeCount, highlighted: true)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-        .padding(.vertical, SynaraSpacing.xSmall)
+        .frame(maxWidth: .infinity, minHeight: SynaraMetrics.roomRowMinHeight, alignment: .leading)
+        .padding(.vertical, SynaraMetrics.roomRowVerticalPadding)
     }
 }
 
 private struct AgentPendingApprovalRow: View {
     let item: AgentPendingApprovalItem
+    /// The room's list summary, for the `#` / person glyph; nil falls back to `#`.
+    var room: RoomSummary? = nil
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            Text("#")
-                .font(SynaraTypography.body.weight(.semibold))
-                .foregroundStyle(SynaraColor.secondaryText)
-                .frame(width: 24, alignment: .center)
-                .accessibilityHidden(true)
+            SynaraRoomGlyphView(room: room, tint: SynaraColor.headingText)
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 Text(item.title)
-                    .font(SynaraTypography.body.weight(.semibold))
+                    .font(SynaraTypography.body.weight(.bold))
                     .foregroundStyle(SynaraColor.headingText)
                     .lineLimit(2)
 
@@ -365,7 +389,7 @@ private struct AgentPendingApprovalRow: View {
 
                 HStack(spacing: SynaraSpacing.small) {
                     Label("Agent", systemImage: "terminal")
-                    Text("# \(item.roomName)")
+                    Text(item.roomName)
                         .lineLimit(1)
                     if let status = item.status, status.isEmpty == false {
                         Text(status)
@@ -383,8 +407,8 @@ private struct AgentPendingApprovalRow: View {
                 .foregroundStyle(SynaraColor.tertiaryText)
                 .accessibilityHidden(true)
         }
-        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-        .padding(.vertical, SynaraSpacing.xSmall)
+        .frame(maxWidth: .infinity, minHeight: SynaraMetrics.roomRowMinHeight, alignment: .leading)
+        .padding(.vertical, SynaraMetrics.roomRowVerticalPadding)
     }
 }
 
@@ -437,7 +461,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .notifications:
             return "bell"
         case .later:
-            return "clock"
+            return "bookmark"
         case .settings:
             return "gearshape"
         }
@@ -482,7 +506,8 @@ enum AppTab: String, CaseIterable, Identifiable {
                 .accessibilityIdentifier("NotificationsTab")
                 .modifier(OptionalTabBadge(count: badgeCounts.notifications))
         case .later:
-            Label("Later", systemImage: "clock")
+            // The bookmark is Later's glyph on desktop too (DS-7).
+            Label("Later", systemImage: "bookmark")
                 .accessibilityIdentifier("LaterTab")
         case .settings:
             Label("Settings", systemImage: "gearshape")
