@@ -286,6 +286,60 @@ test('failed last-read navigation preserves rows, viewport and a working retry',
   await expect.poll(() => activeStreamCount(page)).toBe(1);
 });
 
+test('a stalled first load says it is slow and its retry loads the room', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('/e2e/native-timeline-harness/index.html?holdFirstOpen=1');
+  await expect(page.getByText('Loading messages…')).toBeVisible();
+  const slow = page.locator('[data-native-timeline-slow-loading="true"]');
+  await expect(slow).toBeHidden();
+  await page.clock.fastForward(9000);
+  await expect(slow).toContainText('taking longer than usual');
+  await slow.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.locator('[data-native-timeline-event-id]').first()).toBeVisible();
+  await expect(slow).toBeHidden();
+});
+
+test('a deleted last-read marker says so and retires Jump to Last Read', async ({ page }) => {
+  await open(page, 'missing&lastReadRoute=missing');
+  await scrollToHistory(page);
+  const recovery = page.getByRole('button', { name: 'Jump to Last Read' });
+  await recovery.click();
+  await expect(page.getByText("Your last-read message isn't available any more.")).toBeVisible();
+  await expect(recovery).toBeHidden();
+  await expect.poll(() => activeStreamCount(page)).toBe(1);
+});
+
+test('an unreachable last-read marker says the server may be slow and keeps the retry', async ({
+  page,
+}) => {
+  await open(page, 'missing&lastReadRoute=unreachable');
+  await scrollToHistory(page);
+  const recovery = page.getByRole('button', { name: 'Jump to Last Read' });
+  await recovery.click();
+  await expect(page.getByText("Your last-read message couldn't be loaded.")).toBeVisible();
+  await expect(recovery).toBeVisible();
+  await expect(page.getByText('not available in this context')).toBeHidden();
+  await expect.poll(() => activeStreamCount(page)).toBe(1);
+});
+
+test('Jump to Last Read shows progress and ignores repeat clicks while it opens', async ({
+  page,
+}) => {
+  await open(page, 'missing&delayLastRead=1');
+  await scrollToHistory(page);
+  const recovery = page.getByRole('button', { name: 'Jump to Last Read' });
+  await recovery.click();
+  await expect.poll(() => commandCount(page, 'matrix_timeline_open')).toBe(2);
+  await expect(recovery).toHaveAttribute('aria-busy', 'true');
+  await expect(recovery).toHaveAttribute('aria-disabled', 'true');
+  await recovery.click({ force: true });
+  await page.waitForTimeout(200);
+  expect(await commandCount(page, 'matrix_timeline_open')).toBe(2);
+  await fixture(page, 'releaseLastRead');
+  await expect(page.locator('[data-native-timeline-event-id="$missing"]')).toBeInViewport();
+  await expect(recovery).toBeHidden();
+});
+
 test('last-read context without the target preserves the previous viewport and recovery', async ({
   page,
 }) => {

@@ -229,6 +229,40 @@ const nativeLocalEchoActionKey = (roomId: string, transactionId: string): string
  * first is in flight is ignored, so a double click cannot report a false
  * "could not be discarded" after the first press already removed the echo.
  */
+/**
+ * Why Jump to Last Read could not place the marker. `permanent` means
+ * retrying cannot help (the event is gone or hidden from this account), so
+ * the presenter retires the action instead of offering it again.
+ */
+export class LastReadUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly permanent: boolean
+  ) {
+    super(message);
+    this.name = 'LastReadUnavailableError';
+  }
+}
+
+export const LAST_READ_MISSING_MESSAGE =
+  "Your last-read message isn't available any more. It may have been deleted, or you may no longer have access to it.";
+export const LAST_READ_UNREACHABLE_MESSAGE =
+  "Your last-read message couldn't be loaded. The server may be slow; try again.";
+export const LAST_READ_NOT_PLACED_MESSAGE =
+  "Your last-read position couldn't be shown. Try again.";
+
+/** Map Core's focus route for a failed last-read open to user copy. */
+export const lastReadFailure = (route: NativeTimelineEventRoute | undefined) => {
+  switch (route?.kind) {
+    case 'missing':
+      return new LastReadUnavailableError(LAST_READ_MISSING_MESSAGE, true);
+    case 'unreachable':
+      return new LastReadUnavailableError(LAST_READ_UNREACHABLE_MESSAGE, false);
+    default:
+      return new LastReadUnavailableError(LAST_READ_NOT_PLACED_MESSAGE, false);
+  }
+};
+
 export class NativeLocalEchoActionGuard {
   private readonly pending = new Set<string>();
 
@@ -1421,11 +1455,7 @@ export const useNativeTimelineView = (
         )
       ) {
         discard();
-        throw new Error(
-          openedAnchor !== undefined && openedAnchor !== eventId
-            ? 'The last-read position could not be placed. Try again.'
-            : 'The last-read message is not available in this context. Try again.'
-        );
+        throw lastReadFailure(opened?.focusRoute);
       }
       // Each Core open owns its own subscription. Retire the previous provider
       // only after the adopted anchor has been confirmed in its replacement.

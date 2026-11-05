@@ -90,6 +90,7 @@ import {
   type NativeTimelineThreadSummary,
   type NativeTimelineUnsentDelivery,
   type NativeTimelineViewRow,
+  LastReadUnavailableError,
   shouldPlaceLatestLocally,
   useNativeTimelineView,
 } from './nativeTimelineView';
@@ -235,6 +236,27 @@ type NativeTimelineViewport = {
     offsetPx: number;
     visualTopPx?: number;
   };
+};
+
+/** How long the initial load runs before the view says it is slow. */
+export const SLOW_TIMELINE_LOAD_MS = 8000;
+
+/**
+ * True once `active` has stayed on for {@link SLOW_TIMELINE_LOAD_MS} within
+ * the same navigation, so a stalled open says so and offers a retry instead
+ * of spinning silently.
+ */
+const useSlowLoading = (active: boolean, navigation: unknown): boolean => {
+  const [slowFor, setSlowFor] = useState<unknown>();
+  useEffect(() => {
+    if (!active) return undefined;
+    const timer = window.setTimeout(() => setSlowFor(() => navigation), SLOW_TIMELINE_LOAD_MS);
+    return () => {
+      window.clearTimeout(timer);
+      setSlowFor(undefined);
+    };
+  }, [active, navigation]);
+  return active && slowFor !== undefined && slowFor === navigation;
 };
 
 const NATIVE_TIMELINE_VIEWPORT_LIMIT = 100;
@@ -3029,6 +3051,10 @@ export function NativeTimelinePresenter({
   const [mediaViewer, setMediaViewer] = useState<NativeTimelineMediaViewerTarget>();
   const [atLiveBottom, setAtLiveBottom] = useState(false);
   const [pendingLastRead, setPendingLastRead] = useState<string>();
+  // The navigation a Jump to Last Read request is running for. A focused
+  // open can take many seconds on a slow server, so the button shows that
+  // it is working and ignores repeat clicks, which would supersede it.
+  const [lastReadInFlight, setLastReadInFlight] = useState<unknown>();
   const [latestPlacementRequest, setLatestPlacementRequest] = useState(0);
   const appliedLatestPlacementRef = useRef(0);
   const [lastReadPlacementRequest, setLastReadPlacementRequest] = useState(0);
@@ -4146,10 +4172,12 @@ export function NativeTimelinePresenter({
     jumpToLatest();
   }, [atLiveBottom, documentActive, input, jumpToLatest, reachedForwardEnd]);
 
+  const lastReadPending = lastReadInFlight !== undefined && lastReadInFlight === input;
   const jumpToLastRead = useCallback(() => {
-    if (!pendingLastRead) return;
+    if (!pendingLastRead || lastReadPending) return;
     const navigation = input;
     setNotice(undefined);
+    setLastReadInFlight(navigation);
     void restoreLastRead(pendingLastRead)
       .then((adoptedAnchor) => {
         if (adoptedAnchor !== undefined && mountedNavigationRef.current === navigation) {
@@ -4160,11 +4188,17 @@ export function NativeTimelinePresenter({
         }
       })
       .catch((error) => {
-        if (mountedNavigationRef.current === navigation) {
-          showActionError(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.lastRead));
+        if (mountedNavigationRef.current !== navigation) return;
+        // A deleted or hidden marker cannot be reached by retrying.
+        if (error instanceof LastReadUnavailableError && error.permanent) {
+          setPendingLastRead(undefined);
         }
+        showActionError(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.lastRead));
+      })
+      .finally(() => {
+        setLastReadInFlight((current: unknown) => (current === navigation ? undefined : current));
       });
-  }, [input, pendingLastRead, restoreLastRead, showActionError]);
+  }, [input, lastReadPending, pendingLastRead, restoreLastRead, showActionError]);
 
   // From the error view: leave a focused, restored or thread position for
   // the room's live tail. A side-pane thread has its own close instead.
@@ -4182,6 +4216,9 @@ export function NativeTimelinePresenter({
     setPreferLiveBottom(true);
   }, [closeThread, threadRootId]);
 
+  const showingLoading = timelineState.status === 'loading' || focusedOpenFailed;
+  const slowLoading = useSlowLoading(showingLoading, input);
+
   if (timelineState.status === 'unavailable') {
     return (
       <Box
@@ -4194,18 +4231,36 @@ export function NativeTimelinePresenter({
       </Box>
     );
   }
-  if (timelineState.status === 'loading' || focusedOpenFailed) {
+  if (showingLoading) {
     return (
       <Box
         grow="Yes"
         alignItems="Center"
         justifyContent="Center"
         gap="200"
+        direction="Column"
         role="status"
         style={{ padding: config.space.S400 }}
       >
-        <Spinner variant="Secondary" size="200" />
-        <Text size="T300">Loading messages…</Text>
+        <Box alignItems="Center" gap="200">
+          <Spinner variant="Secondary" size="200" />
+          <Text size="T300">Loading messages…</Text>
+        </Box>
+        {slowLoading ? (
+          <Box
+            direction="Column"
+            alignItems="Center"
+            gap="200"
+            data-native-timeline-slow-loading="true"
+          >
+            <Text size="T200" priority="300" align="Center">
+              This is taking longer than usual. The server may be slow.
+            </Text>
+            <Button size="300" variant="Secondary" fill="Soft" radii="300" onClick={reload}>
+              <Text size="B300">Try again</Text>
+            </Button>
+          </Box>
+        ) : null}
       </Box>
     );
   }
@@ -4454,7 +4509,16 @@ export function NativeTimelinePresenter({
                     outlined
                     size="300"
                     className={depthCss.quietInteractiveSurface}
-                    before={<Icon src={Icons.MessageUnread} size="100" />}
+                    before={
+                      lastReadPending ? (
+                        <Spinner variant="Secondary" size="50" />
+                      ) : (
+                        <Icon src={Icons.MessageUnread} size="100" />
+                      )
+                    }
+                    aria-busy={lastReadPending}
+                    aria-disabled={lastReadPending}
+                    data-native-timeline-last-read-pending={lastReadPending || undefined}
                     onClick={jumpToLastRead}
                   >
                     <Text size="B300">Jump to Last Read</Text>

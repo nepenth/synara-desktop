@@ -26,6 +26,8 @@ const jank = params.has('jank');
 const editable = params.has('editable');
 // `failOpen`: the first room open fails the way Core rejects a command.
 let failOpen = params.has('failOpen');
+// The first open never answers, like a Core open stuck on a slow server.
+let holdFirstOpen = params.has('holdFirstOpen');
 const coreOpenFailure = (diagnosticId: string) => ({
   code: 'Unknown',
   message: 'The native Matrix timeline is unavailable.',
@@ -535,6 +537,10 @@ window.__SYNARA_DESKTOP__ = {
       } as T;
     }
     if (command === 'matrix_timeline_open') {
+      if (holdFirstOpen) {
+        holdFirstOpen = false;
+        await new Promise<never>(() => undefined);
+      }
       let selectedPosition = position;
       let lastRead = false;
       if (request?.position?.kind === 'focused') {
@@ -561,6 +567,14 @@ window.__SYNARA_DESKTOP__ = {
       if (lastRead && failLastRead) {
         failLastRead = false;
         throw new Error('Last-read context is temporarily unavailable');
+      }
+      const lastReadRoute = params.get('lastReadRoute');
+      if (lastRead && (lastReadRoute === 'missing' || lastReadRoute === 'unreachable')) {
+        // Core could not place the marker: it opens the live bottom and says why.
+        return {
+          ...openSnapshot({ kind: 'live_bottom' }),
+          focusRoute: { kind: lastReadRoute },
+        } as T;
       }
       const opened = openSnapshot(selectedPosition, lastRead && !params.has('omitLastRead'));
       if (lastRead || params.get('earlyOpen') === 'initial') {
