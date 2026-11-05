@@ -126,6 +126,8 @@ enum ConnectionStatusCopy {
     static let lostHold: TimeInterval = 4
     /// Connected is a recovery flash, not steady-state chrome.
     static let connectedFlash: TimeInterval = 12
+    /// How long the connection beam stays green (with its fade) after recovery.
+    static let beamConnectedFlash: TimeInterval = 1.5
 
     /// Statuses that paint Connection Lost immediately and should arm the
     /// recovery flash. Reconnecting is excluded here because it waits out
@@ -165,10 +167,20 @@ enum ConnectionStatusCopy {
     }
 }
 
+/// The thin connection beam under the navigation bar: a red pulse while sync
+/// is lost or coming back, a short green fill once it recovers, nothing while
+/// healthy. Mirrors desktop `ConnectionBeamPhase`.
+enum ConnectionBeamPhase: Equatable {
+    case hidden
+    case trying
+    case connected
+}
+
 /// Published chrome state for the signed-in connection/sync indicator.
 final class ConnectionStatusStore: ObservableObject {
     @Published private(set) var status: MatrixSyncStatus = .stopped
     @Published private(set) var isBannerVisible = false
+    @Published private(set) var beamPhase: ConnectionBeamPhase = .hidden
     /// Core's verdict that the homeserver lacks simplified sliding sync
     /// (MSC4186), so sync cannot start. Same meaning as desktop's capability
     /// banner; it replaces the connection copy rather than adding a screen.
@@ -182,18 +194,26 @@ final class ConnectionStatusStore: ObservableObject {
     private var connectedFlashWork: DispatchWorkItem?
     private var pendingLost: MatrixSyncStatus?
     private var recoveredFromVisibleDisconnect = false
+    private let beamConnectedFlash: TimeInterval
+    private var beamHideWork: DispatchWorkItem?
+    /// A session that never connected is starting, not lost: cold launch
+    /// keeps the beam dark.
+    private var hasConnected = false
 
     init(
         reconnectingHold: TimeInterval = ConnectionStatusCopy.lostHold,
-        connectedFlash: TimeInterval = ConnectionStatusCopy.connectedFlash
+        connectedFlash: TimeInterval = ConnectionStatusCopy.connectedFlash,
+        beamConnectedFlash: TimeInterval = ConnectionStatusCopy.beamConnectedFlash
     ) {
         self.lostHold = reconnectingHold
         self.connectedFlash = connectedFlash
+        self.beamConnectedFlash = beamConnectedFlash
     }
 
     deinit {
         lostHoldWork?.cancel()
         connectedFlashWork?.cancel()
+        beamHideWork?.cancel()
     }
 
     /// Empty-state / placeholder copy follows held chrome, not the live SDK blip.
@@ -306,6 +326,7 @@ final class ConnectionStatusStore: ObservableObject {
         }
         connectedFlashWork?.cancel()
         connectedFlashWork = nil
+        updateBeam(for: status)
 
         // Immediate terminal loss used to share the reconnecting hold, which
         // armed the Connected flash. Those states now present at once, and
@@ -328,6 +349,52 @@ final class ConnectionStatusStore: ObservableObject {
         }
 
         isBannerVisible = ConnectionStatusCopy.presentsBanner(status)
+    }
+
+    /// Runs on presented (held) statuses only, so Offline blips shorter than
+    /// the lost hold never light the beam.
+    private func updateBeam(for status: MatrixSyncStatus) {
+        switch status {
+        case .reconnecting, .disconnected, .failed:
+            setBeam(.trying)
+        case .starting:
+            if hasConnected { setBeam(.trying) }
+        case .connected, .syncing:
+            hasConnected = true
+            if beamPhase == .trying {
+                setBeam(.connected)
+                scheduleBeamHide()
+            }
+        case .restoreFailed, .stopped:
+            // The banner names a failed restore; a stopped session has no beam.
+            if status == .stopped { hasConnected = false }
+            setBeam(.hidden)
+        }
+    }
+
+    private func setBeam(_ phase: ConnectionBeamPhase) {
+        if phase != .connected {
+            beamHideWork?.cancel()
+            beamHideWork = nil
+        }
+        if beamPhase != phase {
+            beamPhase = phase
+        }
+    }
+
+    private func scheduleBeamHide() {
+        beamHideWork?.cancel()
+        guard beamConnectedFlash > 0 else {
+            setBeam(.hidden)
+            return
+        }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.beamPhase == .connected else { return }
+            self.beamHideWork = nil
+            self.beamPhase = .hidden
+        }
+        beamHideWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + beamConnectedFlash, execute: work)
     }
 
     private func scheduleLost(_ status: MatrixSyncStatus) {

@@ -175,3 +175,127 @@ struct HeldConnectionEmptyState: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+/// A thin line under the navigation bar that says the connection is coming
+/// back: a red pulse while trying, a short green fill once connected. It is
+/// zero height in layout, so lighting it never moves content.
+struct ConnectionBeam: View {
+    @ObservedObject var store: ConnectionStatusStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static let thickness: CGFloat = 2
+    /// One sweep of the pulse across the width.
+    static let sweepDuration: TimeInterval = 1.4
+
+    var body: some View {
+        Color.clear
+            .frame(height: 0)
+            .overlay(alignment: .top) {
+                beam
+                    .frame(height: Self.thickness)
+                    .frame(maxWidth: .infinity)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .animation(.easeOut(duration: 0.35), value: store.beamPhase)
+            .accessibilityIdentifier("ConnectionBeam")
+            .accessibilityValue(Self.accessibilityValue(store.beamPhase))
+    }
+
+    static func accessibilityValue(_ phase: ConnectionBeamPhase) -> String {
+        switch phase {
+        case .hidden: return "hidden"
+        case .trying: return "trying"
+        case .connected: return "connected"
+        }
+    }
+
+    @ViewBuilder
+    private var beam: some View {
+        switch store.beamPhase {
+        case .hidden:
+            Color.clear
+        case .trying:
+            ZStack(alignment: .leading) {
+                SynaraColor.critical.opacity(reduceMotion ? 1 : 0.35)
+                if !reduceMotion {
+                    pulse
+                }
+            }
+            .clipped()
+            .transition(.opacity)
+        case .connected:
+            SynaraColor.success
+                .transition(.opacity)
+        }
+    }
+
+    private var pulse: some View {
+        TimelineView(.animation) { context in
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let segment = width * 0.4
+                let elapsed = context.date.timeIntervalSinceReferenceDate
+                let progress = elapsed.truncatingRemainder(dividingBy: Self.sweepDuration)
+                    / Self.sweepDuration
+                LinearGradient(
+                    colors: [.clear, SynaraColor.critical, .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: segment)
+                .offset(x: -segment + (width + segment) * progress)
+            }
+        }
+    }
+}
+
+/// What the connection banner's buttons do. The signed-in shell provides
+/// them; screens that draw their own header read them from the environment.
+struct ConnectionStatusActions {
+    var onRetry: (() -> Void)?
+    var onSignOut: (() -> Void)?
+}
+
+private struct ConnectionStatusActionsKey: EnvironmentKey {
+    static let defaultValue = ConnectionStatusActions()
+}
+
+extension EnvironmentValues {
+    var synaraConnectionActions: ConnectionStatusActions {
+        get { self[ConnectionStatusActionsKey.self] }
+        set { self[ConnectionStatusActionsKey.self] = newValue }
+    }
+}
+
+/// The connection banner (actionable states only) with the beam along its
+/// bottom edge. Placed directly under a screen's header, so the beam runs
+/// under the server or room name.
+struct ConnectionStatusChrome: View {
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.synaraConnectionActions) private var actions
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ConnectionStatusBanner(
+                store: environment.connectionStatus,
+                onRetry: actions.onRetry,
+                onSignOut: actions.onSignOut
+            )
+            ConnectionBeam(store: environment.connectionStatus)
+        }
+        // The beam hangs below this view over the content that follows;
+        // draw it above that sibling.
+        .zIndex(1)
+    }
+}
+
+extension View {
+    /// Connection chrome under this screen's system navigation bar, for
+    /// screens that do not draw a header of their own.
+    func synaraConnectionChrome() -> some View {
+        safeAreaInset(edge: .top, spacing: 0) {
+            ConnectionStatusChrome()
+        }
+    }
+}

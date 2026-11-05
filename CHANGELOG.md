@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Connection status (desktop, iOS): a thin beam under the titlebar (desktop) or navigation bar (iOS) shows the connection coming back. A red pulse runs across it once the connection has been down for a few seconds, or at once if it failed. It fills green when you're connected again and fades out about 1.5 seconds later. A healthy connection and short sync blips show nothing. On desktop it replaces the "Connection Lost! Reconnecting..." and "Connected" text banners; a failed connection still says so in words.
+- Connection banner (iOS): "Connection Lost!" with Retry now sits under the room list, room and thread headers instead of being drawn underneath them, where the header covered it.
+
 ## [2.8.1] - 2026-11-02
 
 - Room list (desktop, iOS, iPad): read rooms recede to a quieter grey, unread rooms are bold with a short bar at the left edge, muted rooms are dimmer still, and the selected room sits on a filled row (the accent colour on iPad). Section headers are small captions with a visible chevron and more air above each group. Long room names keep their ending ("Project - Hom…agement"). Direct messages show a presence dot, green when the person is online and grey when offline.
