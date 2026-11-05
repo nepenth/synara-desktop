@@ -309,6 +309,65 @@ final class ConnectionStatusCopyTests: XCTestCase {
         wait(for: [hidden], timeout: 1)
     }
 
+    func testBeamStaysDarkOnColdStartAndWhileHealthy() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.starting)
+        XCTAssertEqual(store.beamPhase, .hidden, "launch is not a lost connection")
+        store.update(.connected)
+        store.update(.syncing)
+        XCTAssertEqual(store.beamPhase, .hidden)
+    }
+
+    func testBeamWaitsOutTheLostHoldSoBlipsStayDark() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.connected)
+        store.update(.reconnecting)
+        XCTAssertEqual(store.beamPhase, .hidden)
+        store.update(.connected)
+        XCTAssertEqual(store.beamPhase, .hidden, "a blip never flashes red or green")
+    }
+
+    func testBeamPulsesWhileTryingThenFlashesGreenAndHides() {
+        let store = ConnectionStatusStore(reconnectingHold: 0, beamConnectedFlash: 0.05)
+        store.update(.connected)
+        store.update(.reconnecting)
+        XCTAssertEqual(store.beamPhase, .trying)
+        store.update(.connected)
+        XCTAssertEqual(store.beamPhase, .connected)
+
+        let hidden = expectation(description: "green flash ends")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            XCTAssertEqual(store.beamPhase, .hidden)
+            hidden.fulfill()
+        }
+        wait(for: [hidden], timeout: 1)
+    }
+
+    func testBeamLightsAtOnceForAHardFailureAndRestartAfterConnecting() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.connected)
+        store.update(.disconnected)
+        XCTAssertEqual(store.beamPhase, .trying)
+
+        let restarting = ConnectionStatusStore(reconnectingHold: 0)
+        restarting.update(.connected)
+        restarting.update(.starting)
+        XCTAssertEqual(restarting.beamPhase, .trying, "a restart after connecting is reconnecting")
+    }
+
+    func testBeamGivesWayToTheRestoreFailedBannerAndSignOut() {
+        let store = ConnectionStatusStore(reconnectingHold: 0)
+        store.update(.connected)
+        store.update(.reconnecting)
+        XCTAssertEqual(store.beamPhase, .trying)
+        store.update(.restoreFailed)
+        XCTAssertEqual(store.beamPhase, .hidden)
+
+        store.update(.stopped)
+        store.update(.starting)
+        XCTAssertEqual(store.beamPhase, .hidden, "a new sign-in starts dark")
+    }
+
     func testEmptyStateCopyUsesHeldStatusNotLiveLost() {
         let store = ConnectionStatusStore(reconnectingHold: 4)
         store.update(.connected)

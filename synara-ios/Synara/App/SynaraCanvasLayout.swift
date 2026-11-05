@@ -137,6 +137,7 @@ struct SynaraConversationCanvas<List: View>: View {
     private var stacked: some View {
         NavigationStack(path: path) {
             list
+                .modifier(ConnectionChromeInset(enabled: tab.drawsOwnHeader == false))
                 .navigationDestination(for: AppRoute.self) { route in
                     RoutePlaceholderView(route: route)
                 }
@@ -146,6 +147,7 @@ struct SynaraConversationCanvas<List: View>: View {
     private var split: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             list
+                .modifier(ConnectionChromeInset(enabled: tab.drawsOwnHeader == false))
                 .navigationSplitViewColumnWidth(
                     min: SynaraSplitColumn.minimumWidth,
                     ideal: SynaraSplitColumn.idealWidth,
@@ -216,6 +218,7 @@ struct SynaraSettingsCanvas: View {
             case .stacked:
                 NavigationStack(path: router.binding(for: .settings)) {
                     SettingsView()
+                        .synaraConnectionChrome()
                         .navigationDestination(for: AppRoute.self) { route in
                             RoutePlaceholderView(route: route)
                         }
@@ -223,6 +226,7 @@ struct SynaraSettingsCanvas: View {
             case .split:
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     SettingsView(selection: $selection)
+                        .synaraConnectionChrome()
                         .navigationSplitViewColumnWidth(
                             min: SynaraSplitColumn.minimumWidth,
                             ideal: SynaraSplitColumn.idealWidth,
@@ -239,5 +243,28 @@ struct SynaraSettingsCanvas: View {
             }
         }
         .environment(\.synaraCanvasLayout, layout)
+    }
+}
+
+/// Connection chrome for a tab root that keeps the system navigation bar.
+/// Rooms, room timelines and threads draw their own header and place the
+/// chrome under it themselves.
+private struct ConnectionChromeInset: ViewModifier {
+    let enabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.synaraConnectionChrome()
+        } else {
+            content
+        }
+    }
+}
+
+extension AppTab {
+    /// The root hides the system navigation bar and draws its own header.
+    var drawsOwnHeader: Bool {
+        self == .rooms
     }
 }

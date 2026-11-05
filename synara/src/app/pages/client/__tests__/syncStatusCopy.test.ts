@@ -4,6 +4,12 @@ import test from 'node:test';
 // SyncState literals are the probed js-sdk enum values.
 import {
   CONNECTED_STATUS_BANNER_DURATION_MS,
+  CONNECTION_BEAM_CONNECTED_MS,
+  CONNECTION_BEAM_HOLD_MS,
+  connectionBeamHoldMs,
+  connectionBeamLabel,
+  isConnectionAttempt,
+  isConnectionRecovered,
   RECONNECTING_BANNER_HOLD_MS,
   getSlidingSyncCapabilityBannerCopy,
   getSyncStatusBannerCopy,
@@ -84,4 +90,29 @@ test('SyncStatus derives the signed-in flag from the client, not a constant', ()
   const source = readFileSync('src/app/pages/client/SyncStatus.tsx', 'utf8');
   assert.match(source, /isSignedInSessionForBanner\(session, connectedDuringMount\)/);
   assert.doesNotMatch(source, /signedInSession = true/);
+});
+
+test('connection beam: reconnecting waits out the hold, failures light at once', () => {
+  assert.equal(isConnectionAttempt('RECONNECTING'), true);
+  assert.equal(isConnectionAttempt('ERROR'), true);
+  assert.equal(isConnectionAttempt('STOPPED', true), true);
+  // Cold start, logout and a renderer stop before reload stay dark.
+  assert.equal(isConnectionAttempt('STOPPED', false), false);
+  assert.equal(isConnectionAttempt(null), false);
+  assert.equal(isConnectionAttempt('PREPARED'), false);
+  assert.equal(isConnectionAttempt('CATCHUP'), false);
+  assert.equal(connectionBeamHoldMs('RECONNECTING'), CONNECTION_BEAM_HOLD_MS);
+  assert.equal(connectionBeamHoldMs('ERROR'), 0);
+  assert.ok(CONNECTION_BEAM_HOLD_MS >= 2_000);
+});
+
+test('connection beam: recovery is prepared or catching up', () => {
+  assert.equal(isConnectionRecovered('PREPARED'), true);
+  assert.equal(isConnectionRecovered('CATCHUP'), true);
+  assert.equal(isConnectionRecovered('RECONNECTING'), false);
+  assert.equal(isConnectionRecovered(null), false);
+  assert.equal(connectionBeamLabel('trying'), 'Reconnecting…');
+  assert.equal(connectionBeamLabel('connected'), 'Connected');
+  assert.equal(connectionBeamLabel('hidden'), null);
+  assert.ok(CONNECTION_BEAM_CONNECTED_MS > 0);
 });

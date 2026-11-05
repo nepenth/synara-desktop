@@ -43,6 +43,12 @@ extension DeviceVerificationPromptDto: Sendable
 extension DirectorySearchCommandError: Sendable
 extension DirectorySearchStatusDto: Sendable
 extension DirectoryVisibilityCommandError: Sendable
+extension DraftDecisionDto: Sendable
+extension DraftKeyStateDto: Sendable
+extension DraftResolutionDto: Sendable
+extension DraftSyncStatusDto: Sendable
+extension DraftWriteResultDto: Sendable
+extension DraftsCommandError: Sendable
 extension EditMessageDto: Sendable
 extension EditMessageError: Sendable
 extension GlobalImagePacksSnapshotDto: Sendable
@@ -117,6 +123,7 @@ extension RegisterFlowsDto: Sendable
 extension RegisterFlowsError: Sendable
 extension RegisterFlowsStatus: Sendable
 extension RegisterUiaFlowDto: Sendable
+extension RemoteDraftDto: Sendable
 extension ResolvedHomeserverDto: Sendable
 extension RestoreBackupDto: Sendable
 extension RestoreBackupError: Sendable
@@ -325,6 +332,13 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func deviceVerificationPrompt() async throws -> DeviceVerificationPromptDto
   open func dismissDeviceVerificationPrompt() throws -> DeviceVerificationPromptDto
   open func downloadPlainMedia(contentUri: String) async throws -> MediaBytesDto
+  open func draftsClear(roomId: String, slot: String) async throws -> DraftWriteResultDto
+  open func draftsDeleteAll() async throws -> UInt32
+  open func draftsFlush() async throws
+  open func draftsResolve(roomId: String, slot: String, localUpdatedAt: UInt64?, localDirty: Bool, localMarkdown: String?, fetchFresh: Bool) async throws -> DraftResolutionDto
+  open func draftsSave(roomId: String, slot: String, markdown: String?, replyTo: String?, editOf: String?, flush: Bool) async throws -> DraftWriteResultDto
+  open func draftsSetEnabled(enabled: Bool) async throws -> DraftSyncStatusDto
+  open func draftsStatus() async throws -> DraftSyncStatusDto
   open func editMessage(roomId: String, eventId: String, body: String, msgType: String?, formattedBody: String?, mentionUserIds: [String]?, mentionRoom: Bool?, txnId: String?) async throws -> EditMessageDto
   open func forgetSession(userId: String, homeserverUrl: String) async throws -> LeftoverAckDto
   open func getGlobalImagePacks() async throws -> GlobalImagePacksSnapshotDto
@@ -599,6 +613,18 @@ public enum DirectorySearchStatusDto: Equatable, Hashable
   case stale
   case cancelled
 public enum DirectoryVisibilityCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
+  case Failed(code: String, description: String)
+  public var errorDescription: String?
+public enum DraftDecisionDto: Equatable, Hashable
+  case keep
+  case apply
+  case prompt
+public enum DraftKeyStateDto: Equatable, Hashable
+  case ready
+  case requesting
+  case needsRecovery
+  case disabled
+public enum DraftsCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
 public enum EditMessageError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
@@ -1020,6 +1046,13 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func deviceVerificationPrompt() async throws -> DeviceVerificationPromptDto
   func dismissDeviceVerificationPrompt() throws -> DeviceVerificationPromptDto
   func downloadPlainMedia(contentUri: String) async throws -> MediaBytesDto
+  func draftsClear(roomId: String, slot: String) async throws -> DraftWriteResultDto
+  func draftsDeleteAll() async throws -> UInt32
+  func draftsFlush() async throws
+  func draftsResolve(roomId: String, slot: String, localUpdatedAt: UInt64?, localDirty: Bool, localMarkdown: String?, fetchFresh: Bool) async throws -> DraftResolutionDto
+  func draftsSave(roomId: String, slot: String, markdown: String?, replyTo: String?, editOf: String?, flush: Bool) async throws -> DraftWriteResultDto
+  func draftsSetEnabled(enabled: Bool) async throws -> DraftSyncStatusDto
+  func draftsStatus() async throws -> DraftSyncStatusDto
   func editMessage(roomId: String, eventId: String, body: String, msgType: String?, formattedBody: String?, mentionUserIds: [String]?, mentionRoom: Bool?, txnId: String?) async throws -> EditMessageDto
   func forgetSession(userId: String, homeserverUrl: String) async throws -> LeftoverAckDto
   func getGlobalImagePacks() async throws -> GlobalImagePacksSnapshotDto
@@ -1326,6 +1359,20 @@ public struct DeviceVerificationPromptDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var show: Bool
   public init(sessionGeneration: UInt64, show: Bool)
+public struct DraftResolutionDto: Equatable, Hashable
+  public var sessionGeneration: UInt64
+  public var decision: DraftDecisionDto
+  public var draft: RemoteDraftDto?
+  public init(sessionGeneration: UInt64, decision: DraftDecisionDto, draft: RemoteDraftDto?)
+public struct DraftSyncStatusDto: Equatable, Hashable
+  public var sessionGeneration: UInt64
+  public var enabled: Bool
+  public var keyState: DraftKeyStateDto
+  public init(sessionGeneration: UInt64, enabled: Bool, keyState: DraftKeyStateDto)
+public struct DraftWriteResultDto: Equatable, Hashable
+  public var sessionGeneration: UInt64
+  public var updatedAt: UInt64
+  public init(sessionGeneration: UInt64, updatedAt: UInt64)
 public struct EditMessageDto: Equatable, Hashable
   public var roomId: String
   public var eventId: String
@@ -1560,6 +1607,17 @@ public struct RegisterFlowsDto: Equatable, Hashable
 public struct RegisterUiaFlowDto: Equatable, Hashable
   public var stages: [String]
   public init(stages: [String])
+public struct RemoteDraftDto: Equatable, Hashable
+  public var roomId: String
+  public var slot: String
+  public var updatedAt: UInt64
+  public var deviceId: String
+  public var cleared: Bool
+  public var markdown: String?
+  public var replyTo: String?
+  public var editOf: String?
+  public var truncated: Bool
+  public init(roomId: String, slot: String, updatedAt: UInt64, deviceId: String, cleared: Bool, markdown: String?, replyTo: String?, editOf: String?, truncated: Bool)
 public struct ResolvedHomeserverDto: Equatable, Hashable
   public var homeserverUrl: String
   public var loginFlows: [LoginFlowDto]

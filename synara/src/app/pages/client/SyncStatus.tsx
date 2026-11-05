@@ -4,15 +4,13 @@ import type { NativeSession } from '../../native/nativeSession';
 import { useSyncState } from '../../hooks/useSyncState';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import {
-  CONNECTED_STATUS_BANNER_DURATION_MS,
-  RECONNECTING_BANNER_HOLD_MS,
   getSlidingSyncCapabilityBannerCopy,
   getSyncStatusBannerVariant,
   getTransientSyncStatusBannerCopy,
   isSignedInSessionForBanner,
-  shouldShowConnectedTransition,
   type SyncState,
 } from './syncStatusCopy';
+import { ConnectionBeam, useConnectionBeamPhase } from './ConnectionBeam';
 
 type StateData = {
   current: SyncState | null;
@@ -35,10 +33,6 @@ export function SyncStatus({ session }: SyncStatusProps) {
   const [slidingSyncCapable, setSlidingSyncCapable] = useState<boolean | null | undefined>(
     undefined
   );
-  const [connectedTransitionVisible, setConnectedTransitionVisible] = useState(false);
-  const [reconnectingBannerVisible, setReconnectingBannerVisible] = useState(false);
-  const [recoveredFromVisibleDisconnect, setRecoveredFromVisibleDisconnect] = useState(false);
-
   useSyncState(
     session,
     useCallback((current, previous, data) => {
@@ -63,47 +57,14 @@ export function SyncStatus({ session }: SyncStatusProps) {
     if (currentSyncState === 'PREPARED') setConnectedDuringMount(true);
   }, [currentSyncState]);
 
-  // Native SyncService flickers Offline during short sliding-sync gaps. Hold
-  // Connection Lost until Offline lasts, so a 1.5s poll blip never alarms.
-  useEffect(() => {
-    if (currentSyncState === 'ERROR') {
-      setReconnectingBannerVisible(false);
-      setRecoveredFromVisibleDisconnect(true);
-      return undefined;
-    }
-    if (currentSyncState !== 'RECONNECTING') {
-      setReconnectingBannerVisible(false);
-      return undefined;
-    }
-
-    const timer = setTimeout(() => {
-      setReconnectingBannerVisible(true);
-      setRecoveredFromVisibleDisconnect(true);
-    }, RECONNECTING_BANNER_HOLD_MS);
-    return () => clearTimeout(timer);
-  }, [currentSyncState]);
-
-  // PREPARED is a steady state. Flash Connected only after a Lost banner the
-  // user actually saw; warnings and failures stay while their state persists.
-  useEffect(() => {
-    if (!shouldShowConnectedTransition(currentSyncState, recoveredFromVisibleDisconnect)) {
-      setConnectedTransitionVisible(false);
-      return undefined;
-    }
-
-    setConnectedTransitionVisible(true);
-    const timer = setTimeout(() => {
-      setConnectedTransitionVisible(false);
-      setRecoveredFromVisibleDisconnect(false);
-    }, CONNECTED_STATUS_BANNER_DURATION_MS);
-    return () => clearTimeout(timer);
-  }, [session, currentSyncState, recoveredFromVisibleDisconnect]);
-
   const signedInSession = isSignedInSessionForBanner(session, connectedDuringMount);
+  // Reconnecting and the recovery flash belong to the beam; the text banner
+  // is only for a connection that has failed outright.
+  const beamPhase = useConnectionBeamPhase(currentSyncState, signedInSession);
   const bannerCopy = getTransientSyncStatusBannerCopy(
     currentSyncState,
-    connectedTransitionVisible,
-    reconnectingBannerVisible,
+    false,
+    false,
     signedInSession
   );
   const bannerVariant = getSyncStatusBannerVariant(currentSyncState, signedInSession);
@@ -135,12 +96,14 @@ export function SyncStatus({ session }: SyncStatusProps) {
       </Box>
     );
   }
+  const beam = <ConnectionBeam phase={beamPhase} />;
   if (banners.length === 0) {
-    return null;
+    return beam;
   }
 
   return (
     <Box direction="Column" shrink="No">
+      {beam}
       {banners.map((banner, idx) => (
         <Box key={idx} direction="Column" shrink="No">
           {banner}

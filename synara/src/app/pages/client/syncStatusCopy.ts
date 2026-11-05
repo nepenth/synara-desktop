@@ -90,3 +90,39 @@ export const getSyncStatusBannerVariant = (
   }
   return null;
 };
+
+/**
+ * The connection beam: a thin line under the titlebar. `trying` is a red
+ * pulse while sync is lost or reconnecting; `connected` is a short green
+ * fill once it recovers. A healthy session shows nothing.
+ */
+export type ConnectionBeamPhase = 'hidden' | 'trying' | 'connected';
+
+/**
+ * Native SyncService reports Offline during brief sliding-sync gaps. The beam
+ * waits this long before it lights, so routine blips never flash red.
+ */
+export const CONNECTION_BEAM_HOLD_MS = 4_000;
+
+/** How long the green fill stays (including its fade) after recovery. */
+export const CONNECTION_BEAM_CONNECTED_MS = 1_500;
+
+/** Whether sync is down or trying to come back. */
+export const isConnectionAttempt = (state: SyncState | null, signedInSession = false): boolean =>
+  state === SyncState.Reconnecting ||
+  state === SyncState.Error ||
+  (state === SyncState.Stopped && signedInSession);
+
+/** A hard failure lights the beam at once; a reconnect waits out the hold. */
+export const connectionBeamHoldMs = (state: SyncState | null): number =>
+  state === SyncState.Reconnecting ? CONNECTION_BEAM_HOLD_MS : 0;
+
+/** Live again: the beam turns green only if the user saw it red. */
+export const isConnectionRecovered = (state: SyncState | null): boolean =>
+  state === SyncState.Prepared || state === SyncState.Catchup;
+
+export const connectionBeamLabel = (phase: ConnectionBeamPhase): string | null => {
+  if (phase === 'trying') return 'Reconnecting…';
+  if (phase === 'connected') return 'Connected';
+  return null;
+};

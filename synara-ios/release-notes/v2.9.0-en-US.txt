@@ -1,0 +1,3 @@
+Synara 2.9.0 syncs your unsent message between your devices, so you can start typing in a room on one device and finish on another. Formatting in the composer behaves predictably: Return continues lists and quotes, and numbering carries on from the list above. A thin beam under the header shows when Synara is reconnecting, and the Connection Lost banner no longer hides under the room list header.
+
+Please test: a draft started on desktop and continued on iPhone (and back), lists and quotes in the composer, and losing and regaining your connection.

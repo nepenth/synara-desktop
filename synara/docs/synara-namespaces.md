@@ -7,6 +7,7 @@ Synara uses namespaced `in.synara.*` account data and event-content fields for c
 - `in.synara.later`: per-user Later inbox anchors. Items store only `roomId`, `eventId`, timestamps, kind, due/reminded/completed state, and never plaintext message bodies. See [Synara Later Account Data Contract](./synara-later-contract.md).
 - `in.synara.agent_approval_history`: per-user decided agent-approval history. Items store room/event anchors, decision, timestamps, and a bounded command-preview summary — never the full command body. Path-like args and secret-like assignments are redacted. See [Synara Agent Approval History Contract](./synara-agent-approval-history-contract.md).
 - `in.synara.room_notes`: per-user room notes, to-dos, and message anchors. See [Synara Room Notes Contract](./synara-room-notes-contract.md).
+- `in.synara.draft` (room account data): this account's unsent composer drafts for the room, sealed with XChaCha20-Poly1305 under a key kept in secret storage as `in.synara.drafts.v1`. The server sees only an opaque, size-padded envelope. The key moves between the user's own verified devices as Olm-encrypted `in.synara.drafts.key.request` / `in.synara.drafts.key.share` to-device events. See [Cross-device drafts](../../docs/design/cross-device-drafts.md).
 - `in.synara.unread_anchor`: per-user message-level unread anchors. This is a private client marker and does not move public read receipts. See [Synara Unread Anchor Contract](./synara-unread-anchor-contract.md).
 - `in.synara.spaces`: existing space organization metadata. See [Synara Spaces Contract](./synara-spaces-contract.md).
 
@@ -21,7 +22,7 @@ Synara uses namespaced `in.synara.*` account data and event-content fields for c
 
 ## Local-Only Storage
 
-- `in.synara.room_draft.<userId>.<roomId>`: browser `localStorage` key for per-room composer drafts. Drafts are local to the device/browser profile, capped in size, and are not written to Matrix account data.
+- `in.synara.room_draft.<userId>.<roomId>`: browser `localStorage` key for per-room composer drafts. Each device keeps its own copy, capped in size. With "Sync drafts across devices" on, Core also mirrors the draft, encrypted, to `in.synara.draft` room account data.
 - `settings.customAccentColor`: browser `localStorage` setting for the optional constrained theme accent. It accepts only full hex colors and is not written to Matrix account data.
 - `settings.themeBaseColor`: browser `localStorage` setting for the optional chrome hue tint. It accepts only full `#rrggbb` colors and is not written to Matrix account data. iOS stores the same key in app-group UserDefaults independently; there is no cross-device sync yet.
 

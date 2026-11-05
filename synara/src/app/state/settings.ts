@@ -76,6 +76,11 @@ export interface SharedSettings {
    */
   linkPreviews: boolean;
   /**
+   * Sync unsent composer drafts with this account's other Synara devices, end-to-end
+   * encrypted in room account data. Per device.
+   */
+  syncDrafts: boolean;
+  /**
    * Show a long bare web address in a message as a short label (its site and
    * path, without the query); the link it opens and its tooltip keep the
    * whole address.
@@ -173,6 +178,7 @@ export const defaultSharedSettings: SharedSettings = {
   inlineGifLinks: true,
   xEmbeds: true,
   linkPreviews: true,
+  syncDrafts: true,
   shortenLinks: true,
   previewDefaultsVersion: PREVIEW_DEFAULTS_VERSION,
   showHiddenEvents: false,

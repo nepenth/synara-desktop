@@ -40,6 +40,7 @@ struct RoomListView: View {
             case .idle, .loading:
                 VStack(spacing: 0) {
                     roomListChrome(spaces: [], unreadCounts: [:], selectedSpaceTitle: nil, filterBadges: [:])
+                    ConnectionStatusChrome()
 
                     List {
                         Section {
@@ -68,6 +69,7 @@ struct RoomListView: View {
                         isRoomManagementSheetPresented = true
                     }
                 )
+                .synaraConnectionChrome()
             case .failed(let message):
                 VStack(spacing: SynaraSpacing.medium) {
                     SynaraErrorState(title: String(localized: "Could Not Load Rooms"), message: message) {
@@ -88,6 +90,7 @@ struct RoomListView: View {
                             .accessibilityIdentifier("RoomListSessionRecoveryError")
                     }
                 }
+                .synaraConnectionChrome()
             case .loaded(let rooms):
                 let filteredRooms = filteredRooms(from: rooms)
                 let sections = RoomListFavorites.sections(from: filteredRooms)
@@ -120,6 +123,8 @@ struct RoomListView: View {
                         selectedSpaceTitle: selectedSpaceTitle,
                         filterBadges: filterBadges(from: rooms)
                     )
+                    // Under the server name: the connection banner and beam.
+                    ConnectionStatusChrome()
 
                     List {
                         if searchQuery.isEmpty == false && filteredRooms.isEmpty {

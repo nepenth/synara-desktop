@@ -578,6 +578,8 @@ struct RoomTimelineView: View {
     @State private var resolvedRoomTitle: String?
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
+    /// Mirrors `draft` to this account's other Synara devices.
+    @StateObject private var draftSync = ComposerDraftSync(service: NoDraftSync())
     /// People picked from the composer's @ suggestions for this draft.
     @State private var composerMentions: [ComposerMention] = []
     @State private var sentDraft: ComposerSentDraft?
@@ -717,6 +719,7 @@ struct RoomTimelineView: View {
                     dismiss()
                 }
             )
+            ConnectionStatusChrome()
             timelineContent
                 .synaraTransientNotice($laterNotice, systemImage: "bookmark.fill")
             if let eventRouteNotice {
@@ -736,6 +739,21 @@ struct RoomTimelineView: View {
                 RoomTypingIndicator(text: typingText)
             }
             RoomIdentityWarningBanner(roomID: roomID, crypto: environment.crypto)
+            if let prompt = draftSync.prompt {
+                SyncedDraftBanner(
+                    truncated: prompt.truncated,
+                    onUse: {
+                        if let remote = draftSync.takeRemote() {
+                            // Its mentions arrive as Markdown links; none of ours apply.
+                            composerMentions = []
+                            draft = remote.markdown
+                        }
+                    },
+                    onKeep: {
+                        draftSync.keepLocal(syncedDraftMarkdown(draft), replyToEventID: replyTarget?.eventID)
+                    }
+                )
+            }
             ComposerView(
                 roomID: roomID,
                 text: $draft,
@@ -1004,6 +1022,7 @@ struct RoomTimelineView: View {
         }
         .onDisappear {
             isReadSceneActive = false
+            draftSync.flushIfNeeded()
             dismissKeyboard()
             // A pushed thread or another tab covers the room without leaving
             // it: keep the stream, window and position for when it comes
@@ -1034,6 +1053,7 @@ struct RoomTimelineView: View {
                 }
             } else {
                 cancelMarkFullyRead()
+                draftSync.flushIfNeeded()
             }
         }
         .onReceive(environment.outgoingSends.queue.$items) { _ in
@@ -1069,6 +1089,17 @@ struct RoomTimelineView: View {
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
+            // An edit borrows the composer; its text is not a draft.
+            if editSession == nil {
+                draftSync.noteChange(syncedDraftMarkdown(value), replyToEventID: replyTarget?.eventID)
+            }
+        }
+        .task(id: roomID) {
+            for await changedRoomID in environment.draftSync.updates() {
+                if changedRoomID == nil || changedRoomID == roomID {
+                    resolveSyncedDraft(fetchFresh: false)
+                }
+            }
         }
         .onChange(of: timelineBottomAnchorGeneration) { _ in
             cancelTimestampReveal()
@@ -2024,6 +2055,33 @@ struct RoomTimelineView: View {
         "\(roomID)|\(timelineTraceID)"
     }
 
+    /// Start syncing this room's draft and take a newer one written elsewhere.
+    private func startDraftSync() {
+        let enabled = environment.settings.bool(for: DraftSyncSettings.syncDraftsKey)
+        let service = environment.draftSync
+        Task { await service.setEnabled(enabled) }
+        draftSync.attach(enabled ? service : NoDraftSync())
+        draftSync.reset(roomID: roomID, openingText: draft)
+        resolveSyncedDraft(fetchFresh: true)
+    }
+
+    private func resolveSyncedDraft(fetchFresh: Bool) {
+        guard editSession == nil else { return }
+        let current = draft
+        let resolvingRoomID = roomID
+        Task { @MainActor in
+            let remote = await draftSync.resolve(
+                currentText: syncedDraftMarkdown(current), isFocused: false, fetchFresh: fetchFresh
+            )
+            // Typed or switched rooms meanwhile: the comparison is stale.
+            guard let remote, roomID == resolvingRoomID, draft == current, editSession == nil else {
+                return
+            }
+            composerMentions = []
+            draft = remote.markdown
+        }
+    }
+
     private func resetTimelineState() {
         cryptoUpdatesTask?.cancel()
         cryptoUpdatesTask = nil
@@ -2037,6 +2095,7 @@ struct RoomTimelineView: View {
         loadedTimelineTaskID = nil
         state = .idle
         draft = environment.drafts.draft(roomID: roomID)
+        startDraftSync()
         replyTarget = nil
         editSession = nil
         sendError = nil
@@ -2821,6 +2880,12 @@ struct RoomTimelineView: View {
     /// `sentText` is the composer text when the send began; only that is
     /// cleared once the send is accepted.
     @MainActor
+
+    /// The draft as other devices get it: picked mentions become the
+    /// matrix.to links the send would make, so they stay mentions there.
+    private func syncedDraftMarkdown(_ text: String) -> String {
+        ComposerMentions.resolve(text, mentions: composerMentions, currentUserID: currentUserID).markdown
+    }
     private func performSend(
         body rawBody: String,
         replyToEventID: String?,
@@ -4808,6 +4873,7 @@ struct ThreadTimelineView: View {
                 subtitle: roomTitle ?? rootTitle ?? String(localized: "Room message"),
                 onBack: { dismiss() }
             )
+            ConnectionStatusChrome()
 
             threadContent
                 .synaraTransientNotice($laterNotice, systemImage: "bookmark.fill")

@@ -34,6 +34,7 @@ full-app = [
   "dep:mime",
   "dep:hmac",
   "dep:regex",
+  "dep:chacha20poly1305",
 ]
 # Apple adds its binding surface explicitly; desktop opts out of the default
 # so it never compiles UniFFI runtime/scaffolding or exports Apple symbols.
@@ -120,6 +121,9 @@ sha2 = { workspace = true }
 # Timeline media handles: HMAC of (session generation, media source) under a
 # per-process secret, so revisits reuse URLs and handles stay unguessable.
 hmac = { workspace = true, optional = true }
+# Cross-device drafts: XChaCha20-Poly1305 seals room-account-data drafts. The
+# same version vodozemac already links, so the graph gains no new crate.
+chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["alloc"], optional = true }
 # Host-only register token buffers (moved with live register orchestration).
 zeroize = { workspace = true }
 # Link previews read title, description and image from the page's <head>.

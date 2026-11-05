@@ -272,10 +272,10 @@
         },
         "direct_matrix_networking": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 5,
+          "fileCount": 6,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
-          "networkingOccurrences": 21
+          "networkingOccurrences": 22
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
@@ -376,7 +376,7 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 5,
+      "fileCount": 6,
       "importFileCount": 0,
       "methodCandidateFrequencies": [],
       "modelCoupling": {
@@ -532,19 +532,19 @@
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 189,
+          "line": 200,
           "path": "synara/e2e/runtime-maturity.spec.ts"
         },
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 213,
+          "line": 224,
           "path": "synara/e2e/runtime-maturity.spec.ts"
         },
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 238,
+          "line": 249,
           "path": "synara/e2e/runtime-maturity.spec.ts"
         },
         {
@@ -562,12 +562,18 @@
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
+          "line": 99,
+          "path": "synara/src/app/pages/auth/login/__tests__/proxyHostLogin.test.ts"
+        },
+        {
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
           "line": 37,
           "path": "synara/src/app/utils/__tests__/remoteContent.test.ts"
         }
       ],
-      "networkingFileCount": 5,
-      "networkingFindingCount": 21,
+      "networkingFileCount": 6,
+      "networkingFindingCount": 22,
       "role": "test",
       "scope": "role",
       "symbols": []
@@ -818,7 +824,7 @@
         {
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 44,
+          "line": 43,
           "path": "synara/e2e/login-harness/main.tsx"
         }
       ],
@@ -984,7 +990,7 @@
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 44
+          "line": 43
         }
       ],
       "path": "synara/e2e/login-harness/main.tsx",
@@ -1040,19 +1046,19 @@
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 189
+          "line": 200
         },
         {
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 213
+          "line": 224
         },
         {
           "description": "String literal containing a /_matrix/ client-server or media path",
           "indicator": "/_matrix/client/versions",
           "kind": "matrix_cs_path_literal",
-          "line": 238
+          "line": 249
         }
       ],
       "path": "synara/e2e/runtime-maturity.spec.ts",
@@ -1103,6 +1109,26 @@
       ],
       "path": "synara/src/app/cs-api.ts",
       "role": "production"
+    },
+    {
+      "bucket": "page",
+      "categories": ["direct_matrix_networking"],
+      "constructorCandidates": [],
+      "desktopRuntime": true,
+      "imports": [],
+      "listenerCandidates": [],
+      "methodCandidates": [],
+      "modelCoupling": [],
+      "networking": [
+        {
+          "description": "String literal containing a /_matrix/ client-server or media path",
+          "indicator": "/_matrix/client/versions",
+          "kind": "matrix_cs_path_literal",
+          "line": 99
+        }
+      ],
+      "path": "synara/src/app/pages/auth/login/__tests__/proxyHostLogin.test.ts",
+      "role": "test"
     },
     {
       "bucket": "utility",
@@ -1164,8 +1190,8 @@
       "productionNetworkingFiles": 1,
       "productionNetworkingFindings": 1,
       "testImportFiles": 0,
-      "testNetworkingFiles": 5,
-      "testNetworkingFindings": 21,
+      "testNetworkingFiles": 6,
+      "testNetworkingFindings": 22,
       "toolingImportFiles": 0,
       "toolingNetworkingFiles": 3,
       "toolingNetworkingFindings": 6,

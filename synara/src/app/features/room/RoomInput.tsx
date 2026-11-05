@@ -5,6 +5,7 @@ import React, {
   forwardRef,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -61,6 +62,7 @@ import {
   customHtmlEqualsPlainText,
   trimCustomHtml,
   isEmptyEditor,
+  exitFormatting,
   getBeginCommand,
   trimCommand,
   getMentions,
@@ -125,7 +127,13 @@ import { gifPickerEnabled, gifSearchAvailable, gifSendsAsLink } from '../../util
 import type { GifResult } from '../../utils/gifProvider';
 import { GifPicker } from './gif/GifPicker';
 import { isTypedGifCommand } from './typedGifCommand';
-import { clearRoomDraft, loadRoomDraft, saveRoomDraft } from '../../utils/drafts';
+import {
+  clearRoomDraft,
+  loadRoomDraft,
+  loadRoomDraftUpdatedAt,
+  saveRoomDraft,
+} from '../../utils/drafts';
+import { draftMarkdownOf, useSyncedRoomDraft } from './useSyncedRoomDraft';
 import {
   DEFAULT_POLL_SELECTIONS,
   MAX_POLL_SELECTIONS,
@@ -148,6 +156,7 @@ import { sendPlainTextWithNativeOwner } from './nativeSendText';
 import {
   clearNativeComposerReplyDraft,
   nativeComposerSendRelation,
+  setNativeComposerReplyDraft,
   useNativeComposerReplyDraft,
 } from './nativeComposerDraft';
 import {
@@ -170,6 +179,7 @@ import { getMyUserId, getSafeMyUserId } from '../../state/nativeIdentity';
 import {
   ComposerSendQueue,
   cloneComposerContent,
+  composerContentIsEmpty,
   mergeRestoredComposerContent,
   restoreComposerContent,
   stashComposerSendError,
@@ -312,6 +322,29 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       [clearReplyDraft]
     );
     const replyUserID = replyDraft?.senderId;
+
+    const [syncDrafts] = useSetting(settingsAtom, 'syncDrafts');
+    // What the composer opens with: the same choice the restore effect makes.
+    const openingDraft = msgDraft.length > 0 ? msgDraft : undefined;
+    const storedMarkdown = useMemo(() => {
+      const nodes = openingDraft ?? loadRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
+      return nodes ? draftMarkdownOf(nodes, isMarkdown) : '';
+    }, [draftKey, isMarkdown, openingDraft]);
+    const syncedDraft = useSyncedRoomDraft({
+      editor,
+      roomId,
+      threadRootOverride,
+      isMarkdown,
+      enabled: syncDrafts,
+      replyToEventId: replyDraft?.eventId,
+      storedUpdatedAt: loadRoomDraftUpdatedAt(window.localStorage, getSafeMyUserId(), draftKey),
+      storedMarkdown,
+      applyReplyTo: (eventId) => {
+        // A thread pane's replies stay in its thread; only the room composer
+        // takes a peer's reply target.
+        if (!threadRootOverride) void setNativeComposerReplyDraft({ roomId, eventId });
+      },
+    });
 
     const powerLevelTags = usePowerLevelTags(room, powerLevels);
     const creatorsTag = useRoomCreatorsTag();
@@ -588,7 +621,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     useEffect(() => {
       const storedDraft = loadRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
       const draft = msgDraft.length > 0 ? msgDraft : storedDraft;
-      if (draft && draft.length > 0) {
+      // A blank draft (an empty list older builds kept) is dropped rather than
+      // shown as a stray bullet beside the placeholder.
+      if (draft && !composerContentIsEmpty(draft)) {
         Transforms.insertFragment(editor, draft);
       }
     }, [roomId, draftKey, editor, msgDraft]);
@@ -615,16 +650,18 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         setDraftHasText(!empty);
         if (empty) {
           clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
+          syncedDraft.noteChange(value, true);
           setComposerPreviewUrl(undefined);
           setComposerPreview(null);
           return;
         }
         saveRoomDraft(window.localStorage, getSafeMyUserId(), draftKey, value);
+        syncedDraft.noteChange(value, false);
         const nextUrl = trailingComposerPreviewUrl(toPlainText(editor.children, isMarkdown));
         setComposerPreviewUrl(nextUrl);
         if (!nextUrl) setComposerPreview(null);
       },
-      [draftKey, editor, isMarkdown]
+      [draftKey, editor, isMarkdown, syncedDraft]
     );
 
     useEffect(() => {
@@ -1142,6 +1179,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           submit();
           return;
         }
+        // Escape stays in the composer (an open thread pane must not close)
+        // and does one thing per press: close suggestions, cancel the reply,
+        // then leave formatting.
         if (isKeyHotkey('escape', evt)) {
           evt.preventDefault();
           if (autocompleteQuery) {
@@ -1152,10 +1192,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             void clearReplyDraft(replyDraft.draftRevision).catch(() => {
               setSendError(t('composer.reply_clear_failed', 'Could not cancel reply.'));
             });
+            return;
           }
+          exitFormatting(editor);
         }
       },
-      [submit, clearReplyDraft, enterForNewline, autocompleteQuery, isComposing, replyDraft, t]
+      [
+        submit,
+        clearReplyDraft,
+        enterForNewline,
+        autocompleteQuery,
+        isComposing,
+        replyDraft,
+        t,
+        editor,
+      ]
     );
 
     const handleKeyUp: KeyboardEventHandler = useCallback(
@@ -1303,6 +1354,43 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             </IconButton>
           </Box>
         )}
+        {syncedDraft.prompt && (
+          <Box
+            gap="200"
+            alignItems="Center"
+            role="status"
+            style={{ padding: `0 ${config.space.S300} ${config.space.S200}` }}
+          >
+            <Box grow="Yes">
+              <Text size="T200" priority="300">
+                {syncedDraft.prompt.truncated
+                  ? t(
+                      'composer.synced_draft.prompt_truncated',
+                      'Draft updated on another device (too long to sync in full).'
+                    )
+                  : t('composer.synced_draft.prompt', 'Draft updated on another device.')}
+              </Text>
+            </Box>
+            <Button
+              size="300"
+              radii="300"
+              variant="Primary"
+              fill="Soft"
+              onClick={syncedDraft.takeRemote}
+            >
+              <Text size="B300">{t('composer.synced_draft.use', 'Use it')}</Text>
+            </Button>
+            <Button
+              size="300"
+              radii="300"
+              variant="Secondary"
+              fill="Soft"
+              onClick={syncedDraft.keepLocal}
+            >
+              <Text size="B300">{t('composer.synced_draft.keep', 'Keep mine')}</Text>
+            </Button>
+          </Box>
+        )}
         {waitingSends > 0 && (
           // Queued messages reach the timeline only once the one before is
           // accepted, so say where they are meanwhile.
@@ -1359,6 +1447,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         <RoomComposer
           editableName="RoomInput"
           editor={editor}
+          markdown={!!isMarkdown}
           placeholder={composerPlaceholder}
           ariaLabel={
             threadRootEventId

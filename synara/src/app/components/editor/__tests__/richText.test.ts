@@ -11,7 +11,6 @@ import {
   MAX_EDITOR_CLIPBOARD_CHARS,
   shouldPreventDefaultForClipboardInsert,
 } from '../input';
-import { indentListItem, outdentListItem, toggleKeyboardShortcut } from '../keyboard';
 import {
   stripEditorMetadataFromCustomHtml,
   toMatrixCustomHTML,
@@ -19,10 +18,13 @@ import {
   trimCustomHtml,
 } from '../output';
 import { BlockType } from '../types';
-import { toggleBlock } from '../utils';
 import { sanitizeCustomHtml } from '../../../utils/sanitize';
 import { MATRIX_HTML_PROFILE } from '../../../utils/matrixHtmlProfile';
-import { toComposerMarkdown } from '../composerMarkdown';
+import {
+  draftMarkdownToEditorInput,
+  toComposerMarkdown,
+  toDraftMarkdown,
+} from '../composerMarkdown';
 
 test('ordered list output preserves start attribute and plain-text numbering', () => {
   const nodes: Descendant[] = [
@@ -196,7 +198,7 @@ test('nested lists round-trip through Matrix HTML and plain-text fallback', () =
             children: [
               {
                 type: BlockType.ListItem,
-                children: [{ text: 'nested' }],
+                children: [{ type: BlockType.Paragraph, children: [{ text: 'nested' }] }],
               },
             ],
           },
@@ -204,280 +206,10 @@ test('nested lists round-trip through Matrix HTML and plain-text fallback', () =
       },
       {
         type: BlockType.ListItem,
-        children: [{ text: 'beta' }],
+        children: [{ type: BlockType.Paragraph, children: [{ text: 'beta' }] }],
       },
     ],
   });
-});
-
-test('list item indent and outdent create stable nested list structure', () => {
-  const editor = withHistory(createEditor());
-  editor.children = [
-    {
-      type: BlockType.OrderedList,
-      children: [
-        {
-          type: BlockType.ListItem,
-          children: [{ text: 'alpha' }],
-        },
-        {
-          type: BlockType.ListItem,
-          children: [{ text: 'beta' }],
-        },
-      ],
-    },
-  ];
-  editor.selection = {
-    anchor: { path: [0, 1, 0], offset: 0 },
-    focus: { path: [0, 1, 0], offset: 0 },
-  };
-
-  assert.equal(indentListItem(editor), true);
-  assert.deepEqual(editor.children, [
-    {
-      type: BlockType.OrderedList,
-      children: [
-        {
-          type: BlockType.ListItem,
-          children: [
-            {
-              type: BlockType.Paragraph,
-              children: [{ text: 'alpha' }],
-            },
-            {
-              type: BlockType.OrderedList,
-              children: [
-                {
-                  type: BlockType.ListItem,
-                  children: [{ text: 'beta' }],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  ]);
-
-  const betaPath = [0, 0, 1, 0];
-  editor.selection = {
-    anchor: { path: [...betaPath, 0], offset: 0 },
-    focus: { path: [...betaPath, 0], offset: 0 },
-  };
-
-  assert.equal(outdentListItem(editor), true);
-  assert.deepEqual(editor.children, [
-    {
-      type: BlockType.OrderedList,
-      children: [
-        {
-          type: BlockType.ListItem,
-          children: [
-            {
-              type: BlockType.Paragraph,
-              children: [{ text: 'alpha' }],
-            },
-          ],
-        },
-        {
-          type: BlockType.ListItem,
-          children: [{ text: 'beta' }],
-        },
-      ],
-    },
-  ]);
-});
-
-test('shift-enter inside a list item creates the next list item', () => {
-  const editor = withHistory(createEditor());
-  editor.children = [
-    {
-      type: BlockType.OrderedList,
-      children: [
-        {
-          type: BlockType.ListItem,
-          children: [{ text: 'alpha' }],
-        },
-      ],
-    },
-  ];
-  editor.selection = {
-    anchor: { path: [0, 0, 0], offset: 5 },
-    focus: { path: [0, 0, 0], offset: 5 },
-  };
-
-  let defaultPrevented = false;
-  const handled = toggleKeyboardShortcut(editor, {
-    key: 'Enter',
-    shiftKey: true,
-    preventDefault: () => {
-      defaultPrevented = true;
-    },
-  } as Parameters<typeof toggleKeyboardShortcut>[1]);
-
-  assert.equal(handled, true);
-  assert.equal(defaultPrevented, true);
-  assert.deepEqual(editor.children, [
-    {
-      type: BlockType.OrderedList,
-      children: [
-        {
-          type: BlockType.ListItem,
-          children: [{ text: 'alpha' }],
-        },
-        {
-          type: BlockType.ListItem,
-          children: [{ text: '' }],
-        },
-      ],
-    },
-  ]);
-});
-
-test('shift-enter on an empty nested list item outdents before exiting the list', () => {
-  const editor = withHistory(createEditor());
-  editor.children = [
-    {
-      type: BlockType.OrderedList,
-      children: [
-        {
-          type: BlockType.ListItem,
-          children: [
-            {
-              type: BlockType.Paragraph,
-              children: [{ text: 'alpha' }],
-            },
-            {
-              type: BlockType.OrderedList,
-              children: [
-                {
-                  type: BlockType.ListItem,
-                  children: [{ text: '' }],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  ];
-  editor.selection = {
-    anchor: { path: [0, 0, 1, 0, 0], offset: 0 },
-    focus: { path: [0, 0, 1, 0, 0], offset: 0 },
-  };
-
-  const handled = toggleKeyboardShortcut(editor, {
-    key: 'Enter',
-    shiftKey: true,
-    preventDefault: () => {},
-  } as Parameters<typeof toggleKeyboardShortcut>[1]);
-
-  assert.equal(handled, true);
-  assert.deepEqual(editor.children, [
-    {
-      type: BlockType.OrderedList,
-      children: [
-        {
-          type: BlockType.ListItem,
-          children: [
-            {
-              type: BlockType.Paragraph,
-              children: [{ text: 'alpha' }],
-            },
-          ],
-        },
-        {
-          type: BlockType.ListItem,
-          children: [{ text: '' }],
-        },
-      ],
-    },
-  ]);
-});
-
-test('shift-enter on an empty top-level list item exits to a paragraph', () => {
-  const editor = withHistory(createEditor());
-  editor.children = [
-    {
-      type: BlockType.OrderedList,
-      children: [
-        {
-          type: BlockType.ListItem,
-          children: [{ text: 'alpha' }],
-        },
-        {
-          type: BlockType.ListItem,
-          children: [{ text: '' }],
-        },
-      ],
-    },
-  ];
-  editor.selection = {
-    anchor: { path: [0, 1, 0], offset: 0 },
-    focus: { path: [0, 1, 0], offset: 0 },
-  };
-
-  const handled = toggleKeyboardShortcut(editor, {
-    key: 'Enter',
-    shiftKey: true,
-    preventDefault: () => {},
-  } as Parameters<typeof toggleKeyboardShortcut>[1]);
-
-  assert.equal(handled, true);
-  assert.deepEqual(editor.children, [
-    {
-      type: BlockType.OrderedList,
-      children: [
-        {
-          type: BlockType.ListItem,
-          children: [{ text: 'alpha' }],
-        },
-      ],
-    },
-    {
-      type: BlockType.Paragraph,
-      children: [{ text: '' }],
-    },
-  ]);
-});
-
-test('shift-enter before toggling a list keeps previous paragraph outside the list', () => {
-  const editor = withHistory(createEditor());
-  editor.children = [
-    {
-      type: BlockType.Paragraph,
-      children: [{ text: 'normal text' }],
-    },
-  ];
-  editor.selection = {
-    anchor: { path: [0, 0], offset: 11 },
-    focus: { path: [0, 0], offset: 11 },
-  };
-
-  const handled = toggleKeyboardShortcut(editor, {
-    key: 'Enter',
-    shiftKey: true,
-    preventDefault: () => {},
-  } as Parameters<typeof toggleKeyboardShortcut>[1]);
-  assert.equal(handled, true);
-
-  toggleBlock(editor, BlockType.OrderedList);
-
-  assert.deepEqual(editor.children, [
-    {
-      type: BlockType.Paragraph,
-      children: [{ text: 'normal text' }],
-    },
-    {
-      type: BlockType.OrderedList,
-      children: [
-        {
-          type: BlockType.ListItem,
-          children: [{ text: '' }],
-        },
-      ],
-    },
-  ]);
 });
 
 test('rich html paste preserves safe block and inline structure', () => {
@@ -499,11 +231,11 @@ test('rich html paste preserves safe block and inline structure', () => {
       children: [
         {
           type: BlockType.ListItem,
-          children: [{ text: 'three' }],
+          children: [{ type: BlockType.Paragraph, children: [{ text: 'three' }] }],
         },
         {
           type: BlockType.ListItem,
-          children: [{ text: 'four' }],
+          children: [{ type: BlockType.Paragraph, children: [{ text: 'four' }] }],
         },
       ],
     },
@@ -526,8 +258,14 @@ test('rich html paste in Markdown mode preserves structure without visible escap
     {
       type: BlockType.UnorderedList,
       children: [
-        { type: BlockType.ListItem, children: [{ text: 'one' }] },
-        { type: BlockType.ListItem, children: [{ text: 'two' }] },
+        {
+          type: BlockType.ListItem,
+          children: [{ type: BlockType.Paragraph, children: [{ text: 'one' }] }],
+        },
+        {
+          type: BlockType.ListItem,
+          children: [{ type: BlockType.Paragraph, children: [{ text: 'two' }] }],
+        },
       ],
     },
   ]);
@@ -793,7 +531,7 @@ test('golden rich content contract covers Matrix HTML, fallback text, and edit i
   assert.doesNotMatch(plain, /classified/);
   assert.equal(
     plain,
-    'Release plan\n| quoted context\n\nconst ready = true;\nreturn ready;\n\nDiscuss with @alice:example.org using [the spec](https://example.org/spec) and keep [spoiler].\n10. ten\n11. eleven\n  - nested'
+    'Release plan\n> quoted context\n\nconst ready = true;\nreturn ready;\n\nDiscuss with @alice:example.org using [the spec](https://example.org/spec) and keep [spoiler].\n10. ten\n11. eleven\n  - nested'
   );
 
   const editedInput = htmlToEditorInput(
@@ -849,7 +587,10 @@ test('golden rich content contract covers Matrix HTML, fallback text, and edit i
       type: BlockType.OrderedList,
       start: 10,
       children: [
-        { type: BlockType.ListItem, children: [{ text: 'ten' }] },
+        {
+          type: BlockType.ListItem,
+          children: [{ type: BlockType.Paragraph, children: [{ text: 'ten' }] }],
+        },
         {
           type: BlockType.ListItem,
           children: [
@@ -859,7 +600,12 @@ test('golden rich content contract covers Matrix HTML, fallback text, and edit i
             },
             {
               type: BlockType.UnorderedList,
-              children: [{ type: BlockType.ListItem, children: [{ text: 'nested' }] }],
+              children: [
+                {
+                  type: BlockType.ListItem,
+                  children: [{ type: BlockType.Paragraph, children: [{ text: 'nested' }] }],
+                },
+              ],
             },
           ],
         },
@@ -900,4 +646,67 @@ test('typed markdown reaches Core verbatim while mentions travel as fragments', 
   assert.equal(fragments.length, 2);
   assert.match(fragments[0], /^<a href="https:\/\/matrix\.to\/#\/@alice:example\.org">Alice<\/a>$/);
   assert.equal(fragments[1], '<u> </u>');
+});
+
+test('synced drafts reach iOS as the Markdown its composer writes', () => {
+  const nodes = [
+    { type: BlockType.Heading, level: 2, children: [{ text: 'Plan' }] },
+    {
+      type: BlockType.Paragraph,
+      children: [
+        { text: 'Ask ' },
+        {
+          type: BlockType.Mention,
+          id: '@alice:example.org',
+          name: 'Alice',
+          highlight: false,
+          children: [{ text: '' }],
+        },
+        { text: ' about ' },
+        { type: BlockType.Link, href: 'https://example.org/a b', children: [{ text: 'the spec' }] },
+        { text: ' ' },
+        { text: 'soon', bold: true, underline: true },
+        { text: ' and ' },
+        { text: 'this', spoiler: true },
+        { text: ' ' },
+        {
+          type: BlockType.Emoticon,
+          key: 'mxc://example.org/party',
+          shortcode: 'party',
+          children: [{ text: '' }],
+        },
+      ],
+    },
+    {
+      type: BlockType.OrderedList,
+      start: 3,
+      children: [
+        {
+          type: BlockType.ListItem,
+          children: [{ type: BlockType.Paragraph, children: [{ text: 'three' }] }],
+        },
+      ],
+    },
+  ] as Descendant[];
+  assert.equal(
+    toDraftMarkdown(nodes, true),
+    '## Plan\nAsk [@Alice](https://matrix.to/#/@alice:example.org) about [the spec](https://example.org/a%20b) <u>**soon**</u> and <span data-mx-spoiler>this</span> :party:\n3. three'
+  );
+});
+
+test('a draft typed with Markdown off keeps its characters literal on iOS', () => {
+  const nodes: Descendant[] = [
+    { type: BlockType.Paragraph, children: [{ text: '1. not a list, *not* bold' }] },
+    { type: BlockType.Paragraph, children: [{ text: '# not a heading' }] },
+  ];
+  assert.equal(toDraftMarkdown(nodes, false), '1\\. not a list, \\*not\\* bold\n\\# not a heading');
+  // With Markdown on, typed Markdown is the draft as written.
+  assert.equal(toDraftMarkdown(nodes, true), '1. not a list, *not* bold\n# not a heading');
+});
+
+test('a Markdown draft from iOS arrives as typed when Markdown is on', async () => {
+  assert.deepEqual(await draftMarkdownToEditorInput('**hi**\n- one', true), [
+    { type: BlockType.Paragraph, children: [{ text: '**hi**' }] },
+    { type: BlockType.Paragraph, children: [{ text: '- one' }] },
+  ]);
 });
