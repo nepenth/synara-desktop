@@ -14,6 +14,8 @@
   - Editing and pasting keep line breaks inside paragraphs and list items, and lists inside quotes. Quotes fall back to `> ` lines in the plain-text body.
 - Timeline (desktop): Jump to Last Read shows a spinner while it opens and ignores repeat clicks, which used to cancel the request in flight. When it fails, the notice says why. If the message was deleted or you can no longer see it, the button goes away. If the server was too slow, it suggests trying again. The vague "not available in this context" error is gone. If the read marker sits among hidden events (joins, bridge state, reactions), Core pages back to the nearest visible message instead of failing. A first load that takes more than 8 seconds says the server may be slow and offers Try again.
 - Timeline (desktop): loading older messages keeps fetching until at least 12 new messages show, up to five pages per request. In rooms full of joins, bridge activity or hidden events, one page could add almost nothing, so you had to keep clicking.
+- Connection status (desktop, iOS): a thin beam under the titlebar (desktop) or navigation bar (iOS) shows the connection coming back. A red pulse runs across it once the connection has been down for a few seconds, or at once if it failed. It fills green when you're connected again and fades out about 1.5 seconds later. A healthy connection and short sync blips show nothing. On desktop it replaces the "Connection Lost! Reconnecting..." and "Connected" text banners; a failed connection still says so in words.
+- Connection banner (iOS): "Connection Lost!" with Retry now sits under the room list, room and thread headers instead of being drawn underneath them, where the header covered it.
 
 ## [2.8.1] - 2026-11-02
 

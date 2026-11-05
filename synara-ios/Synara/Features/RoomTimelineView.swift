@@ -719,6 +719,7 @@ struct RoomTimelineView: View {
                     dismiss()
                 }
             )
+            ConnectionStatusChrome()
             timelineContent
                 .synaraTransientNotice($laterNotice, systemImage: "bookmark.fill")
             if let eventRouteNotice {
@@ -4872,6 +4873,7 @@ struct ThreadTimelineView: View {
                 subtitle: roomTitle ?? rootTitle ?? String(localized: "Room message"),
                 onBack: { dismiss() }
             )
+            ConnectionStatusChrome()
 
             threadContent
                 .synaraTransientNotice($laterNotice, systemImage: "bookmark.fill")

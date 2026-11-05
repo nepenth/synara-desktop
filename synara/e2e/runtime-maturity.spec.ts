@@ -161,9 +161,17 @@ test('an established client requests native recovery on network return and conta
   await page.clock.install();
   await page.goto('/e2e/runtime-maturity-harness/index.html?sync-recovery=running');
   await expect(page.getByText('Native client ready')).toBeVisible();
+  const beam = page.locator('[data-connection-beam]');
+  await expect(beam).toHaveAttribute('data-connection-beam', 'hidden');
   await page.getByRole('button', { name: 'Lose native connection' }).click();
-  await page.clock.runFor(6_000);
-  await expect(page.getByText('Connection Lost! Reconnecting...', { exact: true })).toBeVisible();
+  // A short Offline blip stays dark; a lasting one lights the red beam, and
+  // the reconnect needs no text banner.
+  await page.clock.runFor(1_000);
+  await expect(beam).toHaveAttribute('data-connection-beam', 'hidden');
+  await page.clock.runFor(5_000);
+  await expect(beam).toHaveAttribute('data-connection-beam', 'trying');
+  await expect(page.getByRole('status').filter({ hasText: 'Reconnecting…' })).toHaveCount(1);
+  await expect(page.getByText('Connection Lost! Reconnecting...', { exact: true })).toHaveCount(0);
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
   await page.clock.runFor(1);
   await expect(page.getByTestId('native-recovery-count')).toHaveText('1');
@@ -174,7 +182,10 @@ test('an established client requests native recovery on network return and conta
   await page.clock.runFor(1);
   await expect(page.getByTestId('native-recovery-count')).toHaveText('2');
   await page.getByRole('button', { name: 'Complete native recovery' }).click();
-  await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+  await expect(beam).toHaveAttribute('data-connection-beam', 'connected');
+  await expect(page.getByRole('status').filter({ hasText: 'Connected' })).toHaveCount(1);
+  await page.clock.runFor(2_000);
+  await expect(beam).toHaveAttribute('data-connection-beam', 'hidden');
   await expect(page.getByText('Native client ready')).toBeVisible();
   await expect(page.getByTestId('native-logout-count')).toHaveText('0');
   expect(errors).toEqual([]);

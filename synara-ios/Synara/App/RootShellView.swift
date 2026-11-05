@@ -241,29 +241,27 @@ struct RootShellView: View {
                 SynaraSettingsCanvas(router: router)
             }
         }
-        // The connection band is an inset of the selected tab, not a sibling
-        // above the TabView: the other tabs never reflow, and only actionable
-        // states (lost, restore failed, unsupported server) paint it.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if router.selectedTab == tab {
-                ConnectionStatusBanner(
-                    store: connectionStatus,
-                    onRetry: {
-                        Task {
-                            await environment.matrix.start(session: authenticatedSession)
-                            await MainActor.run {
-                                environment.connectionStatus.update(environment.matrix.syncStatus)
-                            }
+        // Each screen places the connection banner and beam under its own
+        // header (`ConnectionStatusChrome`). A tab-level inset sat outside the
+        // navigation stack, where screens with a custom header drew over it.
+        .environment(
+            \.synaraConnectionActions,
+            ConnectionStatusActions(
+                onRetry: {
+                    Task {
+                        await environment.matrix.start(session: authenticatedSession)
+                        await MainActor.run {
+                            environment.connectionStatus.update(environment.matrix.syncStatus)
                         }
-                    },
-                    onSignOut: {
-                        // Only opens Settings' Log Out confirmation (with the
-                        // last-device warning); nothing is wiped on this tap.
-                        bannerSignOutConfirmation.request(using: environment.sessionCrypto)
                     }
-                )
-            }
-        }
+                },
+                onSignOut: {
+                    // Only opens Settings' Log Out confirmation (with the
+                    // last-device warning); nothing is wiped on this tap.
+                    bannerSignOutConfirmation.request(using: environment.sessionCrypto)
+                }
+            )
+        )
         .synaraTabRootContentReachability(scrollTailHeight: scrollTailHeight(for: tab))
         .tabItem {
             tab.label(badgeCounts: tabBadgeCounts)
