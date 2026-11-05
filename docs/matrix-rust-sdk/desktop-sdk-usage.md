@@ -15,7 +15,7 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
 | production |            0 |                1 |                   1 |
-| test       |            0 |                5 |                  21 |
+| test       |            0 |                6 |                  22 |
 | tooling    |            0 |                3 |                   6 |
 | **total**  |        **0** |                  |                     |
 
@@ -83,7 +83,7 @@ _None._
 
 ## Aggregates: test
 
-Scope: **test only**. Import files: 0. Files with any finding: 5.
+Scope: **test only**. Import files: 0. Files with any finding: 6.
 
 ### Imported modules
 
@@ -104,7 +104,7 @@ _None._
 | Category                   | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | -------------------------- | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
 | `authenticated_media`      |     1 |                 0 |                   0 |                      0 |          0 |
-| `direct_matrix_networking` |     5 |                 0 |                   0 |                      0 |         21 |
+| `direct_matrix_networking` |     6 |                 0 |                   0 |                      0 |         22 |
 
 ### Top method-name candidates (not type-proven)
 
@@ -129,11 +129,12 @@ _None._
 | `synara/e2e/runtime-maturity.spec.ts`                                      |  108 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
 | `synara/e2e/runtime-maturity.spec.ts`                                      |  136 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
 | `synara/e2e/runtime-maturity.spec.ts`                                      |  157 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
-| `synara/e2e/runtime-maturity.spec.ts`                                      |  189 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
-| `synara/e2e/runtime-maturity.spec.ts`                                      |  213 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
-| `synara/e2e/runtime-maturity.spec.ts`                                      |  238 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
+| `synara/e2e/runtime-maturity.spec.ts`                                      |  200 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
+| `synara/e2e/runtime-maturity.spec.ts`                                      |  224 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
+| `synara/e2e/runtime-maturity.spec.ts`                                      |  249 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
 | `synara/src/app/components/uia-stages/__tests__/recaptchaFallback.test.ts` |    9 | `matrix_cs_path_literal`  | `/_matrix/client/v3/auth/m.login.recaptcha/fallback/web?session=abc%2Fdef` |
 | `synara/src/app/components/uia-stages/__tests__/recaptchaFallback.test.ts` |   13 | `matrix_cs_path_literal`  | `/_matrix/client/v3/auth/m.login.recaptcha/fallback/web?session=s1`        |
+| `synara/src/app/pages/auth/login/__tests__/proxyHostLogin.test.ts`         |   99 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
 | `synara/src/app/utils/__tests__/remoteContent.test.ts`                     |   37 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                                                 |
 
 ## Aggregates: tooling
@@ -173,7 +174,7 @@ _None._
 | `scripts/audit-matrix-public.mjs`   |   99 | `matrix_cs_path_literal` | `/_matrix/key/v2/server`         |
 | `scripts/audit-matrix-public.mjs`   |  100 | `matrix_cs_path_literal` | `/_matrix/client/v3/login`       |
 | `scripts/synapse-v12-smoke.mjs`     |   32 | `matrix_cs_path_literal` | `/_matrix/client/v3/`            |
-| `synara/e2e/login-harness/main.tsx` |   44 | `matrix_cs_path_literal` | `/_matrix/client/versions`       |
+| `synara/e2e/login-harness/main.tsx` |   43 | `matrix_cs_path_literal` | `/_matrix/client/versions`       |
 
 ## Files (import and networking inventory)
 
@@ -187,6 +188,7 @@ _None._
 | `synara/e2e/runtime-maturity.spec.ts`                                      | test       | no      | —         | —            | —       |
 | `synara/src/app/components/uia-stages/__tests__/recaptchaFallback.test.ts` | test       | yes     | component | —            | —       |
 | `synara/src/app/cs-api.ts`                                                 | production | yes     | app-other | —            | —       |
+| `synara/src/app/pages/auth/login/__tests__/proxyHostLogin.test.ts`         | test       | yes     | page      | —            | —       |
 | `synara/src/app/utils/__tests__/remoteContent.test.ts`                     | test       | yes     | utility   | —            | —       |
 
 ## Scope notes
