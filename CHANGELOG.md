@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Timeline (desktop): Jump to Last Read shows a spinner while it opens and ignores repeat clicks, which used to cancel the request in flight. When it fails, the notice says why. If the message was deleted or you can no longer see it, the button goes away. If the server was too slow, it suggests trying again. The vague "not available in this context" error is gone. If the read marker sits among hidden events (joins, bridge state, reactions), Core pages back to the nearest visible message instead of failing. A first load that takes more than 8 seconds says the server may be slow and offers Try again.
+- Timeline (desktop): loading older messages keeps fetching until at least 12 new messages show, up to five pages per request. In rooms full of joins, bridge activity or hidden events, one page could add almost nothing, so you had to keep clicking.
 
 ## [2.8.1] - 2026-11-02
 

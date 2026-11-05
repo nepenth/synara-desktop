@@ -248,8 +248,7 @@ export const LAST_READ_MISSING_MESSAGE =
   "Your last-read message isn't available any more. It may have been deleted, or you may no longer have access to it.";
 export const LAST_READ_UNREACHABLE_MESSAGE =
   "Your last-read message couldn't be loaded. The server may be slow; try again.";
-export const LAST_READ_NOT_PLACED_MESSAGE =
-  "Your last-read position couldn't be shown. Try again.";
+export const LAST_READ_NOT_PLACED_MESSAGE = "Your last-read position couldn't be shown. Try again.";
 
 /** Map Core's focus route for a failed last-read open to user copy. */
 export const lastReadFailure = (route: NativeTimelineEventRoute | undefined) => {
@@ -563,7 +562,11 @@ export type NativeTimelineViewState =
 
 export type NativeTimelineViewController = {
   state: NativeTimelineViewState;
-  paginate: (direction: 'backwards' | 'forwards') => Promise<void>;
+  /**
+   * Resolves with the stream revision Core published the page at (its rows
+   * arrive as deltas up to that revision), or `undefined` when superseded.
+   */
+  paginate: (direction: 'backwards' | 'forwards') => Promise<number | undefined>;
   setReadState: (request: {
     action: 'mark_read' | 'mark_unread';
     intent: 'automatic_visibility' | 'explicit_user';
@@ -1214,10 +1217,10 @@ export const useNativeTimelineView = (
         { request: { streamId, direction } }
       );
     } catch (error) {
-      if (superseded()) return;
+      if (superseded()) return undefined;
       throw error;
     }
-    if (superseded()) return;
+    if (superseded()) return undefined;
     if (!result.available || !result.value) {
       throw new Error('Native timeline pagination is unavailable.');
     }
@@ -1230,6 +1233,7 @@ export const useNativeTimelineView = (
       });
       throw new Error('Native timeline pagination lost synchronization.');
     }
+    return result.value.revision;
   }, []);
 
   const setReadState = useCallback(

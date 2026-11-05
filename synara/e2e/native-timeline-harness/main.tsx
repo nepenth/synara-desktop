@@ -14,6 +14,7 @@ import {
   applyNativeTimelineViewDelta,
   type NativeTimelinePosition,
   type NativeTimelineViewDeltaBatch,
+  type NativeTimelineViewRow,
   type NativeTimelineViewSnapshot,
 } from '../../src/app/features/room/nativeTimelineView';
 
@@ -28,6 +29,7 @@ const editable = params.has('editable');
 let failOpen = params.has('failOpen');
 // The first open never answers, like a Core open stuck on a slow server.
 let holdFirstOpen = params.has('holdFirstOpen');
+let olderPage = 0;
 const coreOpenFailure = (diagnosticId: string) => ({
   code: 'Unknown',
   message: 'The native Matrix timeline is unavailable.',
@@ -667,6 +669,48 @@ window.__SYNARA_DESKTOP__ = {
       }
       const current = snapshots.get(request?.streamId ?? '');
       const direction = (args?.request as { direction?: string } | undefined)?.direction;
+      if (current && params.has('visiblePerPage') && direction === 'backwards') {
+        // A page of 30 raw events of which only a few render: the rest are
+        // events the timeline hides. Core publishes the rows before replying.
+        const visible = Number(params.get('visiblePerPage'));
+        olderPage += 1;
+        const page = olderPage;
+        const older = Array.from({ length: 30 }, (_, index) =>
+          index < visible
+            ? {
+                ...makeRow(0),
+                itemId: `$older-${page}-${index}`,
+                eventId: `$older-${page}-${index}`,
+                originServerTs: 1_500_000_000_000 - page * 100_000 + index,
+                body: `Older ${page}.${index}`,
+              }
+            : {
+                kind: 'other' as const,
+                itemId: `$hidden-${page}-${index}`,
+                eventId: `$hidden-${page}-${index}`,
+                eventType: 'org.example.hidden',
+                summary: 'hidden',
+              }
+        ) as NativeTimelineViewRow[];
+        const next = {
+          ...current,
+          revision: current.revision + 1,
+          rows: [...older, ...current.rows],
+        };
+        snapshots.set(request?.streamId ?? '', next);
+        emitBatch({
+          schemaVersion: 1,
+          sessionGeneration: current.sessionGeneration,
+          roomId: current.roomId,
+          streamId: request?.streamId ?? '',
+          revision: next.revision,
+          ops: older
+            .slice()
+            .reverse()
+            .map((row) => ({ op: 'push_front' as const, row })),
+        });
+        return withoutRows(next) as T;
+      }
       if (current && params.has('eventWindow') && direction === 'forwards') {
         // The event-focused window reached the room's newest event; Core
         // publishes the page state as its own batch before replying.

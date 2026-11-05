@@ -210,7 +210,8 @@ for (const operation of ['paginate', 'read', 'follow', 'poll']) {
         const retry = page.getByRole('button', { name: 'Retry', exact: true });
         if (await retry.isVisible()) await retry.click();
         else await page.getByRole('button', { name: 'Load older messages' }).click();
-        await expect.poll(() => commandCount(page, command)).toBe(2);
+        // Harness pages add no rows, so a request may top up with more pages.
+        await expect.poll(() => commandCount(page, command)).toBeGreaterThanOrEqual(2);
         await expect(changed).toBeVisible();
       }
     });
@@ -570,6 +571,27 @@ test('delayed latest result cannot scroll a newer focused event in the same room
   await expect(page.locator('[data-native-timeline-event-id="$30"]')).toBeInViewport();
 });
 
+for (const [visiblePerPage, pages] of [
+  [20, 1],
+  [8, 2],
+  [2, 5],
+] as const) {
+  test(`one older-history request with ${visiblePerPage} visible per page fetches ${pages} page(s)`, async ({
+    page,
+  }) => {
+    await open(page, `sparse-missing&nativeEvents=1&visiblePerPage=${visiblePerPage}`);
+    await page.getByRole('button', { name: 'Load older messages', exact: true }).click();
+    await expect.poll(() => commandCount(page, 'matrix_timeline_paginate')).toBe(pages);
+    // Settled: no further page follows once the request has enough rows or
+    // has used its page budget.
+    await page.waitForTimeout(500);
+    expect(await commandCount(page, 'matrix_timeline_paginate')).toBe(pages);
+    await expect(page.locator(`[data-native-timeline-event-id="$older-${pages}-0"]`)).toHaveCount(
+      1
+    );
+  });
+}
+
 test('older-history pagination shows a loading status until the request finishes', async ({
   page,
 }) => {
@@ -594,7 +616,8 @@ test('older-history pagination failure is an error with retry, not a spinner', a
   await expect(alert).toContainText('Superseded operation rejected');
   await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
-  await expect.poll(() => commandCount(page, 'matrix_timeline_paginate')).toBe(2);
+  // The harness page adds no rows, so the request may top up with more pages.
+  await expect.poll(() => commandCount(page, 'matrix_timeline_paginate')).toBeGreaterThanOrEqual(2);
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
@@ -637,7 +660,7 @@ test('sparse history and missing last-read recovery controls are separately clic
           ).length
       )
     )
-    .toBe(1);
+    .toBeGreaterThanOrEqual(1);
   await lastRead.click();
   await expect
     .poll(() =>

@@ -238,6 +238,13 @@ type NativeTimelineViewport = {
   };
 };
 
+/**
+ * One request for older history pages again while it has added fewer than
+ * this many visible rows, up to {@link BACKFILL_MAX_PAGES} pages in all.
+ */
+export const BACKFILL_MIN_VISIBLE_ROWS = 12;
+export const BACKFILL_MAX_PAGES = 5;
+
 /** How long the initial load runs before the view says it is slow. */
 export const SLOW_TIMELINE_LOAD_MS = 8000;
 
@@ -3496,8 +3503,23 @@ export function NativeTimelinePresenter({
   const hasReadyState = readyState !== undefined;
   const atLiveBottomRef = useRef(atLiveBottom);
   atLiveBottomRef.current = atLiveBottom;
+  // One request for older history keeps paging until it has shown a
+  // screenful of visible messages. A raw page is 30 events; in a room full of
+  // joins, bridge state or hidden events it can add almost nothing visible.
+  const backfillRef = useRef<
+    | {
+        navigation: typeof input;
+        baseline: number;
+        pagesLeft: number;
+        /** The revision the last page's rows were published at. */
+        pageRevision?: number;
+      }
+    | undefined
+  >(undefined);
+  const visibleRowCountRef = useRef(rows.length);
+  visibleRowCountRef.current = rows.length;
   const requestPagination = useCallback(
-    (direction: 'backwards' | 'forwards') => {
+    (direction: 'backwards' | 'forwards', continuation = false) => {
       const current = readyStateRef.current;
       if (!current || paginationInFlightRef.current) return;
       const pageState =
@@ -3520,13 +3542,27 @@ export function NativeTimelinePresenter({
       ) {
         return;
       }
+      if (direction === 'backwards' && !continuation) {
+        backfillRef.current = {
+          navigation: mountedNavigationRef.current,
+          baseline: visibleRowCountRef.current,
+          pagesLeft: BACKFILL_MAX_PAGES - 1,
+        };
+      }
       paginationInFlightRef.current = direction;
       setPaginationInFlight(direction);
       if (direction === 'backwards') pendingBackwardGrowRef.current = true;
       const errorDirection = direction === 'backwards' ? 'backward' : 'forward';
       setPaginationErrors((errors) => clearTimelinePaginationError(errors, errorDirection));
       void paginate(direction)
+        .then((pageRevision) => {
+          const backfill = backfillRef.current;
+          if (direction !== 'backwards' || !backfill) return;
+          if (pageRevision === undefined) backfillRef.current = undefined;
+          else backfill.pageRevision = pageRevision;
+        })
         .catch((error) => {
+          if (direction === 'backwards') backfillRef.current = undefined;
           const message = nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.history);
           setPaginationErrors((errors) =>
             setTimelinePaginationError(errors, errorDirection, new Error(message))
@@ -3543,6 +3579,41 @@ export function NativeTimelinePresenter({
   );
   const requestPaginationRef = useRef(requestPagination);
   requestPaginationRef.current = requestPagination;
+  const backwardPageState = readyState?.snapshot.pagination.backward;
+  const snapshotRevision = readyState?.snapshot.revision;
+  useEffect(() => {
+    const backfill = backfillRef.current;
+    if (!backfill || paginationInFlight) return;
+    // The page's rows arrive as deltas after its reply. Judge the page only
+    // once the view has reached the revision Core published it at.
+    if (
+      backfill.pageRevision !== undefined &&
+      snapshotRevision !== undefined &&
+      snapshotRevision < backfill.pageRevision
+    ) {
+      return;
+    }
+    const added = rows.length - backfill.baseline;
+    if (
+      backfill.navigation !== input ||
+      backwardPageState !== 'available' ||
+      added >= BACKFILL_MIN_VISIBLE_ROWS ||
+      backfill.pagesLeft <= 0
+    ) {
+      backfillRef.current = undefined;
+      return;
+    }
+    backfill.pagesLeft -= 1;
+    backfill.pageRevision = undefined;
+    requestPagination('backwards', true);
+  }, [
+    backwardPageState,
+    input,
+    paginationInFlight,
+    requestPagination,
+    rows.length,
+    snapshotRevision,
+  ]);
   useEffect(() => {
     if (!hasReadyState) {
       scrollHandlersRef.current = undefined;
