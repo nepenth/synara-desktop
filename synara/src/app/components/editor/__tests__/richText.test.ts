@@ -649,7 +649,7 @@ test('typed markdown reaches Core verbatim while mentions travel as fragments', 
 });
 
 test('synced drafts reach iOS as the Markdown its composer writes', () => {
-  const nodes: Descendant[] = [
+  const nodes = [
     { type: BlockType.Heading, level: 2, children: [{ text: 'Plan' }] },
     {
       type: BlockType.Paragraph,
@@ -687,7 +687,7 @@ test('synced drafts reach iOS as the Markdown its composer writes', () => {
         },
       ],
     },
-  ];
+  ] as Descendant[];
   assert.equal(
     toDraftMarkdown(nodes, true),
     '## Plan\nAsk [@Alice](https://matrix.to/#/@alice:example.org) about [the spec](https://example.org/a%20b) <u>**soon**</u> and <span data-mx-spoiler>this</span> :party:\n3. three'
