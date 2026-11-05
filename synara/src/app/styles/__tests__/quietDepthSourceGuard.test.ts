@@ -34,8 +34,12 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   // Selection is `data-selected` on the row; `aria-selected` is invalid on it (D58).
   assert.match(nav, /&\[data-selected=true\]/);
   assert.doesNotMatch(nav, /aria-selected/);
-  // Selected rows rise on quiet depth (tint, accent bar, raised edge) but never move.
-  assert.match(nav, /raisedShadow/);
+  // Rows are flat (Slack): a selected row is the selected tint plus the accent
+  // bar, hover is a surface tint; nothing lifts, borders or moves. Increased
+  // contrast adds a solid edge to the selected row instead of a shadow.
+  assert.doesNotMatch(nav, /raisedShadow/);
+  assert.match(nav, /boxShadow: 'none'/);
+  assert.match(nav, /synara-depth-contrast-strong-edge/);
   assert.doesNotMatch(nav, /translateY/);
   assert.match(editor, /raisedShadow/);
   assert.match(editor, /EditorFloatingOptions/);
@@ -56,7 +60,9 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   assert.match(roomNav, /RoomSurface = style/);
   assert.match(roomNav, /boxShadow: 'none'/);
   assert.doesNotMatch(roomNav, /restingInnerEdge/);
-  assert.match(roomNav, /boxShadow: raisedShadow/);
+  assert.doesNotMatch(roomNav, /raisedShadow/);
+  // Hover is the surface tint only; the badge slot and kebab never reflow.
+  assert.match(roomNav, /backgroundColor: color\.Surface\.ContainerHover/);
 });
 
 test('identity, composer popouts, and critical approvals use their intended depth levels', () => {

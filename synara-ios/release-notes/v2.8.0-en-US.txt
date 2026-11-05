@@ -1,0 +1,3 @@
+Synara 2.8.0 aligns the iPhone and iPad apps with desktop. The Rooms list has one compact header with a title menu for spaces and sort, so more rooms fit on screen; sections collapse and remember it, and red badges appear only for mentions and direct messages. The Notifications tab is now Activity. Swipe a message to reply, and long-press to save it to Later, in the same list desktop uses. Reactions, reply quotes, thread chips, "(edited)" and mention colours match desktop. On iPad, Settings is a sidebar with a detail pane.
+
+Please test: the Rooms title menu (switching spaces, sort, unread counts), collapsing sections, swipe-to-reply, Save to Later from the long-press menu and the Later list, the Activity tab and its Approvals row, and Settings on iPad.

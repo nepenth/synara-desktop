@@ -83,7 +83,7 @@ struct HomeserverSelectionView: View {
                 }
             }
         }
-        .navigationTitle("Choose Server")
+        .navigationTitle("Choose server")
         .accessibilityIdentifier("HomeserverSelectionScreen")
     }
 

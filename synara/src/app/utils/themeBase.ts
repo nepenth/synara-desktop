@@ -252,7 +252,12 @@ const contentRoles = (
     [selectedSurface, TEXT_CONTRAST_AA],
     [secondaryContainer.Container, TEXT_CONTRAST_AA],
   ]);
-  const tertiary = softenToContrast(neutral, background, 4.5);
+  // Tertiary names muted rooms (wave 3), so it holds AA on the room list and
+  // its hover tint too, not only on the chat surface.
+  const tertiary = softenToContrast(neutral, background, 4.5, [
+    [surface.Container, TEXT_CONTRAST_AA],
+    [surface.ContainerHover, TEXT_CONTRAST_AA],
+  ]);
 
   return {
     heading,

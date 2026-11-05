@@ -238,13 +238,15 @@ test('desktop room navigation uses stable channel text instead of decorative roo
   const roomNav = readFileSync(join(srcRoot, 'app/features/room-nav/RoomNavItem.tsx'), 'utf8');
   const roomHeader = readFileSync(join(srcRoot, 'app/features/room/RoomViewHeader.tsx'), 'utf8');
 
-  assert.match(roomNav, /className=\{css\.RoomGlyph\}[\s\S]{0,80}#/);
+  // `#` in the glyph column; the same column carries a lock for non-public rooms.
+  assert.match(roomNav, /className=\{glyphClassName\}[\s\S]{0,80}#/);
+  assert.match(roomNav, /glyph\.locked \?[\s\S]{0,400}Icons\.Lock/);
   assert.doesNotMatch(roomNav, /RoomAvatar/);
   assert.match(roomHeader, /className=\{css\.RoomChannelGlyph\}[\s\S]{0,80}#/);
   assert.doesNotMatch(roomHeader, /RoomAvatar/);
   // Only a DM with a known peer swaps `#` for that person (iOS V3).
   for (const source of [roomNav, roomHeader]) {
-    assert.match(source, /glyph\.kind === 'person' \?[\s\S]{0,40}<PersonGlyph/);
+    assert.match(source, /glyph\.kind === 'person' \?[\s\S]{0,120}<PersonGlyph/);
   }
 });
 

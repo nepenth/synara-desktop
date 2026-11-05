@@ -8,20 +8,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import {
-  Box,
-  Button,
-  config,
-  Icon,
-  Icons,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
-  Spinner,
-  Text,
-} from 'folds';
-import { Dialog } from '../../components/modal-dialog';
-import FocusTrap from '../../components/FocusTrap';
+import { Button, Icon, Icons, Spinner, Text } from 'folds';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { SettingTile } from '../../components/setting-tile';
 import {
   checkDesktopUpdate,
@@ -38,7 +26,6 @@ import {
   updateErrorMessage,
 } from '../../utils/desktopUpdater';
 import { APP_VERSION, openExternalUrl } from '../../utils/appLinks';
-import { stopPropagation } from '../../utils/keyboard';
 
 const CHECK_FOR_UPDATES_EVENT = 'synara://check-for-updates';
 const BACKGROUND_CHECK_INITIAL_DELAY_MS = 10_000;
@@ -80,26 +67,47 @@ const availableTitle = (result: DesktopUpdateCheckResult): string => {
   return `Synara ${result.version} is available`;
 };
 
-const describeResult = (result?: DesktopUpdateCheckResult, checkedAt?: number): string => {
-  if (!result) {
-    return `Current version: v${APP_VERSION}.`;
-  }
-  const checkedText = checkedAt ? ` Last checked ${new Date(checkedAt).toLocaleString()}.` : '';
+/** "Checked just now", "Checked 5 min ago", then the clock time. */
+const checkedLabel = (checkedAt?: number, now = Date.now()): string | undefined => {
+  if (!checkedAt) return undefined;
+  const minutes = Math.round((now - checkedAt) / 60000);
+  if (minutes < 1) return 'Checked just now';
+  if (minutes < 60) return `Checked ${minutes} min ago`;
+  return `Checked ${new Date(checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+};
+
+/** Body of the update prompt: one sentence about what was found. */
+const describeResult = (result?: DesktopUpdateCheckResult): string => {
+  if (!result) return `Version ${APP_VERSION}.`;
   if (result.status === 'available') {
     if (result.platform === 'linux') {
-      return `Version ${result.version} is available. Use apt upgrade, paru -Syu, or pacman -Syu to update.${checkedText}`;
+      return `Version ${result.version} is available. Use apt upgrade, paru -Syu, or pacman -Syu to update.`;
     }
-    return `Version ${result.version} is available.${checkedText}`;
+    return `Version ${result.version} is available.`;
   }
   if (result.status === 'up-to-date') {
-    return `Synara is up to date at v${result.currentVersion}.${checkedText}`;
+    return `Synara is up to date at version ${result.currentVersion}.`;
   }
-  return `${result.message}${checkedText}`;
+  return result.message;
+};
+
+/** Settings tile description: "Version 2.7.6 · Checked 5 min ago". */
+const describeTile = (result?: DesktopUpdateCheckResult, checkedAt?: number): string => {
+  const checked = checkedLabel(checkedAt);
+  const version =
+    result?.status === 'available'
+      ? `Version ${APP_VERSION} · ${result.version} available`
+      : result?.status === 'up-to-date'
+        ? `Version ${result.currentVersion} · Up to date`
+        : result
+          ? result.message
+          : `Version ${APP_VERSION}`;
+  return checked ? `${version} · ${checked}` : version;
 };
 
 const progressLabel = (progress?: DesktopUpdateDownloadProgress): string => {
-  if (!progress) return 'Preparing update...';
-  if (progress.finished) return 'Installing update...';
+  if (!progress) return 'Preparing update…';
+  if (progress.finished) return 'Installing update…';
   if (!progress.contentLength) {
     return `Downloaded ${Math.round(progress.downloadedBytes / 1024 / 1024)} MB.`;
   }
@@ -130,92 +138,38 @@ function DesktopUpdaterPrompt({
   const isAvailable = result?.status === 'available';
   const canInstall = isAvailable && (result.platform === 'macos' || result.platform === 'windows');
   const canOpenRelease = isAvailable && result.platform === 'linux';
+  const actionable = canInstall || canOpenRelease;
 
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            onDeactivate: closePrompt,
-            clickOutsideDeactivates: !state.installing,
-            escapeDeactivates: state.installing ? false : stopPropagation,
-          }}
-        >
-          <Dialog variant="Surface">
-            <Box direction="Column" gap="400" style={{ padding: config.space.S400, maxWidth: 420 }}>
-              <Box direction="Column" gap="100">
-                <Text size="H4">
-                  {state.promptError ? 'Update check failed' : availableTitle(result!)}
-                </Text>
-                <Text size="T300" priority="400">
-                  {state.promptError ?? describeResult(result, state.lastCheckedAt)}
-                </Text>
-                {result?.status === 'available' && result.body && (
-                  <Text size="T300" priority="400">
-                    {result.body}
-                  </Text>
-                )}
-                {state.installing && (
-                  <Text size="T300" priority="400">
-                    {progressLabel(state.downloadProgress)}
-                  </Text>
-                )}
-              </Box>
-              <Box gap="200" justifyContent="End" wrap="Wrap">
-                {canInstall && (
-                  <Button
-                    variant="Primary"
-                    size="300"
-                    radii="300"
-                    disabled={state.installing}
-                    before={
-                      state.installing ? (
-                        <Spinner size="100" variant="Primary" fill="Solid" />
-                      ) : undefined
-                    }
-                    onClick={() => void installAvailableUpdate()}
-                  >
-                    <Text size="B300">Install and Restart</Text>
-                  </Button>
-                )}
-                {canOpenRelease && (
-                  <Button
-                    variant="Primary"
-                    size="300"
-                    radii="300"
-                    onClick={() => void openPromptReleasePage()}
-                  >
-                    <Text size="B300">Open Release Page</Text>
-                  </Button>
-                )}
-                {isAvailable ? (
-                  <Button
-                    variant="Secondary"
-                    fill="Soft"
-                    size="300"
-                    radii="300"
-                    disabled={state.installing}
-                    onClick={dismissPrompt}
-                  >
-                    <Text size="B300">Later</Text>
-                  </Button>
-                ) : (
-                  <Button
-                    variant="Secondary"
-                    fill="Soft"
-                    size="300"
-                    radii="300"
-                    onClick={closePrompt}
-                  >
-                    <Text size="B300">OK</Text>
-                  </Button>
-                )}
-              </Box>
-            </Box>
-          </Dialog>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+    <ConfirmDialog
+      tone="primary"
+      title={state.promptError ? 'Update check failed' : availableTitle(result!)}
+      description={state.promptError ?? describeResult(result)}
+      confirmLabel={
+        canInstall ? 'Install and restart' : canOpenRelease ? 'Open release page' : 'OK'
+      }
+      busyLabel="Installing…"
+      busy={state.installing}
+      cancelLabel="Later"
+      hideCancel={!actionable}
+      onConfirm={() => {
+        if (canInstall) void installAvailableUpdate();
+        else if (canOpenRelease) void openPromptReleasePage();
+        else closePrompt();
+      }}
+      onCancel={isAvailable ? dismissPrompt : closePrompt}
+    >
+      {result?.status === 'available' && result.body && (
+        <Text size="T300" priority="400" style={{ whiteSpace: 'pre-wrap' }}>
+          {result.body}
+        </Text>
+      )}
+      {state.installing && (
+        <Text size="T300" priority="400" role="status">
+          {progressLabel(state.downloadProgress)}
+        </Text>
+      )}
+    </ConfirmDialog>
   );
 }
 
@@ -415,7 +369,7 @@ export function UpdateSettingsTile() {
   return (
     <SettingTile
       title="Updates"
-      description={describeResult(state.lastResult, state.lastCheckedAt)}
+      description={describeTile(state.lastResult, state.lastCheckedAt)}
       after={
         <Button
           onClick={() => void checkForUpdates('manual')}
@@ -433,7 +387,7 @@ export function UpdateSettingsTile() {
             )
           }
         >
-          <Text size="B300">{state.checking ? 'Checking...' : 'Check for Updates'}</Text>
+          <Text size="B300">{state.checking ? 'Checking…' : 'Check for updates'}</Text>
         </Button>
       }
     />

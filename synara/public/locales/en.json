@@ -7,37 +7,38 @@
   "modernization": {
     "settings": {
       "gif_search": {
-        "title": "GIF Search",
+        "title": "GIF search",
         "description": "Show GIF search in the message composer.",
         "unavailable": "GIF search is not configured by this client."
       },
       "desktop_shortcuts": {
-        "title": "Desktop Shortcuts",
-        "description": "Open frequently used screens from anywhere with desktop shortcuts. These keys stop working in other apps while Synara runs; clear a field to turn that shortcut off.",
+        "title": "Keyboard shortcuts",
+        "description": "Open Synara screens from anywhere. These keys stop working in other apps while Synara runs; clear a field to turn that shortcut off.",
         "unavailable": "Desktop shortcuts are only available in the desktop app.",
         "platform": "Desktop only",
         "platform_disabled": "Unavailable",
-        "show_label": "Show main window shortcut",
-        "later_label": "Open Later shortcut",
-        "notifications_label": "Open Notifications shortcut",
+        "show_label": "Show Synara",
+        "later_label": "Open Later",
+        "notifications_label": "Open Notifications",
         "off_placeholder": "Off",
+        "hint": "Example: CommandOrControl+Shift+S",
         "duplicate": "Shortcuts must be unique.",
         "failed": "Failed to save shortcuts.",
         "saving": "Saving…",
         "apply": "Apply shortcuts"
       },
       "accent_color": {
-        "title": "Accent Color",
-        "description": "Buttons, links, and selected items. The window background is Base Color above. Theme default until you pick a custom color.",
+        "title": "Accent color",
+        "description": "Buttons, links and selected items. Theme default until you pick a color.",
         "aria_label": "Custom accent color",
         "reset": "Reset"
       },
       "inline_gif_links": {
-        "title": "Play GIF Links Inline",
+        "title": "Play GIF links inline",
         "description": "Show Klipy and GIPHY links as GIFs. Your device loads them from the provider, which can see your IP address."
       },
       "x_embeds": {
-        "title": "Show X Posts",
+        "title": "Show X posts",
         "description": "Show the post and play its video for x.com links. Your device contacts X, which can see your IP address."
       },
       "link_previews": {
@@ -47,6 +48,15 @@
       "sync_drafts": {
         "title": "Sync drafts across devices",
         "description": "Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them."
+      },
+      "base_color": {
+        "title": "Base color",
+        "description": "Tints the rail, room list and chat. Lightness is mapped to the stacked greys, not used as a fill.",
+        "aria_label": "Theme base color",
+        "reset": "Reset"
+      },
+      "secret_store": {
+        "status_title": "Native session store"
       }
     },
     "gif": {
@@ -151,7 +161,7 @@
       "later": "Open Later",
       "later_description": "Saved messages and reminders",
       "notifications": "Open Notifications",
-      "notifications_description": "Mentions and notification inbox",
+      "notifications_description": "Mentions and notifications in Activity",
       "invites": "Open Invites",
       "invites_description": "Room and space invites",
       "message_search": "Message Search",
@@ -176,6 +186,32 @@
       "mode_mute": "Mute",
       "mode_mute_description": "Suppress push and desktop notifications for this room."
     },
+    "nav": {
+      "rooms": "Rooms",
+      "favorites": "Favorites",
+      "direct_messages": "Direct messages",
+      "search": "Search",
+      "sort_section": "Sort {{section}}. Current: {{current}}",
+      "sort_recent": "Recent activity",
+      "sort_name": "Name",
+      "sort_space_order": "Space order",
+      "mark_as_read": "Mark as read",
+      "add_room": "Add room",
+      "home_options": "Home options",
+      "create_room": "Create room",
+      "join_room": "Join room",
+      "explore_rooms": "Explore rooms",
+      "new_message": "New message",
+      "create_space": "Create space",
+      "no_rooms_title": "No rooms",
+      "no_rooms_description": "You do not have any rooms yet.",
+      "loading_rooms": "Loading rooms…",
+      "loading_space": "Loading space…",
+      "lobby": "Lobby",
+      "no_space_rooms_title": "No rooms yet",
+      "no_space_rooms_description": "You have not joined any rooms in this space.",
+      "open_lobby": "Open lobby"
+    },
     "hermes": {
       "copy_markdown": "Copy as Markdown",
       "copy_json": "Copy JSON",
@@ -194,6 +230,24 @@
       "action_failed": "Action failed",
       "action_copied": "Copied",
       "action_done": "Done"
+    },
+    "timeline": {
+      "action_reply": "Reply",
+      "action_reply_thread": "Reply in thread",
+      "action_edit": "Edit",
+      "action_forward": "Forward",
+      "action_later": "Save for later",
+      "edited": "(edited)",
+      "new_messages": "New messages",
+      "new_message_count_one": "1 new message",
+      "new_message_count_other": "{{count}} new messages",
+      "message_removed": "Message removed",
+      "encrypted_unavailable": "This encrypted message is not available on this device.",
+      "empty_view": "No messages in this view yet.",
+      "intro_room": "This is the start of #{{name}}",
+      "intro_direct": "This is the start of your conversation with {{name}}",
+      "intro_generic": "This is the beginning of the conversation",
+      "intro_caption": "Messages you send here are the first in its history."
     }
   }
 }

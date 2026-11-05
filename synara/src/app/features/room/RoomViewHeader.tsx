@@ -508,7 +508,7 @@ export function RoomViewHeader({
               </Text>
             ))}
           <Box direction="Column">
-            <Text as="h1" size={topic ? 'H5' : 'H3'} className={css.RoomTitle} truncate>
+            <Text as="h1" size="H5" className={css.RoomTitle} truncate>
               {name}
             </Text>
             {topic && (

@@ -278,7 +278,7 @@ final class TimelineMessageCopyTests: XCTestCase {
         )
         XCTAssertTrue(source.contains("Label(\"React\", systemImage: \"face.smiling\")"), "iOS 16 keeps a React submenu")
         XCTAssertFalse(source.contains(".react(\"👍\")"), "React no longer always sends 👍")
-        XCTAssertTrue(source.contains("Button(\"Redact\", systemImage: \"trash\", role: .destructive, action: onRedact)"))
+        XCTAssertTrue(source.contains("Button(\"Delete\", systemImage: \"trash\", role: .destructive, action: onRedact)"))
     }
 
     func testTimelineAndThreadMenusUseDismissibleExplicitSelectionPresentation() throws {

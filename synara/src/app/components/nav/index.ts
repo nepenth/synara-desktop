@@ -4,3 +4,6 @@ export * from './NavEmptyLayout';
 export * from './NavItem';
 export * from './NavItemContent';
 export * from './NavItemOptions';
+export * from './NavSectionHeader';
+export * from './NavSearchField';
+export * from './NavPaneTitle';

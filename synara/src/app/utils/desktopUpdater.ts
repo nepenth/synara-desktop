@@ -348,7 +348,17 @@ const defaultInstallInPlace: NonNullable<InstallUpdateDeps['installInPlace']> = 
   }
 };
 
+// The plugin's relaunch starts the new instance while this one still runs, and
+// the Dock gives that second instance a tile of its own, which outlives the
+// pinned one. `desktop_updater_relaunch` exits first and reopens the bundle
+// through LaunchServices once this process is gone (desktop_updater_macos.rs).
 const defaultRelaunch = async (): Promise<void> => {
+  try {
+    const result = await invokeDesktopWithAvailability('desktop_updater_relaunch');
+    if (result.available) return;
+  } catch {
+    // Fall through to the plugin's relaunch.
+  }
   const processPlugin = await import('@tauri-apps/plugin-process');
   await processPlugin.relaunch();
 };

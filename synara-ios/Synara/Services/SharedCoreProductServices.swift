@@ -282,9 +282,9 @@ struct RejectedAuthenticationRetirer {
 }
 
 enum ExplicitRoomReadReceipt {
-    static let failureCopy = String(localized: "Couldn't mark this channel as read.")
+    static let failureCopy = String(localized: "Couldn't mark this room as read.")
 
-    /// Fixed copy for the channel menu when explicit mark-read did not publish
+    /// Fixed copy for the room menu when explicit mark-read did not publish
     /// a fully-read marker. Nil means the mark-read landed.
     static func failureMessage(acknowledgedEventID: String?) -> String? {
         acknowledgedEventID == nil ? failureCopy : nil
@@ -1274,7 +1274,8 @@ final class SharedCoreRoomListService: RoomListServicing {
                         encryptionStatus: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus),
                         isSpace: $0.isSpace,
                         isLowPriority: $0.isLowPriority,
-                        isAgentRoom: $0.isAgentRoom
+                        isAgentRoom: $0.isAgentRoom,
+                        notificationMode: $0.notificationMode
                     )
                 },
                 invites: invites.map {
@@ -2215,6 +2216,21 @@ final class SharedCoreLaterService: LaterServicing {
             return .failure(.networkFailure)
         }
     }
+
+    func saveItem(roomID: String, eventID: String) async -> Result<Void, LaterInboxError> {
+        guard case .signedIn = host.sessionStore.currentState else {
+            return .failure(.noSession)
+        }
+        do {
+            _ = try await SharedCoreLater.laterUpsert(
+                core: host.core,
+                item: SharedCoreLater.savedItem(roomID: roomID, eventID: eventID)
+            )
+            return .success(())
+        } catch {
+            return .failure(.saveFailed)
+        }
+    }
 }
 
 final class SharedCoreMessageSendService: MessageSending {
@@ -2238,7 +2254,7 @@ final class SharedCoreMessageSendService: MessageSending {
                     body: body,
                     msgType: nil,
                     formattedBody: request.formattedBody,
-                    mentionUserIds: nil,
+                    mentionUserIds: request.mentionUserIDs,
                     mentionRoom: nil,
                     txnId: nil
                 )
@@ -2249,7 +2265,7 @@ final class SharedCoreMessageSendService: MessageSending {
                     body: body,
                     msgType: nil,
                     formattedBody: request.formattedBody,
-                    mentionUserIds: nil,
+                    mentionUserIds: request.mentionUserIDs,
                     mentionRoom: nil,
                     replyTo: request.replyToEventID,
                     threadRoot: request.threadRootEventID,
@@ -2284,7 +2300,7 @@ final class SharedCoreMessageSendService: MessageSending {
                 body: body,
                 msgType: nil,
                 formattedBody: request.formattedBody,
-                mentionUserIds: nil,
+                mentionUserIds: request.mentionUserIDs,
                 mentionRoom: nil,
                 replyTo: request.replyToEventID,
                 threadRoot: request.threadRootEventID,

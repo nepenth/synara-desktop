@@ -40,13 +40,17 @@ const handleDesktopExternalLinkClick: React.MouseEventHandler<HTMLAnchorElement>
 export function NativePlainMessageBody({
   body,
   style,
+  after,
 }: {
   body: string;
   style?: React.CSSProperties;
+  /** Inline trailer after the last word (the "(edited)" marker). */
+  after?: React.ReactNode;
 }) {
   return (
     <Text size="T300" style={style}>
       <NativeLinkifiedText text={body} />
+      {after}
     </Text>
   );
 }

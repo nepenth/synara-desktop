@@ -28,7 +28,7 @@ export const UserHeroCover = style({
 
 export const UserHeroAvatarContainer = style({
   position: 'relative',
-  height: toRem(29),
+  height: toRem(32),
 });
 export const UserAvatarContainer = style({
   position: 'absolute',

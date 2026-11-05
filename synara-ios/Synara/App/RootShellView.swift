@@ -77,38 +77,20 @@ struct RootShellView: View {
     }
 
     private func signedInShell(session authenticatedSession: AuthenticatedSession) -> some View {
-        VStack(spacing: 0) {
-            ConnectionStatusBanner(
-                store: connectionStatus,
-                onRetry: {
-                    Task {
-                        await environment.matrix.start(session: authenticatedSession)
-                        await MainActor.run {
-                            environment.connectionStatus.update(environment.matrix.syncStatus)
-                        }
-                    }
-                },
-                onSignOut: {
-                    // Only opens Settings' Log Out confirmation (with the
-                    // last-device warning); nothing is wiped on this tap.
-                    bannerSignOutConfirmation.request(using: environment.sessionCrypto)
-                }
-            )
-            TabView(selection: $router.selectedTab) {
-                tab(.rooms)
-                tab(.later)
-                tab(.notifications)
-                tab(.settings)
-            }
-            #if canImport(UIKit)
-                .overlay(alignment: .topLeading) {
-                    SynaraTabBarGeometryReader(scrollTailHeight: $tabBarScrollTailHeight)
-                        .frame(width: 0, height: 0)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            #endif
+        TabView(selection: $router.selectedTab) {
+            tab(.rooms, session: authenticatedSession)
+            tab(.later, session: authenticatedSession)
+            tab(.activity, session: authenticatedSession)
+            tab(.settings, session: authenticatedSession)
         }
+        #if canImport(UIKit)
+            .overlay(alignment: .topLeading) {
+                SynaraTabBarGeometryReader(scrollTailHeight: $tabBarScrollTailHeight)
+                    .frame(width: 0, height: 0)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        #endif
         .onChange(of: connectionStatus.status) { status in
             // The only flush trigger outside a send: messages Core could not
             // take while the session was not ready go out now.
@@ -249,19 +231,37 @@ struct RootShellView: View {
         }
     }
 
-    private func tab(_ tab: AppTab) -> some View {
+    private func tab(_ tab: AppTab, session authenticatedSession: AuthenticatedSession) -> some View {
         Group {
             if tab.usesConversationCanvas {
                 SynaraConversationCanvas(tab: tab, router: router) {
                     tab.content
                 }
             } else {
-                NavigationStack(path: router.binding(for: tab)) {
-                    tab.content
-                        .navigationDestination(for: AppRoute.self) { route in
-                            RoutePlaceholderView(route: route)
+                SynaraSettingsCanvas(router: router)
+            }
+        }
+        // The connection band is an inset of the selected tab, not a sibling
+        // above the TabView: the other tabs never reflow, and only actionable
+        // states (lost, restore failed, unsupported server) paint it.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if router.selectedTab == tab {
+                ConnectionStatusBanner(
+                    store: connectionStatus,
+                    onRetry: {
+                        Task {
+                            await environment.matrix.start(session: authenticatedSession)
+                            await MainActor.run {
+                                environment.connectionStatus.update(environment.matrix.syncStatus)
+                            }
                         }
-                }
+                    },
+                    onSignOut: {
+                        // Only opens Settings' Log Out confirmation (with the
+                        // last-device warning); nothing is wiped on this tap.
+                        bannerSignOutConfirmation.request(using: environment.sessionCrypto)
+                    }
+                )
             }
         }
         .synaraTabRootContentReachability(scrollTailHeight: scrollTailHeight(for: tab))

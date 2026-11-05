@@ -3,6 +3,11 @@ import SwiftUI
 /// Signed-in connection/sync chrome. Hidden in steady Connected; Lost waits
 /// for the store hold so SDK blips do not paint a banner.
 ///
+/// Only actionable states paint the band: Connection Lost (with Retry), a
+/// session that could not be restored (Log Out), or a server without sliding
+/// sync. Routine states (cold-launch Connecting…, the Connected recovery
+/// flash) stay out of the layout; the Rooms empty state still names them.
+///
 /// `onSignOut` only asks for sign-out: the owner shows the same confirmation
 /// as Settings → Log Out before anything is wiped.
 struct ConnectionStatusBanner: View {
@@ -11,8 +16,21 @@ struct ConnectionStatusBanner: View {
     var onSignOut: (() -> Void)?
 
     var body: some View {
-        if store.presentsBanner {
+        if store.presentsBanner, Self.isActionable(store.status, slidingSyncUnsupported: store.slidingSyncUnsupported) {
             banner
+        }
+    }
+
+    /// Whether this status is worth a band inside the current tab.
+    static func isActionable(_ status: MatrixSyncStatus, slidingSyncUnsupported: Bool) -> Bool {
+        if slidingSyncUnsupported {
+            return true
+        }
+        switch status {
+        case .reconnecting, .disconnected, .restoreFailed, .failed:
+            return true
+        case .connected, .syncing, .starting, .stopped:
+            return false
         }
     }
 
@@ -23,14 +41,13 @@ struct ConnectionStatusBanner: View {
             || (store.showsSignOutAction && onSignOut != nil)
         HStack(spacing: SynaraSpacing.small) {
             Image(systemName: store.bannerSystemImage)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(iconTint(variant))
                 .accessibilityHidden(true)
             Text(store.bannerText)
-                .font(SynaraTypography.fineMetaBold)
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(textColor(variant))
                 .lineLimit(store.slidingSyncUnsupported ? 4 : 2)
-                .minimumScaleFactor(0.85)
                 .accessibilityIdentifier("ConnectionStatusText")
             Spacer(minLength: SynaraSpacing.small)
             // Retry and Sign Out never show together (ConnectionStatusCopy).
@@ -112,16 +129,49 @@ struct ConnectionStatusBanner: View {
 }
 
 /// Empty-state copy from held connection chrome so SDK blips stay silent.
+///
+/// While connected, `connectedMessage` and `action` replace the connection
+/// copy, so an account with no rooms gets a way forward instead of the word
+/// "Connected".
 struct HeldConnectionEmptyState: View {
+    struct Action {
+        let title: String
+        let identifier: String
+        let handler: () -> Void
+
+        init(title: String, identifier: String, handler: @escaping () -> Void) {
+            self.title = title
+            self.identifier = identifier
+            self.handler = handler
+        }
+    }
+
     let title: String
     let systemImage: String
     @ObservedObject var store: ConnectionStatusStore
+    var connectedMessage: String? = nil
+    var action: Action? = nil
+
+    private var isConnected: Bool {
+        store.slidingSyncUnsupported == false && (store.status == .connected || store.status == .syncing)
+    }
 
     var body: some View {
-        SynaraEmptyState(
-            title: title,
-            systemImage: systemImage,
-            message: store.emptyStateMessage
-        )
+        VStack(spacing: SynaraSpacing.large) {
+            SynaraEmptyState(
+                title: title,
+                systemImage: systemImage,
+                message: isConnected ? (connectedMessage ?? store.emptyStateMessage) : store.emptyStateMessage,
+                paintsBackground: false
+            )
+            .fixedSize(horizontal: false, vertical: true)
+
+            if isConnected, let action {
+                Button(action.title, action: action.handler)
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier(action.identifier)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -14,9 +14,10 @@ test('DM rows show the peer in the # slot and other rooms keep #', async ({ page
   await expect(bob.locator('[aria-hidden="true"]').first()).toHaveText('B', { useInnerText: true });
   await expect(bob.locator('img')).toHaveCount(0);
 
-  // A group, and a DM whose single peer Core does not know, keep #.
-  await expect(row('!ops:example.test').locator('[aria-hidden="true"]')).toHaveText('#');
-  await expect(row('!group:example.test').locator('[aria-hidden="true"]')).toHaveText('#');
+  // A group, and a DM whose single peer Core does not know, keep #. (The row
+  // also carries the always-mounted kebab icon, which is decorative too.)
+  await expect(row('!ops:example.test').locator('[data-room-glyph="hash"]')).toHaveText('#');
+  await expect(row('!group:example.test').locator('[data-room-glyph="hash"]')).toHaveText('#');
 
   // The row's accessible name is still the room name alone.
   await expect(page.getByRole('link', { name: 'Alice Liddell', exact: true })).toBeVisible();

@@ -89,7 +89,10 @@ test('menus return focus when they close', () => {
 
   const row = source('src/app/features/room-nav/RoomNavItem.tsx');
   assert.match(row, /setReturnFocus: returnFocusOrFallback\(\(\) => linkRef\.current\)/);
-  assert.match(row, /optionsVisible = hover \|\| !!menuAnchor \|\| returningFocus/);
+  // The kebab stays mounted (badges never unmount under the pointer); it joins
+  // the tab order only while the row is hovered/focused or its menu is open.
+  assert.match(row, /optionsFocusable = hover \|\| !!menuAnchor \|\| returningFocus/);
+  assert.match(row, /tabIndex=\{optionsFocusable \? 0 : -1\}/);
   assert.match(row, /onPostDeactivate: \(\) => setReturningFocus\(false\)/);
   assert.match(row, /aria-expanded=\{!!menuAnchor\}/);
   assert.match(source('src/app/components/FocusTrap.tsx'), /export const returnFocusOrFallback/);
@@ -130,7 +133,8 @@ test('the Cmd+K switcher is a combobox with a listbox of options', () => {
 test('focus indicators: room list, text fields, Following bar, resize handle', () => {
   const nav = source('src/app/components/nav/styles.css.ts');
   assert.doesNotMatch(nav, /solid \$\{ContainerLine\}/);
-  assert.equal(nav.match(/B600\} solid \$\{color\.Primary\.Main\}/g)?.length, 2);
+  // Row (two selector forms), section-header toggle and the search field.
+  assert.equal(nav.match(/B600\} solid \$\{color\.Primary\.Main\}/g)?.length, 4);
 
   const rings = source('src/app/styles/FocusRing.css.ts');
   assert.match(rings, /div:has\(> input\.\$\{Disabled\}/);
@@ -174,7 +178,15 @@ test('timestamps, composer and links do not rely on opacity or colour alone', ()
   );
 
   const html = source('src/app/features/room/nativeTimelineHtml.css.ts');
-  assert.match(html, /globalStyle\(`\$\{MessageBody\} a:not\(\.\$\{UnfurlLink\}\)`/);
+  assert.match(
+    html,
+    /globalStyle\(`\$\{MessageBody\} a:not\(\.\$\{UnfurlLink\}\):not\(\[data-mention-pill\]\)`/
+  );
+  // Mention pills skip the underline because a tinted fill marks them.
+  assert.match(
+    source('src/app/styles/CustomHtml.css.ts'),
+    /export const Mention = recipe\(\{[\s\S]*?backgroundColor: `color-mix/
+  );
   assert.match(html, /SpoilerButton = style\(\{[\s\S]*?color: 'var\(--synara-content-primary\)'/);
 });
 

@@ -143,24 +143,33 @@ test('desktop and iOS room lists no longer implement a Recent 24h partition', ()
   assert.equal(iosService.includes('TimeInterval = 86400'), false);
   assert.equal(coreSort.includes('fn recent_joined_rooms'), false);
   assert.equal(contract.includes('24-hour cutoff'), false);
-  assert.equal(home.includes("roomSort === 'recent' ? 'Recent activity' : 'Name'"), true);
-  assert.equal(home.includes("onRoomSort('recent')"), true);
-  assert.equal(home.includes("onRoomSort('name')"), true);
-  assert.equal(home.includes('css.SortIconButton'), true);
+  // One shared sort menu (Recent activity / Name) per section header.
+  assert.equal(home.includes('<RoomListSortMenu'), true);
+  assert.equal(home.includes("value: 'recent' as const"), true);
+  assert.equal(home.includes("value: 'name' as const"), true);
   assert.equal(home.includes('handleFavoriteSort'), true);
   assert.equal(home.includes('handleRoomsSort'), true);
   assert.equal(iosView.includes('RoomListSortMenu'), true);
   assert.equal(iosService.includes('synara.roomListSort'), true);
 });
 
-test('Rooms section title is title-case like Favorites, not overline uppercase', () => {
+test('section headers are full-width 28px rows with 12px semibold caption labels', () => {
   const cwd = process.cwd();
   const home = readFileSync(join(cwd, 'src/app/pages/client/home/Home.tsx'), 'utf8');
-  const category = readFileSync(
-    join(cwd, 'src/app/features/room-nav/RoomNavCategoryButton.tsx'),
-    'utf8'
+  const header = readFileSync(join(cwd, 'src/app/components/nav/NavSectionHeader.tsx'), 'utf8');
+  const navCss = readFileSync(join(cwd, 'src/app/components/nav/styles.css.ts'), 'utf8');
+  assert.match(home, /t\('modernization\.nav\.rooms', 'Rooms'\)/);
+  assert.match(home, /t\('modernization\.nav\.favorites', 'Favorites'\)/);
+  // Favorites collapses like every other section.
+  assert.match(home, /FAVORITES_CATEGORY_ID = makeNavCategoryId\('home', 'favorites'\)/);
+  assert.match(header, /aria-expanded=\{!closed\}/);
+  assert.match(navCss, /NavSectionHeader = style\(\{[\s\S]*?minHeight: toRem\(28\)/);
+  // Wave 3 caption: 12px semibold, secondary, 0.02em tracking, chevron always shown.
+  assert.match(
+    navCss,
+    /NavSectionLabel = style\(\{\s*fontSize: toRem\(12\),\s*lineHeight: toRem\(16\),\s*fontWeight: config\.fontWeight\.W600,\s*letterSpacing: '0\.02em'/
   );
-  assert.match(home, />\s*Rooms\s*</);
-  assert.match(category, /size="B300"/);
-  assert.equal(category.includes('size="O400"'), false);
+  assert.doesNotMatch(navCss, /NavSectionChevron = style\(\{[^}]*opacity: 0/);
+  assert.equal(navCss.includes('O400'), false);
+  assert.equal(existsSync(join(cwd, 'src/app/features/room-nav/RoomNavCategoryButton.tsx')), false);
 });

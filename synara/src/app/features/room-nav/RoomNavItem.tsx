@@ -18,9 +18,9 @@ import {
   toRem,
   Line,
   RectCords,
-  Badge,
   Spinner,
 } from 'folds';
+import classNames from 'classnames';
 import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap, { returnFocusOrFallback } from '../../components/FocusTrap';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
@@ -31,8 +31,6 @@ import { setRoomReadStateWithNativeOwner } from '../../utils/nativeRoomReadState
 import { markAsReadFromExplicitUserAction } from '../../utils/notifications';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
-import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
-import { TypingIndicator } from '../../components/typing-indicator';
 import { listNavigationIndex, stopPropagation } from '../../utils/keyboard';
 import type { EventedRoomReading } from '../../utils/roomEvents';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
@@ -53,9 +51,10 @@ import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavor
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { LiveCallChip } from './LiveCallChip';
 import { useNativeUserStatus } from '../matrix-presence/nativeUserStatus';
+import { Presence, useNativeUserPresence } from '../matrix-presence/nativePresence';
+import { MiddleTruncatedText } from '../../components/text';
 import * as css from './styles.css';
 import * as depthCss from '../../styles/Depth.css';
-import { getMyUserId } from '../../state/nativeIdentity';
 import { PersonGlyph, roomGlyphFor } from '../../components/room-glyph';
 
 type RoomNavItemMenuProps = {
@@ -194,7 +193,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
               favoriteBusy ? (
                 <Spinner size="100" variant="Secondary" />
               ) : (
-                <Icon size="100" src={Icons.Pin} filled={isFavorite} />
+                <Icon size="100" src={Icons.Star} filled={isFavorite} />
               )
             }
             radii="300"
@@ -313,8 +312,16 @@ type RoomNavItemProps = {
   selected: boolean;
   linkPath: string;
   notificationMode?: RoomNotificationMode;
+  /** Show a small star after a favourite's name (lists without a Favorites section). */
+  favoriteMarker?: boolean;
 };
-function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNavItemProps) {
+function RoomNavItemImpl({
+  room,
+  selected,
+  notificationMode,
+  linkPath,
+  favoriteMarker,
+}: RoomNavItemProps) {
   const [hover, setHover] = useState(false);
   const { hoverProps } = useHover({ onHoverChange: setHover });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
@@ -336,12 +343,28 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
       : undefined;
   const dmPeerStatus = useNativeUserStatus(dmPeerId);
   const showDmInCall = Boolean(dmPeerId && dmPeerStatus?.inCall);
-  const typingMember = useRoomTypingMember(room.roomId).filter(
-    (receipt) => receipt.userId !== getMyUserId()
+  // Core's live presence for the DM peer (`matrix_presence_subscribe`); the
+  // dot stays hidden while presence is unknown or unavailable.
+  const dmPresence = useNativeUserPresence(
+    nativeRoom?.isDirect === true && typeof nativeRoom.directUserId === 'string'
+      ? nativeRoom.directUserId
+      : undefined
   );
+  const presenceDot: 'online' | 'offline' | undefined = dmPresence
+    ? dmPresence.presence === Presence.Online
+      ? 'online'
+      : 'offline'
+    : undefined;
 
   const roomName = useRoomName(room);
   const glyph = roomGlyphFor(nativeRoom, roomName);
+  const muted = notificationMode === RoomNotificationMode.Mute;
+  const isDirect = nativeRoom?.isDirect === true;
+  // Slack rule: a mention (or any DM) earns a red count; plain unread in a
+  // room is carried by weight alone, so the list is not a wall of numbers.
+  const attention = unread && (unread.highlight > 0 || isDirect);
+  const attentionCount = unread ? (unread.highlight > 0 ? unread.highlight : unread.total) : 0;
+  const showFavoriteStar = favoriteMarker === true && nativeRoom?.isFavorite === true;
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -368,7 +391,19 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
     setMenuAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
-  const optionsVisible = hover || !!menuAnchor || returningFocus;
+  // The kebab is always laid out in a reserved slot (opacity reveals it), so
+  // badges and state glyphs never unmount under the pointer. It only joins the
+  // tab order while the row has focus, a menu is open, or focus is returning.
+  const optionsFocusable = hover || !!menuAnchor || returningFocus;
+
+  const glyphClassName = classNames(
+    css.RoomGlyph,
+    muted ? css.RoomGlyphMuted : unread ? css.RoomGlyphUnread : undefined
+  );
+  const nameClassName = classNames(
+    css.RoomName,
+    muted ? css.RoomNameMuted : !unread && css.RoomNameRead
+  );
 
   return (
     <NavItem
@@ -378,6 +413,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
       highlight={unread !== undefined}
       selected={selected}
       data-hover={!!menuAnchor}
+      data-muted={muted || undefined}
       onContextMenu={handleContextMenu}
       {...hoverProps}
       {...focusWithinProps}
@@ -392,99 +428,117 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
             {glyph.kind === 'person' ? (
-              <PersonGlyph className={css.RoomPersonGlyph} glyph={glyph} />
+              <span className={css.RoomPersonGlyphSlot}>
+                <PersonGlyph className={css.RoomPersonGlyph} glyph={glyph} />
+                {presenceDot && (
+                  <span
+                    className={css.RoomPresenceDot}
+                    data-presence={presenceDot}
+                    aria-hidden="true"
+                  />
+                )}
+              </span>
+            ) : glyph.locked ? (
+              <Text as="span" className={glyphClassName} aria-hidden="true" data-room-glyph="lock">
+                <Icon className={css.RoomGlyphIcon} size="100" src={Icons.Lock} />
+              </Text>
             ) : (
-              <Text as="span" className={css.RoomGlyph} aria-hidden="true">
+              <Text as="span" className={glyphClassName} aria-hidden="true" data-room-glyph="hash">
                 #
               </Text>
             )}
-            <Box as="span" grow="Yes" direction="Column">
-              <Text
-                as="span"
-                size="Inherit"
-                className={unread ? css.RoomName : `${css.RoomName} ${css.RoomNameRead}`}
-                truncate
-              >
-                {roomName}
+            <Box as="span" grow="Yes" direction="Column" style={{ minWidth: 0 }}>
+              <Text as="span" size="Inherit" className={nameClassName} data-room-name="">
+                <MiddleTruncatedText text={roomName} />
               </Text>
+              {presenceDot && (
+                // The dot is aria-hidden; its meaning joins the link's name.
+                <span className={css.RoomPresenceLabel} data-presence-label="">
+                  {presenceDot === 'online' ? ', Online' : ', Offline'}
+                </span>
+              )}
             </Box>
+            {showFavoriteStar && (
+              <Icon
+                className={css.RoomStateGlyph}
+                size="50"
+                src={Icons.Star}
+                filled
+                aria-label="Favorite"
+                data-room-state="favorite"
+              />
+            )}
             {nativeRoom?.hasActiveCall && (
               <LiveCallChip participantCount={nativeRoom.activeCallParticipantCount} />
             )}
             {showDmInCall && !nativeRoom?.hasActiveCall && <LiveCallChip participantCount={1} />}
-            {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
-              <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
-                <TypingIndicator size="300" disableAnimation />
-              </Badge>
-            )}
-            {!optionsVisible && unread && (
+            {attention && (
               <UnreadBadgeCenter>
-                <UnreadBadge highlight={unread.highlight > 0} count={unread.total} />
+                <UnreadBadge highlight count={attentionCount} />
               </UnreadBadgeCenter>
             )}
-            {!optionsVisible && notificationMode !== RoomNotificationMode.Unset && (
+            {notificationMode !== undefined && notificationMode !== RoomNotificationMode.Unset && (
               <Icon
+                className={css.RoomStateGlyph}
                 size="50"
                 src={getRoomNotificationModeIcon(notificationMode)}
-                aria-label={
-                  ROOM_NOTIFICATION_MODE_LABELS[notificationMode ?? RoomNotificationMode.Unset]
-                }
+                aria-label={ROOM_NOTIFICATION_MODE_LABELS[notificationMode]}
+                data-room-state={muted ? 'muted' : 'notifications'}
               />
             )}
           </Box>
         </NavItemContent>
       </NavLink>
-      {optionsVisible && (
-        <NavItemOptions>
-          <PopOut
-            id={`menu-${room.roomId}`}
-            aria-expanded={!!menuAnchor}
-            anchor={menuAnchor}
-            offset={menuAnchor?.width === 0 ? 0 : undefined}
-            alignOffset={menuAnchor?.width === 0 ? 0 : -5}
-            position="Bottom"
-            align={menuAnchor?.width === 0 ? 'Start' : 'End'}
-            content={
-              <FocusTrap
-                focusTrapOptions={{
-                  initialFocus: false,
-                  // Keep the trigger mounted until focus is back on it (or the row).
-                  setReturnFocus: returnFocusOrFallback(() => linkRef.current),
-                  onDeactivate: () => {
-                    setReturningFocus(true);
-                    setMenuAnchor(undefined);
-                  },
-                  onPostDeactivate: () => setReturningFocus(false),
-                  clickOutsideDeactivates: true,
-                  isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
-                  isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
-                  escapeDeactivates: stopPropagation,
-                }}
-              >
-                <RoomNavItemMenu
-                  room={room}
-                  requestClose={() => setMenuAnchor(undefined)}
-                  notificationMode={notificationMode}
-                />
-              </FocusTrap>
-            }
-          >
-            <IconButton
-              className={depthCss.quietInteractiveSurface}
-              onClick={handleOpenMenu}
-              aria-expanded={!!menuAnchor}
-              aria-controls={`menu-${room.roomId}`}
-              aria-label="More Options"
-              variant="Background"
-              fill="None"
-              size="300"
-              radii="300"
+      <NavItemOptions>
+        <PopOut
+          id={`menu-${room.roomId}`}
+          aria-expanded={!!menuAnchor}
+          anchor={menuAnchor}
+          offset={menuAnchor?.width === 0 ? 0 : undefined}
+          alignOffset={menuAnchor?.width === 0 ? 0 : -5}
+          position="Bottom"
+          align={menuAnchor?.width === 0 ? 'Start' : 'End'}
+          content={
+            <FocusTrap
+              focusTrapOptions={{
+                initialFocus: false,
+                // Keep the trigger mounted until focus is back on it (or the row).
+                setReturnFocus: returnFocusOrFallback(() => linkRef.current),
+                onDeactivate: () => {
+                  setReturningFocus(true);
+                  setMenuAnchor(undefined);
+                },
+                onPostDeactivate: () => setReturningFocus(false),
+                clickOutsideDeactivates: true,
+                isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
+                isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
+                escapeDeactivates: stopPropagation,
+              }}
             >
-              <Icon size="50" src={Icons.VerticalDots} />
-            </IconButton>
-          </PopOut>
-        </NavItemOptions>
-      )}
+              <RoomNavItemMenu
+                room={room}
+                requestClose={() => setMenuAnchor(undefined)}
+                notificationMode={notificationMode}
+              />
+            </FocusTrap>
+          }
+        >
+          <IconButton
+            className={depthCss.quietInteractiveSurface}
+            onClick={handleOpenMenu}
+            aria-expanded={!!menuAnchor}
+            aria-controls={`menu-${room.roomId}`}
+            aria-label="More options"
+            variant="Background"
+            fill="None"
+            size="300"
+            radii="300"
+            tabIndex={optionsFocusable ? 0 : -1}
+          >
+            <Icon size="50" src={Icons.VerticalDots} />
+          </IconButton>
+        </PopOut>
+      </NavItemOptions>
     </NavItem>
   );
 }
@@ -496,6 +550,7 @@ function areRoomNavItemPropsEqual(prev: RoomNavItemProps, next: RoomNavItemProps
   if (prev.selected !== next.selected) return false;
   if (prev.linkPath !== next.linkPath) return false;
   if (prev.notificationMode !== next.notificationMode) return false;
+  if (prev.favoriteMarker !== next.favoriteMarker) return false;
   return true;
 }
 

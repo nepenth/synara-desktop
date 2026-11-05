@@ -576,8 +576,8 @@ final class IdentityResetFlowTests: XCTestCase {
     }
 
     func testDesktopWordingIsSharedWordForWord() {
-        XCTAssertEqual(VerifyDevicePromptCopy.title, "Verify This Device")
-        XCTAssertEqual(VerifyDevicePromptCopy.verifyWithDevice, "Verify from Another Device")
+        XCTAssertEqual(VerifyDevicePromptCopy.title, "Verify this device")
+        XCTAssertEqual(VerifyDevicePromptCopy.verifyWithDevice, "Verify from another device")
         XCTAssertEqual(IdentityResetCopy.warnings, [
             "People you talk to will see that your identity changed.",
             "You will need to verify your other devices and contacts again.",

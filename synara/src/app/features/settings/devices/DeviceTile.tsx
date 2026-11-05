@@ -1,21 +1,5 @@
-import React, { FormEventHandler, ReactNode, useCallback, useEffect, useState } from 'react';
-import {
-  Box,
-  Text,
-  IconButton,
-  Icon,
-  Icons,
-  Chip,
-  Input,
-  Button,
-  color,
-  Spinner,
-  toRem,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
-} from 'folds';
-import FocusTrap from '../../../components/FocusTrap';
+import React, { FormEventHandler, ReactNode, useCallback, useEffect, useId, useState } from 'react';
+import { Box, Text, IconButton, Icon, Icons, Chip, Input, Button, Spinner, toRem } from 'folds';
 import { SettingTile } from '../../../components/setting-tile';
 import { timeDayMonYear, timeHourMinute, today, yesterday } from '../../../utils/time';
 import { BreakWord } from '../../../styles/Text.css';
@@ -23,7 +7,7 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { LogoutDialog } from '../../../components/LogoutDialog';
-import { stopPropagation } from '../../../utils/keyboard';
+import { InlineMessage } from '../../../components/inline-message';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { NativeDevice, nativeDeviceTrustLabel, renameNativeDevice } from './nativeDevices';
@@ -97,7 +81,7 @@ function DeviceDetails({ device }: { device: NativeDevice }) {
     <>
       {typeof device.deviceId === 'string' && (
         <Text className={BreakWord} size="T200" priority="300">
-          Device ID: <i>{device.deviceId}</i>
+          Session ID: <i>{device.deviceId}</i>
         </Text>
       )}
       {typeof device.ed25519Fingerprint === 'string' && (
@@ -118,7 +102,7 @@ function DeviceDetails({ device }: { device: NativeDevice }) {
       {typeof lastSeenTs === 'number' && <DeviceActiveTime ts={lastSeenTs} />}
       {typeof device.lastSeenIp === 'string' && (
         <Text className={BreakWord} size="T200" priority="300">
-          IP Address: <i>{device.lastSeenIp}</i>
+          IP address: <i>{device.lastSeenIp}</i>
         </Text>
       )}
     </>
@@ -143,6 +127,7 @@ function DeviceRename({ device, onCancel, onRename, refreshDeviceList }: DeviceR
   );
 
   const renaming = renameState.status === AsyncStatus.Loading;
+  const nameId = useId();
 
   useEffect(() => {
     if (renameState.status === AsyncStatus.Success) {
@@ -165,10 +150,13 @@ function DeviceRename({ device, onCancel, onRename, refreshDeviceList }: DeviceR
 
   return (
     <Box as="form" onSubmit={handleSubmit} direction="Column" gap="100">
-      <Text size="L400">Device Name</Text>
+      <Text as="label" size="L400" priority="300" htmlFor={nameId}>
+        Session name
+      </Text>
       <Box gap="200">
         <Box grow="Yes" direction="Column">
           <Input
+            id={nameId}
             name="nameInput"
             size="300"
             variant="Secondary"
@@ -205,14 +193,16 @@ function DeviceRename({ device, onCancel, onRename, refreshDeviceList }: DeviceR
         </Box>
       </Box>
       {renameState.status === AsyncStatus.Error ? (
-        <Text size="T200" style={{ color: color.Critical.Main }}>
+        <InlineMessage tone="critical">
           {composerErrorMessage(
             renameState.error,
             'Synara could not rename this session. Try again.'
           )}
-        </Text>
+        </InlineMessage>
       ) : (
-        <Text size="T200">Device names are visible to public.</Text>
+        <Text size="T200" priority="300">
+          Session names are visible to other users.
+        </Text>
       )}
     </Box>
   );
@@ -226,23 +216,9 @@ export function DeviceLogoutBtn() {
   return (
     <>
       <Chip variant="Secondary" fill="Soft" radii="Pill" onClick={() => setPrompt(true)}>
-        <Text size="B300">Log Out</Text>
+        <Text size="B300">Log out</Text>
       </Chip>
-      {prompt && (
-        <Overlay open backdrop={<OverlayBackdrop />}>
-          <OverlayCenter>
-            <FocusTrap
-              focusTrapOptions={{
-                onDeactivate: handleClose,
-                clickOutsideDeactivates: true,
-                escapeDeactivates: stopPropagation,
-              }}
-            >
-              <LogoutDialog handleClose={handleClose} />
-            </FocusTrap>
-          </OverlayCenter>
-        </Overlay>
-      )}
+      {prompt && <LogoutDialog onClose={handleClose} />}
     </>
   );
 }
@@ -276,7 +252,7 @@ export function DeviceDeleteBtn({
       radii="Pill"
       onClick={() => onDeleteToggle(deviceId)}
       disabled={disabled}
-      aria-label="Delete device"
+      aria-label="Log out session"
     >
       <Icon size="50" src={Icons.Delete} />
     </Chip>
@@ -319,7 +295,7 @@ export function DeviceTile({
             radii="300"
             onClick={() => setDetails(!details)}
             aria-expanded={details}
-            aria-label={details ? 'Hide device details' : 'Show device details'}
+            aria-label={details ? 'Hide session details' : 'Show session details'}
           >
             <Icon size="50" src={details ? Icons.ChevronBottom : Icons.ChevronRight} />
           </IconButton>
@@ -348,7 +324,7 @@ export function DeviceTile({
           </Text>
           {device.isCurrent && (
             <Chip as="span" variant="Secondary" radii="Pill" outlined>
-              <Text size="B300">This device</Text>
+              <Text size="B300">This session</Text>
             </Chip>
           )}
           <DeviceTrustChip trust={device.trust} />

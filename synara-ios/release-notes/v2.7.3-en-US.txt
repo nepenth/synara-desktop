@@ -1,0 +1,3 @@
+Synara 2.7.3 shortens long links in messages: a long web address shows as its site and path, without tracking queries, and still opens the whole address. Long-press a link to see it in full. Turn it off in Settings > GIFs & Link Previews > Shorten Long Links.
+
+Please test: long news and shopping links in plain and formatted messages, tapping and long-pressing a shortened link, turning the setting off, and short links staying as written.

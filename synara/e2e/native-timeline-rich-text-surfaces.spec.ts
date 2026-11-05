@@ -15,7 +15,7 @@ const openSurfaces = async (page: Page) => {
     route.fulfill({ status: 200, contentType: 'image/png', body: PNG })
   );
   await page.goto('/e2e/native-timeline-harness/index.html?surface=rich-text');
-  await expect(page.getByRole('region', { name: 'Inbox message' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Activity message' })).toBeVisible();
   return requests;
 };
 
@@ -26,7 +26,7 @@ test('inbox text renders mentions, permalinks and custom emoji without row conte
   page,
 }) => {
   const requests = await openSurfaces(page);
-  const inbox = page.getByRole('region', { name: 'Inbox message' });
+  const inbox = page.getByRole('region', { name: 'Activity message' });
 
   await expect(inbox.locator('strong')).toHaveText('bold');
   const mention = inbox.getByRole('link', { name: 'Reader Zero' });
@@ -50,7 +50,7 @@ test('inbox text renders mentions, permalinks and custom emoji without row conte
 
 test('surface text keeps the native sanitizer: no remote images, no scripts', async ({ page }) => {
   const requests = await openSurfaces(page);
-  const inbox = page.getByRole('region', { name: 'Inbox message' });
+  const inbox = page.getByRole('region', { name: 'Activity message' });
   // A remote image keeps only its alt text, on an inert span.
   await expect(inbox.locator('span', { hasText: /^tracker$/ })).toBeVisible();
   await expect(inbox.locator('img:not([data-mx-emoticon])')).toHaveCount(0);
@@ -113,4 +113,18 @@ test('the room topic viewer links the topic with the same renderer', async ({ pa
   await expect(topic.getByRole('link', { name: 'https://example.org/topic' })).toBeVisible();
   await topic.getByRole('link', { name: 'https://matrix.to/#/#lobby:example.test' }).click();
   expect(await opened(page)).toMatchObject({ kind: 'room', roomIdOrAlias: '#lobby:example.test' });
+});
+
+test('a long bare link shows as its site and path but opens the whole address', async ({
+  page,
+}) => {
+  await openSurfaces(page);
+  const body = page.getByRole('region', { name: 'Long link body' });
+  const links = body.getByRole('link');
+  await expect(links).toHaveCount(2);
+  for (const link of await links.all()) {
+    await expect(link).toHaveText('example.com/…/a-very-long-story-slug-about-…');
+    await expect(link).toHaveAttribute('href', /\?guccounter=1&guce_referrer=/);
+    await expect(link).toHaveAttribute('title', /^https:\/\/www\.example\.com\/entertainment\//);
+  }
 });

@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { useMatch } from 'react-router-dom';
+import { matchPath, useLocation, useMatch } from 'react-router-dom';
 import { ScreenSize, useScreenSizeContext } from '../hooks/useScreenSize';
 import { DIRECT_PATH, EXPLORE_PATH, HOME_PATH, INBOX_PATH, SPACE_PATH } from './paths';
 
@@ -25,16 +25,17 @@ export function MobileFriendlyClientNav({ children }: MobileFriendlyClientNavPro
 }
 
 type MobileFriendlyPageNavProps = {
-  path: string;
+  /** The pane's base path(s); Home serves both `/home/` and `/direct/` (NAV-12). */
+  path: string | readonly string[];
   children: ReactNode;
 };
 export function MobileFriendlyPageNav({ path, children }: MobileFriendlyPageNavProps) {
   const screenSize = useScreenSizeContext();
-  const exactPath = useMatch({
-    path,
-    caseSensitive: true,
-    end: true,
-  });
+  const { pathname } = useLocation();
+  const paths: readonly string[] = typeof path === 'string' ? [path] : path;
+  const exactPath = paths.some(
+    (base) => matchPath({ path: base, caseSensitive: true, end: true }, pathname) !== null
+  );
 
   if (screenSize === ScreenSize.Mobile && !exactPath) {
     return null;

@@ -32,8 +32,11 @@ import {
   nativeCustomEmojiContentUri,
   nativeLinkHostMismatch,
   parseNativePermalink,
+  shortLinkLabel,
   type NativePermalinkTarget,
 } from './nativeTimelineLinks';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
 
 /** Opens a matrix.to user, room or event link inside Synara. */
 export type NativePermalinkHandler = (target: NativePermalinkTarget, anchor: HTMLElement) => void;
@@ -198,6 +201,8 @@ type NativeFormattedRenderContext = {
   ownUserId?: string;
   /** Search terms to mark in the text (message search results). */
   highlightRegex?: RegExp;
+  /** Show a long bare web address as a short label; the link is unchanged. */
+  shortenLinks?: boolean;
 };
 
 const renderNativeAnchor = (
@@ -212,6 +217,7 @@ const renderNativeAnchor = (
     return (
       <a
         href={href}
+        data-mention-pill=""
         className={customHtmlCss.Mention({
           highlight: permalink.kind === 'user' && permalink.userId === context.ownUserId,
         })}
@@ -243,10 +249,19 @@ const renderNativeAnchor = (
   // The webview has no status bar: name the destination on hover, and say
   // where a link really goes when its text is a different web address.
   const mismatchHost = nativeLinkHostMismatch(text, href);
+  // Search results keep the whole address, so a match in it stays visible.
+  const shortLabel =
+    context.shortenLinks && !context.highlightRegex ? shortLinkLabel(text, href) : undefined;
   return (
     <>
-      <a href={href} target="_blank" rel="noreferrer noopener" title={href}>
-        {children}
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer noopener"
+        title={href}
+        {...(shortLabel ? { 'data-native-short-link': 'true' } : {})}
+      >
+        {shortLabel ?? children}
       </a>
       {mismatchHost ? (
         <span className={htmlCss.LinkHostWarning} data-native-link-host-warning="true">
@@ -390,17 +405,27 @@ export function NativeFormattedBody({
   fallbackBody,
   style,
   highlightRegex,
+  after,
 }: {
   html: string;
   fallbackBody: string;
   style?: React.CSSProperties;
   highlightRegex?: RegExp;
+  /** Inline trailer after the body (the "(edited)" marker); block endings wrap it to a new line. */
+  after?: React.ReactNode;
 }) {
   const onPermalink = useContext(NativePermalinkContext);
   const ownUserId = getMyUserId() ?? undefined;
+  const [shortenLinks] = useSetting(settingsAtom, 'shortenLinks');
   const parserOptions = useMemo(
-    () => createNativeFormattedHtmlParserOptions({ onPermalink, ownUserId, highlightRegex }),
-    [onPermalink, ownUserId, highlightRegex]
+    () =>
+      createNativeFormattedHtmlParserOptions({
+        onPermalink,
+        ownUserId,
+        highlightRegex,
+        shortenLinks,
+      }),
+    [onPermalink, ownUserId, highlightRegex, shortenLinks]
   );
   const projection = useMemo(() => projectNativeFormattedBody(html), [html]);
   const parsed = useMemo(() => {
@@ -418,6 +443,7 @@ export function NativeFormattedBody({
       style={{ ...style, whiteSpace: parsed === undefined ? 'pre-wrap' : undefined }}
     >
       {parsed === undefined ? fallbackBody : parsed}
+      {after}
     </div>
   );
 }
@@ -452,9 +478,10 @@ export function NativeLinkifiedText({
 }) {
   const onPermalink = useContext(NativePermalinkContext);
   const ownUserId = getMyUserId() ?? undefined;
+  const [shortenLinks] = useSetting(settingsAtom, 'shortenLinks');
   const options = useMemo(
-    () => createNativeLinkifyOptions({ onPermalink, ownUserId }),
-    [onPermalink, ownUserId]
+    () => createNativeLinkifyOptions({ onPermalink, ownUserId, highlightRegex, shortenLinks }),
+    [onPermalink, ownUserId, highlightRegex, shortenLinks]
   );
   return (
     <Linkify options={options}>

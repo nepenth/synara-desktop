@@ -1,6 +1,6 @@
 import type { NativeDeviceSnapshot } from '../features/settings/devices/nativeDevices';
 
-export const LAST_DEVICE_LOGOUT_TITLE = 'Last Signed-In Device';
+export const LAST_DEVICE_LOGOUT_TITLE = 'Save your recovery key first';
 
 export const LAST_DEVICE_LOGOUT_WARNING =
   'This is your last signed-in device. Save your recovery key before logging out, or you will lose access to your encrypted messages.';

@@ -23,7 +23,8 @@ test('a reaction pill names who reacted, on hover and to assistive tech', async 
   const row = await addReactionToLastRow(page);
   const pill = row.getByRole('button', { name: /Alice Liddell reacted with ✅/ });
   await expect(pill).toBeVisible();
-  await expect(pill).toHaveText('✅ 1');
+  // The emoji and the count are separate pieces of the pill, spaced by CSS.
+  await expect(pill).toHaveText(/^✅\s*1$/);
 
   // The harness turns reacting off, so the pill is disabled; its wrapper
   // still carries the tooltip and the context menu, as in the app.

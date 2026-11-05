@@ -49,6 +49,8 @@ enum SharedCoreRoomListRows {
     /// Core's agent-room rule (listed agent member, or approval/workflow
     /// content), shared with desktop.
     var isAgentRoom: Bool = false
+    /// Core's raw per-room notification mode (`SharedCoreRoomDetails.notificationMode`).
+    var notificationMode: String? = nil
     }
 
     struct InviteRow {
@@ -107,7 +109,8 @@ enum SharedCoreRoomListRows {
                 hasActiveCall: room.hasActiveCall,
                 activeCallParticipantCount: room.activeCallParticipantCount,
                 directUserId: room.directUserId,
-                encryptionStatus: room.encryptionStatus
+                encryptionStatus: room.encryptionStatus,
+                notificationMode: SharedCoreRoomDetails.notificationMode(room.notificationMode)
             )
         }
         let inviteRows = invites

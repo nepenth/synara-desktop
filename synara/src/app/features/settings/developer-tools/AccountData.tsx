@@ -28,7 +28,7 @@ export function AccountData({ expand, onExpandToggle, onSelect }: AccountDataPro
   }, [expand]);
 
   return (
-    <SettingsSection title="Account Data">
+    <SettingsSection title="Account data">
       <SequenceCard
         className={SequenceCardStyle}
         variant="SurfaceVariant"

@@ -28,6 +28,7 @@ import { mDirectAtom } from '../../../state/mDirectList';
 import { BreakWord, LineClamp3 } from '../../../styles/Text.css';
 import { NativeLinkifiedText } from '../../room/nativeTimelineFormattedBody';
 import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
+import { avatarLadderStyle } from '../../../components/user-avatar';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { StateEvent } from '../../../../types/matrix/room';
 import { CompactUploadCardRenderer } from '../../../components/upload-card';
@@ -206,7 +207,7 @@ export function RoomProfileEdit({
           )}
         </Box>
         <Box shrink="No">
-          <Avatar size="500" radii="300">
+          <Avatar style={avatarLadderStyle('hero')}>
             <RoomAvatar
               roomId={room.roomId}
               src={avatarUrl}
@@ -348,7 +349,7 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
               )}
             </Box>
             <Box shrink="No">
-              <Avatar size="500" radii="300">
+              <Avatar style={avatarLadderStyle('hero')}>
                 <RoomAvatar
                   roomId={room.roomId}
                   src={avatarUrl}

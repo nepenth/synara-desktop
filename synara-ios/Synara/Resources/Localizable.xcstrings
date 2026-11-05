@@ -69,6 +69,9 @@
         }
       }
     },
+    "%@ and %@ are typing" : {
+
+    },
     "%@ and %@ are typing..." : {
       "localizations" : {
         "en" : {
@@ -141,6 +144,9 @@
         }
       }
     },
+    "%@ is typing" : {
+
+    },
     "%@ is typing..." : {
 
     },
@@ -195,6 +201,9 @@
           }
         }
       }
+    },
+    "%@, %@, and %lld more are typing" : {
+
     },
     "%@, %@, and %lld more are typing..." : {
       "localizations" : {
@@ -333,28 +342,6 @@
     },
     "%lld" : {
 
-    },
-    "%lld channels" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld channel"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld channels"
-                }
-              }
-            }
-          }
-        }
-      }
     },
     "%lld chars" : {
       "localizations" : {
@@ -620,6 +607,9 @@
         }
       }
     },
+    "(edited)" : {
+
+    },
     ", " : {
 
     },
@@ -702,6 +692,9 @@
 
     },
     "Active" : {
+
+    },
+    "Activity" : {
 
     },
     "Add Agent" : {
@@ -1007,9 +1000,6 @@
     "Changes save to your account as you make them. Some encrypted alerts may still show as generic activity, even with previews hidden." : {
 
     },
-    "Channels" : {
-
-    },
     "Chat" : {
 
     },
@@ -1038,6 +1028,9 @@
 
     },
     "Choose one answer" : {
+
+    },
+    "Choose server" : {
 
     },
     "Choose up to %lld answers" : {
@@ -1102,6 +1095,9 @@
 
     },
     "Collapses the replies." : {
+
+    },
+    "Collapses this section" : {
 
     },
     "Collapses unread rooms" : {
@@ -1207,9 +1203,6 @@
     "Could Not Load Later" : {
 
     },
-    "Could Not Load Notifications" : {
-
-    },
     "Could Not Load Rooms" : {
 
     },
@@ -1249,6 +1242,9 @@
     "Could not load Later account data." : {
 
     },
+    "Could not load activity" : {
+
+    },
     "Could not log out" : {
 
     },
@@ -1285,10 +1281,13 @@
     "Could not update the room invite. Try again." : {
 
     },
-    "Couldn't mark this channel as read." : {
+    "Couldn't mark this room as read." : {
 
     },
     "Couldn't restore this session. Log out and sign in again." : {
+
+    },
+    "Couldn't save this message to Later. Try again." : {
 
     },
     "Couldn't update this identity change." : {
@@ -1298,6 +1297,9 @@
 
     },
     "Create Room" : {
+
+    },
+    "Create or join a room" : {
 
     },
     "Cross-Signing" : {
@@ -1606,6 +1608,9 @@
     "Expanded" : {
 
     },
+    "Expands this section" : {
+
+    },
     "Expands unread rooms" : {
 
     },
@@ -1670,6 +1675,9 @@
 
     },
     "GIFs & Link Previews" : {
+
+    },
+    "Go to original message" : {
 
     },
     "Graphite" : {
@@ -1768,6 +1776,9 @@
     "Join Room" : {
 
     },
+    "Join a room or start a direct message." : {
+
+    },
     "Join another room before forwarding this message." : {
 
     },
@@ -1820,6 +1831,9 @@
 
     },
     "Last activity %@" : {
+
+    },
+    "Last reply %@" : {
 
     },
     "Later" : {
@@ -1927,10 +1941,16 @@
     "Mark ToDo active" : {
 
     },
+    "Mark read" : {
+
+    },
     "Matrix Account" : {
 
     },
     "Matrix IDs must look like @name:server." : {
+
+    },
+    "Matrix account" : {
 
     },
     "Matrix chat with agent approvals." : {
@@ -1969,6 +1989,12 @@
     "Message" : {
 
     },
+    "Message #%@" : {
+
+    },
+    "Message %@" : {
+
+    },
     "Message Action" : {
 
     },
@@ -1994,6 +2020,9 @@
 
     },
     "Message pinned to your private room notes." : {
+
+    },
+    "Message removed" : {
 
     },
     "Message reported." : {
@@ -2047,6 +2076,9 @@
     "Mute" : {
 
     },
+    "Muted" : {
+
+    },
     "Name" : {
 
     },
@@ -2066,6 +2098,9 @@
 
     },
     "New approval requests from agents will appear here." : {
+
+    },
+    "New messages" : {
 
     },
     "New private note" : {
@@ -2129,6 +2164,9 @@
 
     },
     "No recent requests" : {
+
+    },
+    "No rooms yet" : {
 
     },
     "Nobody has reacted to this message." : {
@@ -2224,7 +2262,7 @@
     "Open" : {
 
     },
-    "Open Account Page" : {
+    "Open account page" : {
 
     },
     "Open Synara to review the command. It may have expired." : {
@@ -2408,6 +2446,9 @@
     "Push cleanup unavailable; finishing local logout" : {
 
     },
+    "Push delivery" : {
+
+    },
     "Push delivery is configured for this build." : {
 
     },
@@ -2415,6 +2456,9 @@
 
     },
     "Push gateway not configured" : {
+
+    },
+    "Push registration and the local delivery log." : {
 
     },
     "Push unavailable" : {
@@ -2610,6 +2654,9 @@
     "Replying to %@" : {
 
     },
+    "Replying to %@: %@" : {
+
+    },
     "Replying to a message" : {
 
     },
@@ -2634,13 +2681,16 @@
     "Reset Base Color" : {
 
     },
-    "Reset Identity" : {
+    "Reset identity" : {
 
     },
     "Reset Local Data" : {
 
     },
     "Reset and Sign In" : {
+
+    },
+    "Reset and sign in" : {
 
     },
     "Reset cancelled. Your key backup and recovery key were removed when it started. Set up recovery in Settings once this device is verified, or reset your identity to finish." : {
@@ -2768,10 +2818,22 @@
     "Save status" : {
 
     },
+    "Save to Later" : {
+
+    },
     "Saved" : {
 
     },
     "Saved\nRoom: %@" : {
+
+    },
+    "Saved for later" : {
+
+    },
+    "Saved message" : {
+
+    },
+    "Saved to Later" : {
 
     },
     "Saved to your account." : {
@@ -2784,6 +2846,9 @@
 
     },
     "Saving…" : {
+
+    },
+    "Say hello to start the conversation." : {
 
     },
     "Search Directory" : {
@@ -2810,6 +2875,9 @@
     "Searches KLIPY for a GIF to send" : {
 
     },
+    "Searches the messages loaded in this room." : {
+
+    },
     "Security" : {
 
     },
@@ -2817,9 +2885,6 @@
 
     },
     "Select Text" : {
-
-    },
-    "Select a Notification" : {
 
     },
     "Select a Room" : {
@@ -2897,6 +2962,9 @@
     "Sheet" : {
 
     },
+    "Shorten Long Links" : {
+
+    },
     "Show GIF search in the composer and for /gif. Your searches go to KLIPY, which can see your IP address. A GIF is sent as its KLIPY link." : {
 
     },
@@ -2904,6 +2972,9 @@
 
     },
     "Show X Posts" : {
+
+    },
+    "Show a long web address as its site and path. Tapping it still opens the full address." : {
 
     },
     "Show approval details" : {
@@ -2927,13 +2998,25 @@
     "Shows account details, settings, and logout" : {
 
     },
+    "Shows the original message" : {
+
+    },
     "Shows the replies." : {
+
+    },
+    "Shows the rooms of every space" : {
 
     },
     "Sign In" : {
 
     },
     "Sign In Again" : {
+
+    },
+    "Sign in" : {
+
+    },
+    "Sign in again" : {
 
     },
     "Sign in again to load this timeline." : {
@@ -2997,10 +3080,16 @@
         }
       }
     },
+    "Sort by" : {
+
+    },
     "Sort by name" : {
 
     },
     "Sort by recent activity" : {
+
+    },
+    "Spaces" : {
 
     },
     "Spoiler" : {
@@ -3058,6 +3147,9 @@
 
     },
     "Support" : {
+
+    },
+    "Switches space and list order" : {
 
     },
     "Synara" : {
@@ -3258,6 +3350,12 @@
     "This is the name other people see in rooms. It is stored on your homeserver." : {
 
     },
+    "This is the very beginning of #%@" : {
+
+    },
+    "This is the very beginning of your conversation with %@" : {
+
+    },
     "This is your last signed-in device. Save your recovery key before logging out, or you will lose access to your encrypted messages." : {
 
     },
@@ -3402,7 +3500,7 @@
     "Urgent agent approvals" : {
 
     },
-    "Use Recovery Key" : {
+    "Use recovery key" : {
 
     },
     "Use it" : {
@@ -3483,13 +3581,10 @@
     "Verify" : {
 
     },
-    "Verify This Device" : {
-
-    },
-    "Verify from Another Device" : {
-
-    },
     "Verify this device" : {
+
+    },
+    "Verify from another device" : {
 
     },
     "Version" : {
@@ -3616,10 +3711,16 @@
     "favorite" : {
 
     },
+    "just now" : {
+
+    },
     "matrix.org" : {
 
     },
     "mentioned" : {
+
+    },
+    "muted" : {
 
     },
     "this session" : {

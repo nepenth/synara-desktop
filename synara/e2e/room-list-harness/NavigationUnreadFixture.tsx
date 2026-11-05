@@ -1,8 +1,13 @@
-// Production rail tabs and snapshot bindings; only native IPC data is synthetic.
-import React, { useCallback } from 'react';
+// The production Home rail tab and snapshot bindings; only native IPC data is
+// synthetic. Since wave 3 the rail has no Direct messages tab: DMs are a
+// section of the one Home list (NAV-12) and count in the Home badge. `homePane`
+// adds the production Home pane, mounted across `/home/` and `/direct/` routes
+// as in the app router.
+import React, { useCallback, useState } from 'react';
 import { presentationFor } from './presentation';
 import { Provider } from 'jotai';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { enableMapSet } from 'immer';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { configClass, varsClass } from 'folds';
 import { darkTheme } from '../../src/colors.css';
 import { ScreenSize, ScreenSizeProvider } from '../../src/app/hooks/useScreenSize';
@@ -14,11 +19,14 @@ import { useBindMDirectAtom } from '../../src/app/state/mDirectList';
 import { useBindRoomToUnreadAtom } from '../../src/app/state/room/roomToUnread';
 import { useBindRoomToParentsAtom } from '../../src/app/state/room/roomToParents';
 import { HomeTab } from '../../src/app/pages/client/sidebar/HomeTab';
-import { DirectTab } from '../../src/app/pages/client/sidebar/DirectTab';
 import { useDirectRooms } from '../../src/app/pages/client/direct/useDirectRooms';
 import { useHomeRooms } from '../../src/app/pages/client/home/useHomeRooms';
 import { useRoomNavigate } from '../../src/app/hooks/useRoomNavigate';
 import type { RoomSummary } from '../../src/app/features/matrix-dto/room';
+import { Home } from '../../src/app/pages/client/home/Home';
+import { ClosedNavCategoriesProvider } from '../../src/app/state/hooks/closedNavCategories';
+import { makeClosedNavCategoriesAtom } from '../../src/app/state/closedNavCategories';
+import { RoomsNotificationPreferencesProvider } from '../../src/app/hooks/useRoomsNotificationPreferences';
 
 const room = (roomId: string, isDirect: boolean): RoomSummary => ({
   roomId,
@@ -40,8 +48,13 @@ const room = (roomId: string, isDirect: boolean): RoomSummary => ({
 const dm = '!dm:example.test';
 const otherDM = '!other-dm:example.test';
 const home = '!home:example.test';
-let rooms = [room(dm, true), room(otherDM, true), room(home, false)];
 const params = new URLSearchParams(location.search);
+const homePane = params.has('homePane');
+// Enough Home rooms that the Direct messages section starts below the fold.
+const filler = homePane
+  ? Array.from({ length: 30 }, (_, index) => room(`!filler-${index}:example.test`, false))
+  : [];
+let rooms = [room(dm, true), room(otherDM, true), room(home, false), ...filler];
 const mdirectLagging = params.has('laggingMDirect');
 const session = {
   status: 'logged_in',
@@ -90,7 +103,46 @@ const fixtureSession = createNativeSession(async (command) => ({
   value: await invoke(command),
 }));
 setNativeSessionForTests(fixtureSession);
+// The app enables this at startup; route-path and category stores use Map/Set.
+enableMapSet();
 const nav = makeNavToActivePathAtom('@reader:example.test');
+const closedCategories = makeClosedNavCategoriesAtom('@reader:example.test');
+const notificationPreferences = {
+  mute: new Set<string>(),
+  specialMessages: new Set<string>(),
+  allMessages: new Set<string>(),
+};
+
+function HomePane() {
+  return (
+    <div
+      data-testid="home-pane"
+      // A row flex box stretches the pane to this height, as `PageRoot` does.
+      style={{ width: 280, height: 420, display: 'flex', overflow: 'hidden' }}
+    >
+      <ClosedNavCategoriesProvider value={closedCategories}>
+        <RoomsNotificationPreferencesProvider value={notificationPreferences}>
+          <Home />
+        </RoomsNotificationPreferencesProvider>
+      </ClosedNavCategoriesProvider>
+    </div>
+  );
+}
+
+/** One pane element for both route trees, like the app's pathless layout route. */
+function HomePaneRoutes() {
+  const [pane] = useState(() => <HomePane />);
+  return (
+    <Routes>
+      <Route element={pane}>
+        <Route path="/home/" element={null} />
+        <Route path="/home/:roomIdOrAlias/*" element={null} />
+        <Route path="/direct/" element={null} />
+        <Route path="/direct/:roomIdOrAlias/*" element={null} />
+      </Route>
+    </Routes>
+  );
+}
 const update = (roomId: string, change: Partial<RoomSummary>) => {
   rooms = rooms.map((r) => (r.roomId === roomId ? { ...r, ...change } : r));
 };
@@ -136,10 +188,8 @@ function BoundRail() {
         <div data-testid="home-rail">
           <HomeTab />
         </div>
-        <div data-testid="dm-rail">
-          <DirectTab />
-        </div>
       </nav>
+      {homePane && <HomePaneRoutes />}
       <DestinationMembership />
       <button type="button" onClick={() => update(dm, { unreadCount: 2 })}>
         Receive DM
@@ -149,6 +199,9 @@ function BoundRail() {
       </button>
       <button type="button" onClick={() => update(home, { unreadCount: 4 })}>
         Receive Home
+      </button>
+      <button type="button" onClick={() => update(home, { unreadCount: 4, highlightCount: 1 })}>
+        Mention Home
       </button>
       <button type="button" onClick={() => update(dm, { unreadCount: 0, highlightCount: 1 })}>
         Mention only DM

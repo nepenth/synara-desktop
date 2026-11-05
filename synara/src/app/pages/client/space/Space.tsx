@@ -8,7 +8,6 @@ import React, {
 } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import {
-  Avatar,
   Box,
   Button,
   Icon,
@@ -36,30 +35,46 @@ type RoomJoinRulesEventContent = {
   }>;
 };
 import FocusTrap from '../../../components/FocusTrap';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import {
   NavCategory,
-  NavCategoryHeader,
+  NavEmptyCenter,
+  NavEmptyLayout,
   NavItem,
   NavItemContent,
   NavLink,
+  NavLoading,
+  NavPaneTitle,
+  NavSearchField,
+  NavSectionHeader,
 } from '../../../components/nav';
-import { getSpaceLobbyPath, getSpaceRoomPath, getSpaceSearchPath } from '../../pathUtils';
+import { getSpaceLobbyPath, getSpaceRoomPath } from '../../pathUtils';
+import {
+  readSpaceRoomListSort,
+  writeSpaceRoomListSort,
+  type SpaceRoomListSort,
+} from './spaceRoomList';
+import { favoriteRoomIdSet } from '../home/homeRoomList';
+import { useRoomListSortOptions } from '../home/Home';
+import * as roomNavCss from '../../../features/room-nav/styles.css';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
-import {
-  useSpaceLobbySelected,
-  useSpaceSearchSelected,
-} from '../../../hooks/router/useSelectedSpace';
+import { useSpaceLobbySelected } from '../../../hooks/router/useSelectedSpace';
 import { useSpace } from '../../../hooks/useSpace';
 import { VirtualTile } from '../../../components/virtualizer';
-import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
+import { RoomListSortMenu, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { useRoomName } from '../../../hooks/useRoomMeta';
 import { useSpaceJoinedHierarchy } from '../../../hooks/useSpaceHierarchy';
-import { allRoomsAtom } from '../../../state/room-list/roomList';
+import {
+  allRoomsAtom,
+  useNativeRoomListLoaded,
+  useNativeRoomListSnapshot,
+} from '../../../state/room-list/roomList';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
@@ -289,9 +304,7 @@ function SpaceHeader() {
       <PageNavHeader>
         <Box alignItems="Center" grow="Yes" gap="300">
           <Box grow="Yes" alignItems="Center" gap="100">
-            <Text size="H4" truncate>
-              {spaceName}
-            </Text>
+            <NavPaneTitle text={spaceName} />
             {joinRules?.join_rule !== 'public' && <Icon src={Icons.Lock} size="50" />}
           </Box>
           <Box shrink="No">
@@ -407,7 +420,40 @@ export function SpaceTombstone({ roomId, replacementRoomId }: SpaceTombstoneProp
   );
 }
 
+function SpaceEmpty({ lobbyPath }: { lobbyPath: string }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  return (
+    <NavEmptyCenter>
+      <NavEmptyLayout
+        icon={<Icon size="600" src={Icons.Space} />}
+        title={
+          <Text size="H5" align="Center">
+            {t('modernization.nav.no_space_rooms_title', 'No rooms yet')}
+          </Text>
+        }
+        content={
+          <Text size="T300" align="Center">
+            {t(
+              'modernization.nav.no_space_rooms_description',
+              'You have not joined any rooms in this space.'
+            )}
+          </Text>
+        }
+        options={
+          <Button variant="Secondary" size="300" onClick={() => navigate(lobbyPath)}>
+            <Text size="B300" truncate>
+              {t('modernization.nav.open_lobby', 'Open lobby')}
+            </Text>
+          </Button>
+        }
+      />
+    </NavEmptyCenter>
+  );
+}
+
 export function Space() {
+  const { t } = useTranslation();
   const space = useSpace();
   useNavToActivePathMapper(space.roomId);
   const spaceIdOrAlias = getCanonicalAliasOrRoomId(space.roomId);
@@ -416,13 +462,39 @@ export function Space() {
   const allRooms = useAtomValue(allRoomsAtom);
   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
   const notificationPreferences = useRoomsNotificationPreferencesContext();
+  const roomListLoaded = useNativeRoomListLoaded();
+  const nativeRoomList = useNativeRoomListSnapshot();
+  const homeSortOptions = useRoomListSortOptions();
 
   const tombstoneEvent = useStateEvent(space, StateEvent.RoomTombstone);
   const selectedRoomId = useSelectedRoom();
   const lobbySelected = useSpaceLobbySelected(spaceIdOrAlias);
-  const searchSelected = useSpaceSearchSelected(spaceIdOrAlias);
 
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
+
+  // One device-local sort for every space: Space order (default), Recent, Name.
+  const sortStorage = typeof localStorage === 'undefined' ? undefined : localStorage;
+  const [spaceSort, setSpaceSort] = useState<SpaceRoomListSort>(() =>
+    readSpaceRoomListSort(sortStorage)
+  );
+  const handleSpaceSort = (sort: SpaceRoomListSort) => {
+    setSpaceSort(sort);
+    writeSpaceRoomListSort(sortStorage, sort);
+  };
+  const spaceSortOptions = useMemo(
+    () => [
+      { value: 'space' as const, label: t('modernization.nav.sort_space_order', 'Space order') },
+      ...homeSortOptions,
+    ],
+    [homeSortOptions, t]
+  );
+
+  const favoriteIds = useMemo(
+    () => favoriteRoomIdSet(nativeRoomList.presentation),
+    [nativeRoomList.presentation]
+  );
+  const favoritesCategoryId = makeNavCategoryId(space.roomId, 'favorites');
+  const favoritesClosed = closedCategories.has(favoritesCategoryId);
 
   const getRoom = useCallback(
     (rId: string): EventedRoomReading | undefined => {
@@ -434,24 +506,58 @@ export function Space() {
     [allJoinedRooms]
   );
 
+  // Favourites move out of their sub-space into the Favorites section; a
+  // collapsed section (either kind) keeps unread and selected rows visible.
   const hierarchy = useSpaceJoinedHierarchy(
     space.roomId,
     getRoom,
     useCallback(
       (parentId, roomId) => {
+        if (favoriteIds.has(roomId)) return true;
         if (!closedCategories.has(makeNavCategoryId(space.roomId, parentId))) {
           return false;
         }
         const showRoomAnyway = roomToUnread.has(roomId) || roomId === selectedRoomId;
         return !showRoomAnyway;
       },
-      [space.roomId, closedCategories, roomToUnread, selectedRoomId]
+      [space.roomId, closedCategories, roomToUnread, selectedRoomId, favoriteIds]
     ),
     useCallback(
-      (sId) => closedCategories.has(makeNavCategoryId(space.roomId, sId)),
-      [closedCategories, space.roomId]
+      (sId) => (closedCategories.has(makeNavCategoryId(space.roomId, sId)) ? 'recent' : spaceSort),
+      [closedCategories, space.roomId, spaceSort]
     )
   );
+
+  const fullHierarchy = useSpaceJoinedHierarchy(
+    space.roomId,
+    getRoom,
+    useCallback(() => false, []),
+    useCallback(() => 'space' as const, [])
+  );
+  const spaceRoomIds = useMemo(
+    () => fullHierarchy.filter((item) => !('space' in item)).map((item) => item.roomId),
+    [fullHierarchy]
+  );
+  const favoriteRoomIds = useMemo(() => {
+    const ids = spaceRoomIds.filter((roomId) => favoriteIds.has(roomId));
+    const order =
+      spaceSort === 'name'
+        ? nativeRoomList.presentation.nameOrder
+        : nativeRoomList.presentation.recentOrder;
+    if (spaceSort === 'space') return Array.from(new Set(ids));
+    const rank = new Map(order.map((roomId, index) => [roomId, index]));
+    return Array.from(new Set(ids)).sort(
+      (a, b) => (rank.get(a) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b) ?? Number.MAX_SAFE_INTEGER)
+    );
+  }, [spaceRoomIds, favoriteIds, spaceSort, nativeRoomList.presentation]);
+  const visibleFavoriteRoomIds = useMemo(
+    () =>
+      favoritesClosed
+        ? favoriteRoomIds.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId)
+        : favoriteRoomIds,
+    [favoriteRoomIds, favoritesClosed, roomToUnread, selectedRoomId]
+  );
+  const noRoomToDisplay = spaceRoomIds.length === 0;
 
   const getRoomKey = useCallback(
     (index: number) => JSON.stringify([hierarchy[index].parentId, hierarchy[index].roomId]),
@@ -472,72 +578,138 @@ export function Space() {
 
   const getToLink = (roomId: string) =>
     getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(roomId));
+  const lobbyPath = getSpaceLobbyPath(getCanonicalAliasOrRoomId(space.roomId));
+  const roomsLabel = t('modernization.nav.rooms', 'Rooms');
+  const favoritesLabel = t('modernization.nav.favorites', 'Favorites');
+
+  const lobbyRow = (
+    <NavCategory>
+      <NavItem variant="Surface" radii="300" selected={lobbySelected}>
+        <NavLink aria-current={lobbySelected ? 'page' : undefined} to={lobbyPath}>
+          <NavItemContent>
+            <Box as="span" grow="Yes" alignItems="Center" gap="200">
+              <Text as="span" className={roomNavCss.RoomGlyph} aria-hidden="true">
+                <Icon
+                  className={roomNavCss.RoomGlyphIcon}
+                  src={Icons.Flag}
+                  size="100"
+                  filled={lobbySelected}
+                />
+              </Text>
+              <Box as="span" grow="Yes">
+                <Text as="span" size="Inherit" truncate>
+                  {t('modernization.nav.lobby', 'Lobby')}
+                </Text>
+              </Box>
+            </Box>
+          </NavItemContent>
+        </NavLink>
+      </NavItem>
+    </NavCategory>
+  );
 
   return (
-    <PageNav label="Space rooms">
+    <PageNav label={roomsLabel}>
       <SpaceHeader />
-      <PageNavContent scrollRef={scrollRef}>
-        <Box direction="Column" gap="300">
-          {tombstoneEvent && (
-            <SpaceTombstone
-              roomId={space.roomId}
-              replacementRoomId={tombstoneEvent.getContent().replacement_room}
-            />
+      <NavSearchField />
+      {noRoomToDisplay ? (
+        <>
+          <div style={{ padding: `${config.space.S200} ${config.space.S200} 0` }}>
+            {tombstoneEvent && (
+              <SpaceTombstone
+                roomId={space.roomId}
+                replacementRoomId={tombstoneEvent.getContent().replacement_room}
+              />
+            )}
+            {lobbyRow}
+          </div>
+          {roomListLoaded ? (
+            <SpaceEmpty lobbyPath={lobbyPath} />
+          ) : (
+            <NavLoading label={t('modernization.nav.loading_space', 'Loading space…')} />
           )}
-          <NavCategory>
-            <NavItem variant="Surface" radii="400" selected={lobbySelected}>
-              <NavLink
-                aria-current={lobbySelected ? 'page' : undefined}
-                to={getSpaceLobbyPath(getCanonicalAliasOrRoomId(space.roomId))}
-              >
-                <NavItemContent>
-                  <Box as="span" grow="Yes" alignItems="Center" gap="200">
-                    <Avatar size="200" radii="400">
-                      <Icon src={Icons.Flag} size="100" filled={lobbySelected} />
-                    </Avatar>
-                    <Box as="span" grow="Yes">
-                      <Text as="span" size="Inherit" truncate>
-                        Lobby
-                      </Text>
-                    </Box>
-                  </Box>
-                </NavItemContent>
-              </NavLink>
-            </NavItem>
-            <NavItem variant="Surface" radii="400" selected={searchSelected}>
-              <NavLink
-                aria-current={searchSelected ? 'page' : undefined}
-                to={getSpaceSearchPath(getCanonicalAliasOrRoomId(space.roomId))}
-              >
-                <NavItemContent>
-                  <Box as="span" grow="Yes" alignItems="Center" gap="200">
-                    <Avatar size="200" radii="400">
-                      <Icon src={Icons.Search} size="100" filled={searchSelected} />
-                    </Avatar>
-                    <Box as="span" grow="Yes">
-                      <Text as="span" size="Inherit" truncate>
-                        Message Search
-                      </Text>
-                    </Box>
-                  </Box>
-                </NavItemContent>
-              </NavLink>
-            </NavItem>
-          </NavCategory>
-          <NavCategory
-            ref={listRef}
-            style={{
-              height: virtualizer.getTotalSize(),
-              position: 'relative',
-            }}
-          >
-            {virtualizer.getVirtualItems().map((vItem) => {
-              const { roomId } = hierarchy[vItem.index] ?? {};
-              const room = getNativeRoom(roomId);
-              if (!room) return null;
+        </>
+      ) : (
+        <PageNavContent scrollRef={scrollRef}>
+          <Box direction="Column" gap="300">
+            {tombstoneEvent && (
+              <SpaceTombstone
+                roomId={space.roomId}
+                replacementRoomId={tombstoneEvent.getContent().replacement_room}
+              />
+            )}
+            {lobbyRow}
+            {favoriteRoomIds.length > 0 && (
+              <NavCategory>
+                <NavSectionHeader
+                  label={favoritesLabel}
+                  closed={favoritesClosed}
+                  categoryId={favoritesCategoryId}
+                  onToggle={handleCategoryClick}
+                />
+                {visibleFavoriteRoomIds.map((roomId) => {
+                  const room = getNativeRoom(roomId);
+                  if (!room) return null;
+                  return (
+                    <RoomNavItem
+                      key={roomId}
+                      room={room}
+                      selected={selectedRoomId === roomId}
+                      linkPath={getToLink(roomId)}
+                      notificationMode={getRoomNotificationMode(
+                        notificationPreferences,
+                        room.roomId
+                      )}
+                    />
+                  );
+                })}
+              </NavCategory>
+            )}
+            <NavCategory
+              ref={listRef}
+              style={{
+                height: virtualizer.getTotalSize(),
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((vItem) => {
+                const { roomId } = hierarchy[vItem.index] ?? {};
+                const room = getNativeRoom(roomId);
+                if (!room) return null;
 
-              if (room.isSpaceRoom()) {
-                const categoryId = makeNavCategoryId(space.roomId, roomId);
+                if (room.isSpaceRoom()) {
+                  const categoryId = makeNavCategoryId(space.roomId, roomId);
+
+                  return (
+                    <VirtualTile
+                      virtualItem={vItem}
+                      scrollMargin={scrollMargin}
+                      key={vItem.key}
+                      ref={virtualizer.measureElement}
+                    >
+                      <div
+                        style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S500 }}
+                      >
+                        <NavSectionHeader
+                          label={roomId === space.roomId ? roomsLabel : room?.name}
+                          closed={closedCategories.has(categoryId)}
+                          categoryId={categoryId}
+                          onToggle={handleCategoryClick}
+                          actions={
+                            <RoomListSortMenu
+                              sectionLabel={
+                                roomId === space.roomId ? roomsLabel : (room?.name ?? '')
+                              }
+                              value={spaceSort}
+                              options={spaceSortOptions}
+                              onChange={handleSpaceSort}
+                            />
+                          }
+                        />
+                      </div>
+                    </VirtualTile>
+                  );
+                }
 
                 return (
                   <VirtualTile
@@ -546,40 +718,22 @@ export function Space() {
                     key={vItem.key}
                     ref={virtualizer.measureElement}
                   >
-                    <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
-                      <NavCategoryHeader>
-                        <RoomNavCategoryButton
-                          data-category-id={categoryId}
-                          onClick={handleCategoryClick}
-                          closed={closedCategories.has(categoryId)}
-                        >
-                          {roomId === space.roomId ? 'Rooms' : room?.name}
-                        </RoomNavCategoryButton>
-                      </NavCategoryHeader>
-                    </div>
+                    <RoomNavItem
+                      room={room}
+                      selected={selectedRoomId === roomId}
+                      linkPath={getToLink(roomId)}
+                      notificationMode={getRoomNotificationMode(
+                        notificationPreferences,
+                        room.roomId
+                      )}
+                    />
                   </VirtualTile>
                 );
-              }
-
-              return (
-                <VirtualTile
-                  virtualItem={vItem}
-                  scrollMargin={scrollMargin}
-                  key={vItem.key}
-                  ref={virtualizer.measureElement}
-                >
-                  <RoomNavItem
-                    room={room}
-                    selected={selectedRoomId === roomId}
-                    linkPath={getToLink(roomId)}
-                    notificationMode={getRoomNotificationMode(notificationPreferences, room.roomId)}
-                  />
-                </VirtualTile>
-              );
-            })}
-          </NavCategory>
-        </Box>
-      </PageNavContent>
+              })}
+            </NavCategory>
+          </Box>
+        </PageNavContent>
+      )}
     </PageNav>
   );
 }

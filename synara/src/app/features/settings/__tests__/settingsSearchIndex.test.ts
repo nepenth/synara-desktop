@@ -19,9 +19,10 @@ const APP_PAGES: SettingsSearchPage<SettingsPages>[] = [
   { id: SettingsPages.AppearancePage, name: 'Appearance' },
   { id: SettingsPages.NotificationPage, name: 'Notifications' },
   { id: SettingsPages.AccountPage, name: 'Account' },
-  { id: SettingsPages.DevicesPage, name: 'Devices' },
+  { id: SettingsPages.SecurityPage, name: 'Security & recovery' },
+  { id: SettingsPages.DevicesPage, name: 'Sessions' },
   { id: SettingsPages.DiagnosticsPage, name: 'Diagnostics' },
-  { id: SettingsPages.DeveloperToolsPage, name: 'Developer Tools' },
+  { id: SettingsPages.DeveloperToolsPage, name: 'Developer tools' },
   { id: SettingsPages.AboutPage, name: 'About' },
 ];
 
@@ -29,23 +30,26 @@ const search = (query: string) => searchSettings(APP_PAGES, APP_SETTINGS_SEARCH_
 const titles = (query: string) =>
   search(query).flatMap((group) => group.results.map((result) => result.title));
 
-test('"thread" finds Thread Display on Appearance', () => {
+test('"thread" finds Thread display on Appearance', () => {
   const groups = search('thread');
   assert.equal(groups[0]?.pageName, 'Appearance');
-  assert.equal(groups[0]?.results[0]?.title, 'Thread Display');
+  assert.equal(groups[0]?.results[0]?.title, 'Thread display');
 });
 
 test('synonyms and descriptions find settings whose titles do not say so', () => {
   assert.ok(titles('dark').includes('Theme'));
-  assert.ok(titles('dark').includes('Dark Theme'));
-  assert.ok(titles('side panel').includes('Thread Display'));
-  assert.ok(titles('read receipts').includes('Hide Typing & Read Receipts'));
-  assert.ok(titles('block').includes('Select User'));
-  assert.ok(titles('keychain').includes('Native Session Store'));
+  assert.ok(titles('dark').includes('Dark theme'));
+  assert.ok(titles('side panel').includes('Thread display'));
+  assert.ok(titles('read receipts').includes('Hide typing & read receipts'));
+  assert.ok(titles('block').includes('Block a user'));
+  assert.ok(titles('keychain').includes('Native session store'));
+  // Old names still find the renamed rows.
+  assert.ok(titles('devices').includes('Other sessions'));
+  assert.ok(titles('desktop shortcuts').includes('Keyboard shortcuts'));
 });
 
 test('every word must match, case-insensitively', () => {
-  assert.deepEqual(titles('NOTIFICATION SOUND'), ['Notification Sound']);
+  assert.deepEqual(titles('NOTIFICATION SOUND'), ['Notification sound']);
   assert.deepEqual(titles('thread zebra'), []);
   assert.deepEqual(search(''), []);
   assert.deepEqual(search('   '), []);
@@ -73,7 +77,7 @@ test('a page name lists its settings, and a page with none still appears', () =>
 });
 
 test('matches are highlighted and long descriptions are cut around the match', () => {
-  assert.deepEqual(matchRanges('Thread Display', ['thread']), [[0, 6]]);
+  assert.deepEqual(matchRanges('Thread display', ['thread']), [[0, 6]]);
   assert.deepEqual(matchRanges('Side side', ['side']), [
     [0, 4],
     [5, 9],
@@ -92,8 +96,11 @@ const walk = (dir: string): string[] =>
     return path.endsWith('.tsx') ? [path] : [];
   });
 
-const assertIndexed = <T>(dir: string, page: T, index: SettingsSearchEntry<T>[]) => {
-  const indexed = new Set(index.filter((entry) => entry.page === page).map((entry) => entry.title));
+const assertIndexed = <T>(dir: string, page: T | T[], index: SettingsSearchEntry<T>[]) => {
+  const pages = Array.isArray(page) ? page : [page];
+  const indexed = new Set(
+    index.filter((entry) => pages.includes(entry.page)).map((entry) => entry.title)
+  );
   walk(dir).forEach((file) => {
     scanSettingTitles(readFileSync(file, 'utf8')).forEach(({ candidates }) => {
       assert.ok(
@@ -105,12 +112,13 @@ const assertIndexed = <T>(dir: string, page: T, index: SettingsSearchEntry<T>[])
 };
 
 test('the App Settings index lists every title its pages render', () => {
-  const pages: Array<[string, SettingsPages]> = [
+  // The devices directory renders both the Sessions and the Security & recovery pages.
+  const pages: Array<[string, SettingsPages | SettingsPages[]]> = [
     ['general', SettingsPages.GeneralPage],
     ['appearance', SettingsPages.AppearancePage],
     ['notifications', SettingsPages.NotificationPage],
     ['account', SettingsPages.AccountPage],
-    ['devices', SettingsPages.DevicesPage],
+    ['devices', [SettingsPages.DevicesPage, SettingsPages.SecurityPage]],
     ['diagnostics', SettingsPages.DiagnosticsPage],
     ['developer-tools', SettingsPages.DeveloperToolsPage],
     ['about', SettingsPages.AboutPage],

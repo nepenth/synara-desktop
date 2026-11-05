@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { Box, Button, Header, Switch, Text } from 'folds';
+import { Box, Button, Switch, Text } from 'folds';
+import { ConfirmDialog } from '../../../components/confirm-dialog';
+import { InlineMessage } from '../../../components/inline-message';
+import { DesktopIntegrationSection } from './DesktopIntegration';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
@@ -154,8 +157,9 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
     }
   };
 
+  const [confirmClear, setConfirmClear] = useState(false);
   const handleClear = async () => {
-    if (!window.confirm('Clear all diagnostic records stored by this desktop client?')) return;
+    setConfirmClear(false);
     setBusyAction('clear');
     setFeedback(undefined);
     try {
@@ -178,7 +182,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
       description="Connection and runtime information to share when reporting a problem."
       requestClose={requestClose}
     >
-      <SettingsSection title="Diagnostic Capture">
+      <SettingsSection title="Diagnostic capture">
         <SequenceCard
           className={SequenceCardStyle}
           variant="SurfaceVariant"
@@ -186,7 +190,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
           gap="400"
         >
           <SettingTile
-            title="Enable Diagnostic Capture"
+            title="Capture diagnostics"
             description="Record additional privacy-filtered evidence while reproducing a problem. Normal client behavior is unchanged."
             after={<Switch variant="Primary" value={enabled} onChange={handleEnabledChange} />}
           />
@@ -203,7 +207,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
             }
           />
           <SettingTile
-            title="Session Persistence"
+            title="Session persistence"
             description="Capture credential-store availability, bootstrap source, token-refresh outcomes, and sync lifecycle without recording credentials."
             after={
               <Switch
@@ -220,7 +224,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
             }
           />
           <SettingTile
-            title="Room State and Positioning"
+            title="Room state and positioning"
             description="Capture room-open decisions, read-marker outcomes, recent-room updates, pagination, anchoring, and unexpected scroll movement."
             after={
               <Switch
@@ -237,7 +241,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
             }
           />
           <SettingTile
-            title="Performance Overlay"
+            title="Performance overlay"
             description="Show live frame rate, long-task, timeline-row, and memory counters over the client."
             after={
               <Switch
@@ -256,7 +260,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
         </SequenceCard>
       </SettingsSection>
 
-      <SettingsSection title="Stored Report">
+      <SettingsSection title="Stored report">
         <SequenceCard
           className={SequenceCardStyle}
           variant="SurfaceVariant"
@@ -311,19 +315,29 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
               fill="None"
               radii="300"
               disabled={reportActionsDisabled}
-              onClick={handleClear}
+              onClick={() => setConfirmClear(true)}
             >
               <Text size="B300">{busyAction === 'clear' ? 'Clearing…' : 'Clear records'}</Text>
             </Button>
           </Box>
-          {feedback && <Text size="T200">{feedback}</Text>}
+          {feedback && <InlineMessage tone="info">{feedback}</InlineMessage>}
         </SequenceCard>
       </SettingsSection>
 
-      <Box direction="Column" gap="100">
-        <Header size="300">
-          <Text size="L400">Privacy</Text>
-        </Header>
+      {confirmClear && (
+        <ConfirmDialog
+          title="Clear diagnostic records?"
+          description="Reports stored on this device are deleted. Nothing is sent anywhere."
+          confirmLabel="Clear"
+          tone="critical"
+          onConfirm={() => void handleClear()}
+          onCancel={() => setConfirmClear(false)}
+        />
+      )}
+
+      <DesktopIntegrationSection />
+
+      <SettingsSection title="Privacy">
         <SequenceCard
           className={SequenceCardStyle}
           variant="SurfaceVariant"
@@ -340,7 +354,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
             team.
           </Text>
         </SequenceCard>
-      </Box>
+      </SettingsSection>
     </SettingsPage>
   );
 }

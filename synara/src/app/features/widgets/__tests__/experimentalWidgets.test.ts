@@ -81,12 +81,14 @@ test('General owns the Widgets editor; Developer Tools only points at it', () =>
     'utf8'
   );
   const panel = readFileSync('src/app/features/room/RoomWidgetsPanel.tsx', 'utf8');
-  assert.match(general, /<SettingsSection title="Widgets">/);
+  assert.match(general, /<SettingsSection\s+title="Widgets"/);
   assert.match(general, /experimentalWidgetsEnabled/);
   assert.match(general, /agentWidgetEntries/);
   assert.match(general, /Add agent widget/);
   assert.match(general, /widgetsSettingsDescription/);
-  assert.match(developerTools, /Widgets are configured under General/);
+  // Developer Tools no longer carries a pointer row; General is the only home.
+  assert.doesNotMatch(developerTools, /Widgets are configured under General/);
+  assert.doesNotMatch(developerTools, /Experimental Widgets/);
   assert.equal(developerTools.includes('Add agent widget'), false);
   assert.equal(developerTools.includes('setAgentWidgetEntries'), false);
   assert.equal(developerTools.includes('closeExperimentalWidgets'), false);

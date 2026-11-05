@@ -77,7 +77,6 @@ final class LocalizationCatalogTests: XCTestCase {
             "%lld replies": "%lld reply",
             "%lld members": "%lld member",
             "%lld rooms": "%lld room",
-            "%lld channels": "%lld channel",
             "%lld items changed": "%lld item changed",
             "%lld chars": "%lld char",
             "%lld lines": "%lld line",

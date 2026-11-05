@@ -155,6 +155,119 @@ final class TimelinePolishTests: XCTestCase {
         })
     }
 
+    func testLongBareLinksShowAsSiteAndPathButOpenTheWholeAddress() throws {
+        let yahoo = "https://www.yahoo.com/entertainment/celebrity/article/patrick-stewart-star-of-x-men-and-star-trek-dies-at-86-195431969.html?guccounter=1&guce_referrer=aHR0cHM6Ly93d3cuZ29vZ2xlLmNvbS8"
+        let body = "I got some terrible news guys...\(yahoo) so sad"
+        let attributed = SynaraPlainTextLinks.attributedText(body, shortensLinks: true)
+        XCTAssertEqual(
+            String(attributed.characters),
+            "I got some terrible news guys...yahoo.com/…/patrick-stewart-star-of-x-men-and-… so sad"
+        )
+        let linked = try XCTUnwrap(attributed.runs.first { $0.link != nil })
+        XCTAssertEqual(linked.link?.absoluteString, yahoo)
+        XCTAssertEqual(
+            String(SynaraPlainTextLinks.attributedText(body).characters),
+            body,
+            "with the setting off the address stays whole"
+        )
+
+        func label(_ text: String, _ href: String? = nil) -> String? {
+            SynaraShortLinks.label(text: text, url: URL(string: href ?? text)!)
+        }
+        XCTAssertEqual(label("https://example.com/news/story?utm_source=feed&utm_medium=rss&utm_campaign=x"), "example.com/news/story…")
+        XCTAssertEqual(label("https://docs.example.org/guide/install/linux/arch/packages/troubleshooting"), "docs.example.org/…/troubleshooting")
+        XCTAssertEqual(
+            label("www.example.com/a/b?session=0123456789abcdef0123456789abcdef", "http://www.example.com/a/b?session=0123456789abcdef0123456789abcdef"),
+            "example.com/a/b…"
+        )
+    }
+
+    func testShortLinksNeverCutTheSiteOrRelabelOtherLinks() {
+        func label(_ text: String, _ href: String? = nil) -> String? {
+            SynaraShortLinks.label(text: text, url: URL(string: href ?? text)!)
+        }
+        XCTAssertEqual(
+            label("https://paypal.com.account-verify.secure-login.example-phishing-host.test/x?token=1"),
+            "paypal.com.account-verify.secure-login.example-phishing-host.test/…"
+        )
+        let host = String(repeating: "a", count: 60) + ".test"
+        XCTAssertEqual(label("https://\(host)/one/two/three"), "\(host)/…")
+        XCTAssertNil(label("https://example.com/a?b=c"))
+        let long = "https://example.com/a/very/long/path/that/goes/on/and/on/for/a/while"
+        XCTAssertNil(label("Read the full article here please, it is long", long))
+        XCTAssertNil(label(long, "https://example.com/other"))
+        XCTAssertNil(label("https://user:secret@example.com/a/very/long/path/that/goes/on/and/on"))
+        XCTAssertNil(label("mailto:someone.with.a.very.long.address@example-company-domain.test"))
+    }
+
+    func testMentionPillsComeFromMatrixToUserLinks() {
+        func user(_ link: String) -> String? {
+            URL(string: link).flatMap(TimelineMentionPolicy.userID(inPermalink:))
+        }
+        XCTAssertEqual(user("https://matrix.to/#/@ada:example.org"), "@ada:example.org")
+        XCTAssertEqual(user("https://matrix.to/#/%40ada%3Aexample.org"), "@ada:example.org")
+        XCTAssertEqual(user("https://matrix.to/#/@ada:example.org?via=example.org"), "@ada:example.org")
+        XCTAssertNil(user("https://matrix.to/#/!room:example.org"))
+        XCTAssertNil(user("https://matrix.to/#/!room:example.org/$event"))
+        XCTAssertNil(user("https://example.org/#/@ada:example.org"))
+        XCTAssertEqual(TimelineMentionPolicy.pillLabel("Ada"), "\u{200A}@Ada\u{200A}")
+        XCTAssertEqual(TimelineMentionPolicy.pillLabel("@Ada"), "\u{200A}@Ada\u{200A}")
+    }
+
+    func testComposerMentionQueryNeedsTheAtToStartAWord() {
+        XCTAssertEqual(ComposerMentions.query(in: "hi @al", cursor: 6), .init(location: 3, text: "al"))
+        XCTAssertEqual(ComposerMentions.query(in: "@", cursor: 1), .init(location: 0, text: ""))
+        XCTAssertNil(ComposerMentions.query(in: "mail@al", cursor: 7))
+        XCTAssertNil(ComposerMentions.query(in: "@al ex", cursor: 6))
+        XCTAssertNil(ComposerMentions.query(in: "hi", cursor: 2))
+    }
+
+    func testComposerMentionSuggestionsRankNamesAndSkipYouAndLeavers() {
+        let members = [
+            RoomMemberSummary(userID: "@me:example.org", displayName: "Alma", membership: .join, powerLevel: 0),
+            RoomMemberSummary(userID: "@alex:example.org", displayName: "Alex Kim", membership: .join, powerLevel: 0),
+            RoomMemberSummary(userID: "@sam:example.org", displayName: "Sam Alvarez", membership: .invite, powerLevel: 0),
+            RoomMemberSummary(userID: "@al:example.org", displayName: "Gone Al", membership: .leave, powerLevel: 0),
+        ]
+        let picked = ComposerMentions.suggestions(for: "al", members: members, excluding: "@me:example.org")
+        XCTAssertEqual(picked.map(\.userID), ["@alex:example.org", "@sam:example.org"])
+    }
+
+    func testComposerMentionInsertAndResolveMakeDesktopPills() {
+        let alex = ComposerMention(userID: "@alex:example.org", displayName: "Alex Kim")
+        let inserted = ComposerMentions.insert(
+            alex,
+            replacing: .init(location: 3, text: "al"),
+            cursor: 6,
+            in: "hi @al"
+        )
+        XCTAssertEqual(inserted.text, "hi @Alex Kim ")
+        XCTAssertEqual(inserted.cursor, 13)
+
+        let me = ComposerMention(userID: "@me:example.org", displayName: "Me")
+        let resolved = ComposerMentions.resolve(
+            "@Alex Kim and @Me, not @Alex Kimberly",
+            mentions: [alex, me],
+            currentUserID: "@me:example.org"
+        )
+        XCTAssertEqual(
+            resolved.markdown,
+            "[@Alex Kim](https://matrix.to/#/@alex:example.org) and [@Me](https://matrix.to/#/@me:example.org), not @Alex Kimberly"
+        )
+        XCTAssertEqual(resolved.userIDs, ["@alex:example.org"])
+
+        let html = ComposerMatrixFormatting.formattedBody(for: resolved.markdown) ?? ""
+        XCTAssertTrue(html.contains("<a href=\"https://matrix.to/#/@alex:example.org\">@Alex Kim</a>"), html)
+    }
+
+    func testComposerMentionsComeBackWhenEditingAPilledMessage() {
+        let found = ComposerMentions.mentions(
+            inHTML: "<a href=\"https://matrix.to/#/@alex:example.org\">@Alex</a> hi"
+        )
+        XCTAssertEqual(found.map(\.label), ["@Alex", "@alex:example.org"])
+        XCTAssertEqual(Set(found.map(\.userID)), ["@alex:example.org"])
+    }
+
     // MARK: Reactions (I21)
 
     func testReactionPillsToggleOnlyWhenReactingIsAllowedAndOwnershipIsKnown() {
@@ -302,6 +415,59 @@ final class TimelinePolishTests: XCTestCase {
         XCTAssertTrue(RoomListPeerCallStatus.isInCall(rooms[0], peersInCall: ["@bob:example.org"]))
         XCTAssertFalse(RoomListPeerCallStatus.isInCall(rooms[3], peersInCall: ["@live:example.org"]))
         XCTAssertFalse(RoomListPeerCallStatus.isInCall(rooms[4], peersInCall: ["@nobody:example.org"]))
+    }
+
+    // MARK: Room-list wave 3 (presence dot, unread marker)
+
+    func testRoomListPresenceAsksEveryDirectPeerIncludingLiveCalls() {
+        let rooms = [
+            room(kind: .directMessage, name: "Bob", peer: "@bob:example.org"),
+            room(kind: .directMessage, name: "Live", peer: "@live:example.org", hasActiveCall: true),
+            room(kind: .directMessage, name: "Nobody", peer: ""),
+            room(kind: .room, name: "Channel", peer: "@chan:example.org"),
+        ]
+        XCTAssertEqual(RoomListPeerPresence.peerIDs(in: rooms), ["@bob:example.org", "@live:example.org"])
+    }
+
+    func testRoomListPresenceMapsCoreStatesAndNeverGuessesUnknown() {
+        func snapshot(_ state: String, active: Bool = false) -> SharedCorePresence {
+            SharedCorePresenceLive.presence(userId: "@a:example.org", state: state, currentlyActive: active, statusMsg: nil)
+        }
+        XCTAssertNil(RoomListPeerPresence.presence(from: nil))
+        XCTAssertEqual(RoomListPeerPresence.presence(from: snapshot("online")), .online)
+        XCTAssertEqual(RoomListPeerPresence.presence(from: snapshot("offline")), .offline)
+        XCTAssertEqual(RoomListPeerPresence.presence(from: snapshot("unavailable")), .offline)
+        XCTAssertNil(RoomListPeerPresence.presence(from: snapshot("")))
+        XCTAssertNil(RoomListPeerPresence.presence(from: snapshot("unknown")))
+        XCTAssertEqual(RoomListPeerPresence.presence(from: snapshot("unknown", active: true)), .online)
+    }
+
+    func testUnreadGutterMarkerShowsForUnreadAudibleRowsOnly() {
+        func summary(unread: Int, highlight: Bool = false, mode: SynaraRoomNotificationMode = .default) -> RoomSummary {
+            RoomSummary(
+                id: "!r:example.org",
+                name: "R",
+                lastMessagePreview: "",
+                unreadCount: unread,
+                hasHighlight: highlight,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: Date(timeIntervalSince1970: 0),
+                notificationMode: mode
+            )
+        }
+        XCTAssertTrue(RoomListUnreadMarker.isShown(for: summary(unread: 2)))
+        XCTAssertTrue(RoomListUnreadMarker.isShown(for: summary(unread: 1, highlight: true)))
+        XCTAssertFalse(RoomListUnreadMarker.isShown(for: summary(unread: 0)))
+        XCTAssertFalse(RoomListUnreadMarker.isShown(for: summary(unread: 4, mode: .mute)))
+        XCTAssertFalse(RoomListUnreadMarker.isShown(for: summary(unread: 1, highlight: true, mode: .mute)))
+        XCTAssertEqual(SynaraMetrics.unreadMarkerWidth, 3)
+        XCTAssertEqual(SynaraMetrics.unreadMarkerHeight, 16)
+        XCTAssertLessThanOrEqual(
+            RoomListUnreadMarker.gutterOffset + SynaraMetrics.unreadMarkerWidth / 2,
+            SynaraSpacing.small,
+            "The marker stays inside the row's leading list inset"
+        )
     }
 
     // MARK: Formatter cache (I15)

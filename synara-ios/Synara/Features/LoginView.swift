@@ -36,7 +36,7 @@ enum LoginFormField: Hashable {
 
 /// Neutral sign-in copy: the same screen serves first-time users.
 enum LoginCopy {
-    static let title = String(localized: "Sign In")
+    static let title = String(localized: "Sign in")
     static let subtitle = String(localized: "Use your Matrix account.")
 }
 
@@ -111,7 +111,7 @@ struct LoginView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     } else {
-                        Text("Log In")
+                        Text("Sign in")
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -120,7 +120,7 @@ struct LoginView: View {
                 .id(LoginFormField.submitRowID)
                 .accessibilityIdentifier("LoginSubmitButton")
             } header: {
-                Text("Matrix Account")
+                Text("Matrix account")
             }
 
             if case .failed(let message) = state {
@@ -138,14 +138,14 @@ struct LoginView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .navigationTitle("Login")
+        .navigationTitle(LoginCopy.title)
         .accessibilityIdentifier("LoginScreen")
         .confirmationDialog(
             "Reset local data for this account?",
             isPresented: $confirmingStoreReset,
             titleVisibility: .visible
         ) {
-            Button("Reset and Sign In", role: .destructive) {
+            Button("Reset and sign in", role: .destructive) {
                 resetLocalDataAndLogin()
             }
         } message: {

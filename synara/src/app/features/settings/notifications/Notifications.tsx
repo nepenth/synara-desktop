@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Box, Text, IconButton, Icon, Icons, Button, Input, Spinner, color } from 'folds';
+import React, { useCallback, useEffect, useId, useState } from 'react';
+import { Box, Text, Button, Chip, Icon, Icons, Input, Spinner, Switch } from 'folds';
+import { InlineMessage } from '../../../components/inline-message';
 import { SystemNotification } from './SystemNotification';
 import { AgentNotifications } from './AgentNotifications';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -67,9 +68,9 @@ type PushRuleSection = 'defaults' | 'mentions' | 'keywords';
 function SectionError({ message }: { message?: string }) {
   if (!message) return null;
   return (
-    <Text size="T200" role="alert" style={{ color: color.Critical.Main }}>
-      {message}
-    </Text>
+    <Box>
+      <InlineMessage tone="critical">{message}</InlineMessage>
+    </Box>
   );
 }
 
@@ -78,6 +79,7 @@ function NativePushRulesEditor() {
   const [keyword, setKeyword] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [writeError, setWriteError] = useState<{ section: PushRuleSection; message: string }>();
+  const keywordId = useId();
 
   const refresh = useCallback(async () => {
     setSnapshot(await nativePushRulesSnapshot());
@@ -122,89 +124,39 @@ function NativePushRulesEditor() {
     );
   };
 
+  const modeRow = (
+    title: string,
+    value: NativePushRuleMode | undefined,
+    onChange: (mode: NativePushRuleMode) => void
+  ) => (
+    <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+      <SettingTile
+        title={title}
+        after={
+          snapshot &&
+          value && <NativeModePicker value={value} disabled={busy} onChange={onChange} />
+        }
+      />
+    </SequenceCard>
+  );
+
   return (
-    <Box direction="Column" gap="700">
-      <SettingsSection title="All Messages">
-        <SequenceCard
-          className={SequenceCardStyle}
-          variant="SurfaceVariant"
-          direction="Column"
-          gap="400"
-        >
-          <SettingTile
-            title="1-to-1 Chats"
-            after={
-              snapshot && (
-                <NativeModePicker
-                  value={snapshot.dm}
-                  disabled={busy}
-                  onChange={(mode) => setDefault(false, true, mode)}
-                />
-              )
-            }
-          />
-        </SequenceCard>
-        <SequenceCard
-          className={SequenceCardStyle}
-          variant="SurfaceVariant"
-          direction="Column"
-          gap="400"
-        >
-          <SettingTile
-            title="1-to-1 Chats (Encrypted)"
-            after={
-              snapshot && (
-                <NativeModePicker
-                  value={snapshot.dmEncrypted}
-                  disabled={busy}
-                  onChange={(mode) => setDefault(true, true, mode)}
-                />
-              )
-            }
-          />
-        </SequenceCard>
-        <SequenceCard
-          className={SequenceCardStyle}
-          variant="SurfaceVariant"
-          direction="Column"
-          gap="400"
-        >
-          <SettingTile
-            title="Rooms"
-            after={
-              snapshot && (
-                <NativeModePicker
-                  value={snapshot.group}
-                  disabled={busy}
-                  onChange={(mode) => setDefault(false, false, mode)}
-                />
-              )
-            }
-          />
-        </SequenceCard>
-        <SequenceCard
-          className={SequenceCardStyle}
-          variant="SurfaceVariant"
-          direction="Column"
-          gap="400"
-        >
-          <SettingTile
-            title="Rooms (Encrypted)"
-            after={
-              snapshot && (
-                <NativeModePicker
-                  value={snapshot.groupEncrypted}
-                  disabled={busy}
-                  onChange={(mode) => setDefault(true, false, mode)}
-                />
-              )
-            }
-          />
-        </SequenceCard>
+    <>
+      <SettingsSection
+        title="Direct messages"
+        description="How much to notify for one-to-one conversations."
+      >
+        {modeRow('Unencrypted', snapshot?.dm, (mode) => setDefault(false, true, mode))}
+        {modeRow('Encrypted', snapshot?.dmEncrypted, (mode) => setDefault(true, true, mode))}
         <SectionError message={sectionError('defaults')} />
       </SettingsSection>
 
-      <SettingsSection title="Mentions">
+      <SettingsSection title="Rooms" description="How much to notify for group rooms.">
+        {modeRow('Unencrypted', snapshot?.group, (mode) => setDefault(false, false, mode))}
+        {modeRow('Encrypted', snapshot?.groupEncrypted, (mode) => setDefault(true, false, mode))}
+      </SettingsSection>
+
+      <SettingsSection title="Mentions" description="Always notify when a message mentions you.">
         {[
           ['userMention', 'Mentions of your user ID'] as const,
           ['displayName', 'Contains your display name'] as const,
@@ -217,37 +169,22 @@ function NativePushRulesEditor() {
             className={SequenceCardStyle}
             variant="SurfaceVariant"
             direction="Column"
-            gap="400"
           >
             <SettingTile
               title={title}
               after={
                 snapshot && (
-                  <Button
-                    className={SettingsQuietControl}
-                    size="300"
-                    variant="Secondary"
-                    fill={snapshot.mentions[ruleId] ? 'Soft' : 'None'}
-                    outlined
-                    radii="300"
-                    aria-pressed={snapshot.mentions[ruleId]}
-                    before={
-                      <Icon
-                        size="100"
-                        src={Icons.Check}
-                        aria-hidden
-                        style={{ visibility: snapshot.mentions[ruleId] ? 'visible' : 'hidden' }}
-                      />
-                    }
+                  <Switch
+                    variant="Primary"
+                    aria-label={title}
+                    value={snapshot.mentions[ruleId]}
                     disabled={busy}
-                    onClick={() =>
+                    onChange={(next) =>
                       save('mentions', `Couldn't change "${title}". Try again.`, () =>
-                        nativePushRulesSetMention(ruleId, !snapshot.mentions[ruleId])
+                        nativePushRulesSetMention(ruleId, next)
                       )
                     }
-                  >
-                    <Text size="T300">{snapshot.mentions[ruleId] ? 'On' : 'Off'}</Text>
-                  </Button>
+                  />
                 )
               }
             />
@@ -256,20 +193,21 @@ function NativePushRulesEditor() {
         <SectionError message={sectionError('mentions')} />
       </SettingsSection>
 
-      <SettingsSection title="Keyword Messages">
+      <SettingsSection
+        title="Keywords"
+        description="Notify when a message contains one of these words."
+      >
         <SequenceCard
           className={SequenceCardStyle}
           variant="SurfaceVariant"
           direction="Column"
-          gap="400"
+          gap="300"
         >
-          <SettingTile
-            title="Select Keyword"
-            description="Notify when a message contains this keyword."
-          >
+          <SettingTile>
             <Box
               as="form"
               gap="200"
+              alignItems="End"
               onSubmit={(evt) => {
                 evt.preventDefault();
                 const next = keyword.trim();
@@ -281,9 +219,13 @@ function NativePushRulesEditor() {
                 });
               }}
             >
-              <Box grow="Yes" direction="Column">
+              <Box grow="Yes" direction="Column" gap="100">
+                <Text as="label" size="L400" priority="300" htmlFor={keywordId}>
+                  Add a keyword
+                </Text>
                 <Input
                   aria-label="New keyword"
+                  id={keywordId}
                   value={keyword}
                   onChange={(evt) => setKeyword(evt.currentTarget.value)}
                   variant="Secondary"
@@ -302,42 +244,34 @@ function NativePushRulesEditor() {
                 disabled={busy || !keyword.trim()}
               >
                 {busy && <Spinner variant="Secondary" size="300" />}
-                <Text size="B400">Save</Text>
+                <Text size="B400">Add</Text>
               </Button>
             </Box>
+            {snapshot && snapshot.keywords.length > 0 && (
+              <Box wrap="Wrap" gap="200">
+                {snapshot.keywords.map((item) => (
+                  <Chip
+                    key={item}
+                    className={SettingsQuietControl}
+                    variant="Secondary"
+                    fill="None"
+                    radii="Pill"
+                    after={<Icon src={Icons.Cross} size="100" />}
+                    onClick={() =>
+                      save('keywords', `Couldn't remove the keyword "${item}". Try again.`, () =>
+                        nativePushRulesRemoveKeyword(item)
+                      )
+                    }
+                    disabled={busy}
+                    aria-label={`Remove keyword ${item}`}
+                  >
+                    <Text size="T200">{item}</Text>
+                  </Chip>
+                ))}
+              </Box>
+            )}
           </SettingTile>
         </SequenceCard>
-        {snapshot?.keywords.map((item) => (
-          <SequenceCard
-            key={item}
-            className={SequenceCardStyle}
-            variant="SurfaceVariant"
-            direction="Column"
-            gap="400"
-          >
-            <SettingTile
-              title={`"${item}"`}
-              before={
-                <IconButton
-                  className={SettingsQuietControl}
-                  onClick={() =>
-                    save('keywords', `Couldn't remove the keyword "${item}". Try again.`, () =>
-                      nativePushRulesRemoveKeyword(item)
-                    )
-                  }
-                  aria-label={`Remove keyword ${item}`}
-                  size="300"
-                  radii="Pill"
-                  variant="Secondary"
-                  fill="None"
-                  disabled={busy}
-                >
-                  <Icon src={Icons.Cross} size="100" />
-                </IconButton>
-              }
-            />
-          </SequenceCard>
-        ))}
         <SectionError message={sectionError('keywords')} />
       </SettingsSection>
       {loadFailed && (
@@ -358,7 +292,7 @@ function NativePushRulesEditor() {
           </Button>
         </Box>
       )}
-    </Box>
+    </>
   );
 }
 

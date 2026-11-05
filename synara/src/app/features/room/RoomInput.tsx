@@ -108,7 +108,7 @@ import { stopPropagation } from '../../utils/keyboard';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { Command, SHRUG, TABLEFLIP, UNFLIP, useCommands } from '../../hooks/useCommands';
 import { mobileOrTablet } from '../../utils/user-agent';
-import { ReplyLayout, ThreadIndicator } from '../../components/message';
+import { ReplyQuote, ThreadIndicator } from '../../components/message';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { useImagePackRooms } from '../../hooks/useImagePackRooms';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
@@ -267,6 +267,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     }, [mentionInsert, roomId, editor, setMentionInsert]);
     const roomThreadRootEventId = useNativeThreadRoot(roomId);
     const threadRootEventId = threadRootOverride ?? roomThreadRootEventId;
+    // "Message #room" in a channel and "Message Name" in a DM, as on iOS.
+    const composerRoomName = room?.name?.trim();
+    const composerPlaceholder = threadRootEventId
+      ? t('composer.thread_placeholder', 'Reply in thread')
+      : !composerRoomName
+        ? t('composer.placeholder', 'Send a message...')
+        : direct
+          ? t('composer.direct_placeholder', {
+              name: composerRoomName,
+              defaultValue: 'Message {{name}}',
+            })
+          : t('composer.room_placeholder', {
+              room: composerRoomName,
+              defaultValue: 'Message #{{room}}',
+            });
     const coreReplyDraft = useNativeComposerReplyDraft(roomId, threadRootEventId);
     // A queued send owns the reply it was written as. The preview hides until
     // the send clears it (or fails and gives it back), so the next message is
@@ -379,6 +394,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const imagePackRooms: string[] = useImagePackRooms(roomId, roomToParents);
 
     const [toolbar, setToolbar] = useSetting(settingsAtom, 'editorToolbar');
+    // Send is the dominant control only while there is something to send.
+    const [draftHasText, setDraftHasText] = useState(() => !isEmptyEditor(editor));
+    const canSend = draftHasText || selectedFiles.length > 0;
     const [composerToolsAnchor, setComposerToolsAnchor] = useState<RectCords>();
     useEffect(() => {
       if (!composerToolsAnchor) return undefined;
@@ -624,7 +642,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const handleEditorChange = useCallback(
       (value: Parameters<EditorChangeHandler>[0]) => {
-        if (isEmptyEditor(editor)) {
+        const empty = isEmptyEditor(editor);
+        setDraftHasText(!empty);
+        if (empty) {
           clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
           syncedDraft.noteChange(value, true);
           setComposerPreviewUrl(undefined);
@@ -1409,7 +1429,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         <RoomComposer
           editableName="RoomInput"
           editor={editor}
-          placeholder="Send a message..."
+          placeholder={composerPlaceholder}
           ariaLabel={
             threadRootEventId
               ? t('composer.thread_aria_label', 'Reply in thread')
@@ -1442,24 +1462,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   >
                     <Icon src={Icons.Cross} size="50" />
                   </IconButton>
-                  <Box direction="Row" gap="200" alignItems="Center">
+                  <Box direction="Row" gap="200" alignItems="Center" style={{ minWidth: 0 }}>
                     {replyDraft.threadRootEventId && <ThreadIndicator />}
-                    <ReplyLayout
-                      userColor={replyUsernameColor}
-                      username={
-                        <Text size="T300" truncate>
-                          <b>
-                            {getMemberDisplayName(room, replyDraft.senderId) ??
-                              getMxIdLocalPart(replyDraft.senderId) ??
-                              replyDraft.senderId}
-                          </b>
-                        </Text>
+                    <ReplyQuote
+                      style={
+                        replyUsernameColor ? { borderLeftColor: replyUsernameColor } : undefined
                       }
-                    >
-                      <Text size="T300" truncate>
-                        {trimReplyFromBody(replyDraft.body)}
-                      </Text>
-                    </ReplyLayout>
+                      senderName={
+                        getMemberDisplayName(room, replyDraft.senderId) ??
+                        getMxIdLocalPart(replyDraft.senderId) ??
+                        replyDraft.senderId
+                      }
+                      body={trimReplyFromBody(replyDraft.body)}
+                    />
                   </Box>
                 </Box>
               </div>
@@ -1838,12 +1853,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 {null}
               </PopOut>
               <IconButton
-                className={css.ComposerAction}
+                className={canSend ? css.ComposerSendReady : css.ComposerAction}
                 fill="None"
                 onClick={() => submit()}
-                variant="Primary"
+                variant={canSend ? 'Primary' : 'Secondary'}
                 size="300"
                 radii="300"
+                aria-disabled={!canSend}
+                data-composer-send-ready={canSend ? 'true' : 'false'}
                 aria-label={t('composer.send_aria_label', 'Send message')}
               >
                 <Icon src={Icons.Send} />

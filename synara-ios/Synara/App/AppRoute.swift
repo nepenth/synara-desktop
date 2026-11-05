@@ -13,14 +13,14 @@ enum AppRoute: Hashable {
         focusedEventID: String? = nil
     )
     case settings
-    case notifications
+    case activity
     case later
 
     var isConversation: Bool {
         switch self {
         case .room, .thread:
             return true
-        case .login, .settings, .notifications, .later:
+        case .login, .settings, .activity, .later:
             return false
         }
     }
@@ -31,7 +31,7 @@ enum AppRoute: Hashable {
             return id
         case .thread(let roomID, _, _, _, _):
             return roomID
-        case .login, .settings, .notifications, .later:
+        case .login, .settings, .activity, .later:
             return nil
         }
     }
@@ -40,7 +40,7 @@ enum AppRoute: Hashable {
 enum AppDeepLink: Equatable {
     case room(id: String, eventID: String? = nil)
     case settings
-    case notifications
+    case activity
     case later
 
     init?(url: URL) {
@@ -76,8 +76,15 @@ enum AppDeepLink: Equatable {
             return
         }
 
-        if host == "notifications" || host == "notification" || pathComponents.first?.lowercased() == "notifications" {
-            self = .notifications
+        // "activity" is the canonical slug since the tab was renamed (review-2
+        // IOSS-14); the older "notifications" links keep working.
+        let activitySlugs: Set<String> = ["activity", "notifications", "notification"]
+        if let host, activitySlugs.contains(host) {
+            self = .activity
+            return
+        }
+        if let first = pathComponents.first?.lowercased(), activitySlugs.contains(first) {
+            self = .activity
             return
         }
 
@@ -101,10 +108,9 @@ enum AppDeepLink: Equatable {
             let normalized = pathComponents.map { $0.lowercased() }
             if normalized.contains("later") {
                 self = .later
-            } else if normalized.contains("notifications") || normalized.contains("invites") {
-                self = .notifications
             } else {
-                self = .notifications
+                // notifications, activity, invites, or the bare inbox.
+                self = .activity
             }
             return
         }

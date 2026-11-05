@@ -96,6 +96,7 @@ enum RichLinkSettings {
             xEmbedsKey: true,
             linkPreviewsKey: true,
             DraftSyncSettings.syncDraftsKey: true,
+            SynaraShortLinks.settingKey: true,
         ]
     }
 }

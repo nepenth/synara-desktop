@@ -1,71 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Badge, Text, Switch } from 'folds';
+import { Switch } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
-import { isSynaraDesktop } from '../../../utils/desktop';
 import { pushEncryptedStateEventsSetting } from '../encryptedStateEvents';
 import {
   AccountDataEditor,
   AccountDataSubmitCallback,
 } from '../../../components/AccountDataEditor';
 import { AccountData } from './AccountData';
-import {
-  getPlatformSecretStoreBackendLabel,
-  getPlatformSecretStoreSessionPersistence,
-  getPlatformSecretStoreStatusDescription,
-  getPlatformSecretStoreStatusLabel,
-  platformSessionStore,
-  type PlatformSecretStoreStatus,
-} from '../../../platform';
 import { setNativeAccountData, useNativeAccountData } from '../../../native/nativeAccountData';
 import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
-
-function NativeSessionStoreStatus() {
-  const [status, setStatus] = useState<PlatformSecretStoreStatus>();
-
-  useEffect(() => {
-    let active = true;
-
-    platformSessionStore.getStatus().then((nextStatus) => {
-      if (active) setStatus(nextStatus);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const persistence = status ? getPlatformSecretStoreSessionPersistence(status) : undefined;
-  const badgeVariant =
-    persistence === 'persistent'
-      ? 'Success'
-      : persistence === 'session-scoped'
-        ? 'Warning'
-        : status
-          ? 'Critical'
-          : 'Secondary';
-  const backendLabel = status ? getPlatformSecretStoreBackendLabel(status.backend) : 'Checking';
-  const statusLabel = status ? getPlatformSecretStoreStatusLabel(status) : 'Checking';
-  const details = status ? getPlatformSecretStoreStatusDescription(status) : backendLabel;
-
-  return (
-    <SettingTile
-      title="Native Session Store"
-      description={details}
-      after={
-        <Badge variant={badgeVariant} fill="Soft" radii="Pill" outlined>
-          <Text as="span" size="L400">
-            {statusLabel}
-          </Text>
-        </Badge>
-      }
-    />
-  );
-}
 
 type DeveloperToolsProps = {
   requestClose: () => void;
@@ -110,7 +58,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
 
   return (
     <SettingsPage
-      title="Developer Tools"
+      title="Developer tools"
       description="Low-level account data and protocol tools. Changes here take effect immediately."
       requestClose={requestClose}
     >
@@ -122,7 +70,8 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
           gap="400"
         >
           <SettingTile
-            title="Enable Developer Tools"
+            title="Enable developer tools"
+            description="Show event sources, state editors and raw account data in rooms and settings."
             after={<Switch variant="Primary" value={developerTools} onChange={setDeveloperTools} />}
           />
           <SettingTile
@@ -137,47 +86,9 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
             }
           />
         </SequenceCard>
-        {isSynaraDesktop() && (
-          <SequenceCard
-            className={SequenceCardStyle}
-            variant="SurfaceVariant"
-            direction="Column"
-            gap="400"
-          >
-            <SettingTile
-              title="Experimental Widgets"
-              description="Widgets are configured under General."
-            />
-          </SequenceCard>
-        )}
-        {developerTools && (
-          <SequenceCard
-            className={SequenceCardStyle}
-            variant="SurfaceVariant"
-            direction="Column"
-            gap="400"
-          >
-            <NativeSessionStoreStatus />
-          </SequenceCard>
-        )}
       </SettingsSection>
       {developerTools && !isNativeMatrixSession() && (
         <AccountData expand={expand} onExpandToggle={setExpend} onSelect={setAccountDataType} />
-      )}
-      {developerTools && isNativeMatrixSession() && (
-        <SettingsSection title="Account Data">
-          <SequenceCard
-            className={SequenceCardStyle}
-            variant="SurfaceVariant"
-            direction="Column"
-            gap="400"
-          >
-            <SettingTile
-              title="Global"
-              description="Account-data browsing is not available in this native session."
-            />
-          </SequenceCard>
-        </SettingsSection>
       )}
     </SettingsPage>
   );

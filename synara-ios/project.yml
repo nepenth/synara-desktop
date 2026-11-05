@@ -10,8 +10,8 @@ settings:
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "2.7.2"
-    CURRENT_PROJECT_VERSION: "2.7.2"
+    MARKETING_VERSION: "2.8.1"
+    CURRENT_PROJECT_VERSION: "2.8.1"
     SYNARA_CRITICAL_ALERTS_ENABLED: "NO"
     SYNARA_NOTIFICATION_FILTERING_ENABLED: "NO"
     # User-facing copy lives in String Catalogs: Synara/Resources/Localizable.xcstrings
@@ -80,6 +80,9 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.whylandcreative.synara
         PRODUCT_NAME: Synara
         SYNARA_PUSH_GATEWAY_URL: ""
+        # One accent on both clients: desktop Primary #1245A8 / #8DB4F5
+        # (Synara/Resources/Assets.xcassets/AccentColor.colorset).
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
       configs:
         Debug:
           APS_ENVIRONMENT: development

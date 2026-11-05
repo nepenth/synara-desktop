@@ -111,13 +111,13 @@ final class SynaraThemeRampTests: XCTestCase {
         }
     }
 
-    func testStandardTextBubbleIsLayeredByDefault() {
+    func testStandardTextMessagesAreFlatRowsByDefault() {
         let bubble = SynaraMessageBubble(
             text: "Readable message",
             alignment: .other
         )
 
-        XCTAssertTrue(bubble.showsBackground)
+        XCTAssertFalse(bubble.showsBackground)
         XCTAssertEqual(bubble.depth, .layered)
     }
 
@@ -134,7 +134,7 @@ final class SynaraThemeRampTests: XCTestCase {
         XCTAssertEqual(SynaraSurfaceDepthRole.roomRow, .collection)
         XCTAssertEqual(SynaraSurfaceDepthRole.standardMessage, .layered)
         XCTAssertEqual(SynaraSurfaceDepthRole.emphasizedMessage, .raised)
-        XCTAssertTrue(SynaraSurfaceDepthRole.standardMessageShowsBackground)
+        XCTAssertFalse(SynaraSurfaceDepthRole.standardMessageShowsBackground)
     }
 
     func testReduceTransparencyShiftsDepthFromShadowTowardBoundary() {

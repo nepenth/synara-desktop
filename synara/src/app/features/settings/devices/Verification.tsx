@@ -1,9 +1,8 @@
-import React, { FormEventHandler, useState } from 'react';
+import React, { FormEventHandler, useEffect, useId, useRef, useState } from 'react';
 import {
   Badge,
   Box,
   Button,
-  color,
   config,
   Header,
   Icon,
@@ -29,6 +28,8 @@ import { PasswordInput } from '../../../components/password-input';
 import { NativeSecretStorageGate } from '../../../components/SecretStorage';
 import { currentDeviceVerificationAvailabilityMessage } from './deviceVerificationStatus';
 import { composerErrorMessage } from '../../room/composerSendError';
+import { InlineMessage } from '../../../components/inline-message';
+import { stopPropagation } from '../../../utils/keyboard';
 
 type VerificationStatusBadgeProps = {
   verificationStatus: VerificationStatus;
@@ -45,7 +46,7 @@ export function VerificationStatusBadge({
   if (verificationStatus === 'unverified') {
     return (
       <Badge variant="Critical" fill="Solid" size="500">
-        <Text size="L400">Unverified</Text>
+        <Text size="L400">Not verified</Text>
       </Badge>
     );
   }
@@ -53,7 +54,7 @@ export function VerificationStatusBadge({
   if (unverifiedCount > 0) {
     return (
       <Badge variant="Warning" fill="Solid" size="500">
-        <Text size="L400">{unverifiedCount} Unverified</Text>
+        <Text size="L400">{unverifiedCount} not verified</Text>
       </Badge>
     );
   }
@@ -83,8 +84,8 @@ export function VerifyCurrentDeviceTile({
   const retry = hasDevicesToVerifyAgainst !== true && onRetry;
   return (
     <InfoCard
-      variant="Critical"
-      title="Unverified"
+      variant="Warning"
+      title="This session is not verified"
       description={currentDeviceVerificationAvailabilityMessage(hasDevicesToVerifyAgainst)}
       after={
         canStart ? (
@@ -98,7 +99,7 @@ export function VerifyCurrentDeviceTile({
             onClick={onRetry}
           >
             <Text as="span" size="B300">
-              {hasDevicesToVerifyAgainst === null ? 'Retry Availability Check' : 'Refresh'}
+              {hasDevicesToVerifyAgainst === null ? 'Retry check' : 'Refresh'}
             </Text>
           </Button>
         ) : undefined
@@ -117,8 +118,8 @@ export function VerifyOtherDeviceTile({
   return (
     <InfoCard
       variant="Warning"
-      title="Unverified"
-      description="Verify device identity and grant access to encrypted messages."
+      title="Not verified"
+      description="Verify this session so it is trusted and can read encrypted messages."
       after={<NativeStartVerification deviceId={deviceId} onExit={() => onVerified?.()} />}
     />
   );
@@ -158,11 +159,15 @@ function NativeEnableVerification({
   error?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // Escape and clicking outside close the setup dialog, except while a step runs.
+  const workingRef = useRef(false);
   if (!visible) return null;
   if (loading && !status) return <Spinner size="200" variant="Secondary" />;
   if (error || status?.readiness === 'unavailable') {
     return (
-      <Text size="T200">Synara could not check cross-signing. Restart Synara and try again.</Text>
+      <InlineMessage tone="critical">
+        Synara could not check cross-signing. Restart Synara and try again.
+      </InlineMessage>
     );
   }
   if (status?.bootstrap === 'not_needed') {
@@ -177,7 +182,7 @@ function NativeEnableVerification({
     <>
       <Button size="300" radii="300" onClick={() => setOpen(true)}>
         <Text as="span" size="B300">
-          Enable
+          Set up
         </Text>
       </Button>
       {open && (
@@ -186,11 +191,17 @@ function NativeEnableVerification({
             <FocusTrap
               focusTrapOptions={{
                 initialFocus: false,
-                clickOutsideDeactivates: false,
-                escapeDeactivates: false,
+                onDeactivate: () => setOpen(false),
+                clickOutsideDeactivates: () => !workingRef.current,
+                escapeDeactivates: (evt) => (workingRef.current ? false : stopPropagation(evt)),
               }}
             >
-              <NativeCrossSigningSetup onCancel={() => setOpen(false)} />
+              <NativeCrossSigningSetup
+                onCancel={() => setOpen(false)}
+                onWorkingChange={(working) => {
+                  workingRef.current = working;
+                }}
+              />
             </FocusTrap>
           </OverlayCenter>
         </Overlay>
@@ -199,11 +210,21 @@ function NativeEnableVerification({
   );
 }
 
-function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
+function NativeCrossSigningSetup({
+  onCancel,
+  onWorkingChange,
+}: {
+  onCancel: () => void;
+  onWorkingChange?: (working: boolean) => void;
+}) {
   const [authenticationRequired, setAuthenticationRequired] = useState(false);
   const [crossSigningComplete, setCrossSigningComplete] = useState(false);
   const [working, setWorking] = useState(false);
   const [setupError, setSetupError] = useState<string>();
+  const passwordId = useId();
+  useEffect(() => {
+    onWorkingChange?.(working);
+  }, [working, onWorkingChange]);
 
   const startSetup = async () => {
     setWorking(true);
@@ -246,7 +267,7 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
   };
 
   return (
-    <Dialog>
+    <Dialog variant="Surface">
       <Header
         style={{
           padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -256,7 +277,9 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
         size="500"
       >
         <Box grow="Yes">
-          <Text size="H4">Setup Device Verification</Text>
+          <Text as="h2" size="H4">
+            Set up device verification
+          </Text>
         </Box>
         <IconButton size="300" radii="300" onClick={onCancel} disabled={working} aria-label="Close">
           <Icon src={Icons.Cross} />
@@ -289,8 +312,16 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
             </Text>
             {authenticationRequired && (
               <Box direction="Column" gap="100">
-                <Text size="L400">Account Password</Text>
-                <PasswordInput name="password" size="400" readOnly={working} autoFocus />
+                <Text as="label" size="L400" priority="300" htmlFor={passwordId}>
+                  Account password
+                </Text>
+                <PasswordInput
+                  id={passwordId}
+                  name="password"
+                  size="400"
+                  readOnly={working}
+                  autoFocus
+                />
               </Box>
             )}
             <Button
@@ -299,13 +330,9 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
               disabled={working}
               before={working && <Spinner size="200" variant="Primary" fill="Solid" />}
             >
-              <Text size="B400">{authenticationRequired ? 'Authenticate' : 'Continue'}</Text>
+              <Text size="B400">Continue</Text>
             </Button>
-            {setupError && (
-              <Text size="T200" style={{ color: color.Critical.Main }}>
-                {setupError}
-              </Text>
-            )}
+            {setupError && <InlineMessage tone="critical">{setupError}</InlineMessage>}
           </>
         )}
       </Box>

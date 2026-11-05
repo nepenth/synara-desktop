@@ -1,6 +1,6 @@
-import React, { forwardRef, useCallback } from 'react';
-import { Header, config, Box, Text, Button, Spinner, color } from 'folds';
-import { Dialog } from './modal-dialog';
+import React, { useCallback } from 'react';
+import { ConfirmDialog } from './confirm-dialog';
+import { InlineMessage } from './inline-message';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
 import {
   attemptLogout,
@@ -17,89 +17,67 @@ import {
 } from './logoutLastDevice';
 
 import { getNativeRooms, nativeSession } from '../native/nativeSession';
+
 type LogoutDialogProps = {
-  handleClose: () => void;
+  onClose: () => void;
 };
-export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
-  ({ handleClose }, ref) => {
-    const hasEncryptedRoom = !!getNativeRooms().find((room) => room.hasEncryptionStateEvent());
-    const crossSigningActive = useCrossSigningActive();
-    const [deviceSnapshot] = useDeviceList();
-    const lastSignedInDevice = isLastSignedInDevice(deviceSnapshot) === true;
 
-    const [logoutState, logout] = useAsyncCallback<LogoutAttemptOutcome, Error, []>(
-      useCallback(() => attemptLogout(nativeSession()), [])
-    );
+/** "Log out of Synara?" with the key-safety advisories, on the shared confirm pattern. */
+export function LogoutDialog({ onClose }: LogoutDialogProps) {
+  const hasEncryptedRoom = !!getNativeRooms().find((room) => room.hasEncryptionStateEvent());
+  const crossSigningActive = useCrossSigningActive();
+  const [deviceSnapshot] = useDeviceList();
+  const lastSignedInDevice = isLastSignedInDevice(deviceSnapshot) === true;
 
-    const ongoingLogout = logoutState.status === AsyncStatus.Loading;
-    // attemptLogout resolves `retry` for a rejected or incomplete native
-    // logout; an unexpected throw is treated the same way.
-    const logoutNeedsRetry =
-      (logoutState.status === AsyncStatus.Success && logoutState.data === 'retry') ||
-      logoutState.status === AsyncStatus.Error;
+  const [logoutState, logout] = useAsyncCallback<LogoutAttemptOutcome, Error, []>(
+    useCallback(() => attemptLogout(nativeSession()), [])
+  );
 
-    return (
-      <Dialog variant="Surface" ref={ref}>
-        <Header
-          style={{
-            padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
-            borderBottomWidth: config.borderWidth.B300,
-          }}
-          variant="Surface"
-          size="500"
-        >
-          <Box grow="Yes">
-            <Text size="H4">Log Out</Text>
-          </Box>
-        </Header>
-        <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
-          {hasEncryptedRoom &&
-            (crossSigningActive ? (
-              deviceSnapshot?.ownVerification === 'unverified' && (
-                <InfoCard
-                  variant="Critical"
-                  title="Unverified Device"
-                  description="Verify your device before logging out to save your encrypted messages."
-                />
-              )
-            ) : (
-              <InfoCard
-                variant="Critical"
-                title="Alert"
-                description="Enable device verification or export your encrypted data from settings to avoid losing access to your messages."
-              />
-            ))}
-          {lastSignedInDevice && (
+  const ongoingLogout = logoutState.status === AsyncStatus.Loading;
+  // attemptLogout resolves `retry` for a rejected or incomplete native
+  // logout; an unexpected throw is treated the same way.
+  const logoutNeedsRetry =
+    (logoutState.status === AsyncStatus.Success && logoutState.data === 'retry') ||
+    logoutState.status === AsyncStatus.Error;
+
+  return (
+    <ConfirmDialog
+      title="Log out of Synara?"
+      description="This device stops receiving messages until you log in again."
+      confirmLabel={logoutNeedsRetry ? 'Retry log out' : 'Log out'}
+      busyLabel="Logging out…"
+      tone="critical"
+      busy={ongoingLogout}
+      onConfirm={() => {
+        // The outcome lands in logoutState; `retry` renders LOGOUT_RETRY_COPY.
+        void logout();
+      }}
+      onCancel={onClose}
+    >
+      {hasEncryptedRoom &&
+        (crossSigningActive ? (
+          deviceSnapshot?.ownVerification === 'unverified' && (
             <InfoCard
-              variant="Critical"
-              title={LAST_DEVICE_LOGOUT_TITLE}
-              description={LAST_DEVICE_LOGOUT_WARNING}
+              variant="Warning"
+              title="Verify this device before logging out"
+              description="An unverified device cannot restore your encrypted messages later."
             />
-          )}
-          <Text priority="400">You’re about to log out. Are you sure?</Text>
-          {logoutNeedsRetry && (
-            <Text style={{ color: color.Critical.Main }} size="T300">
-              {LOGOUT_RETRY_COPY}
-            </Text>
-          )}
-          <Box direction="Column" gap="200">
-            <Button
-              variant="Critical"
-              onClick={() => {
-                // The outcome lands in logoutState; `retry` renders LOGOUT_RETRY_COPY.
-                void logout();
-              }}
-              disabled={ongoingLogout}
-              before={ongoingLogout && <Spinner variant="Critical" fill="Solid" size="200" />}
-            >
-              <Text size="B400">Log Out</Text>
-            </Button>
-            <Button variant="Secondary" fill="Soft" onClick={handleClose} disabled={ongoingLogout}>
-              <Text size="B400">Cancel</Text>
-            </Button>
-          </Box>
-        </Box>
-      </Dialog>
-    );
-  }
-);
+          )
+        ) : (
+          <InfoCard
+            variant="Warning"
+            title="Back up your keys before logging out"
+            description="Set up device verification or export your encrypted data from Settings so you keep access to your messages."
+          />
+        ))}
+      {lastSignedInDevice && (
+        <InfoCard
+          variant="Warning"
+          title={LAST_DEVICE_LOGOUT_TITLE}
+          description={LAST_DEVICE_LOGOUT_WARNING}
+        />
+      )}
+      {logoutNeedsRetry && <InlineMessage tone="critical">{LOGOUT_RETRY_COPY}</InlineMessage>}
+    </ConfirmDialog>
+  );
+}

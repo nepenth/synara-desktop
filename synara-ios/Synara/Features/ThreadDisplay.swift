@@ -143,3 +143,47 @@ enum InlineThreadWindow {
         Array(replies.suffix(max(0, limit)))
     }
 }
+
+/// Someone who replied in a thread, for the thread chip's avatar stack.
+struct TimelineThreadParticipant: Equatable, Identifiable {
+    let userID: String
+    let avatarURL: URL?
+
+    var id: String { userID }
+}
+
+/// What the loaded window knows about each thread: who replied (oldest
+/// first, once each) and when the newest reply arrived. Core's thread
+/// summary carries only a count, so replies outside the window are missing.
+enum TimelineThreadLocalSummary {
+    struct Summary: Equatable {
+        var participants: [TimelineThreadParticipant] = []
+        var lastReplyAt: Date?
+    }
+
+    static func summaries(for items: [TimelineItem]) -> [String: Summary] {
+        var summaries: [String: Summary] = [:]
+        for item in items {
+            guard let rootID = rootEventID(of: item), rootID != item.eventID else { continue }
+            var summary = summaries[rootID] ?? Summary()
+            if summary.participants.contains(where: { $0.userID == item.senderID }) == false {
+                summary.participants.append(.init(userID: item.senderID, avatarURL: item.senderAvatarURL))
+            }
+            if summary.lastReplyAt.map({ $0 < item.timestamp }) ?? true {
+                summary.lastReplyAt = item.timestamp
+            }
+            summaries[rootID] = summary
+        }
+        return summaries
+    }
+
+    /// Mirrors `TimelineThreadMembership`: Core rows say so with their thread
+    /// root; fixtures without capabilities fall back to the classic reply.
+    private static func rootEventID(of item: TimelineItem) -> String? {
+        if let threadRootEventID = item.threadRootEventID {
+            return threadRootEventID
+        }
+        guard item.actionCapabilities == nil else { return nil }
+        return item.replyToEventID
+    }
+}

@@ -23,6 +23,7 @@ import { RenderElement, RenderLeaf } from './Elements';
 import { CustomElement } from './slate';
 import * as css from './Editor.css';
 import { toggleKeyboardShortcut } from './keyboard';
+import { withLinkEdgeEscape } from './utils';
 import { enableDesktopSpellcheck } from '../../utils/desktop';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 
@@ -55,7 +56,9 @@ const withVoid = (editor: Editor): Editor => {
 };
 
 export const useEditor = (): Editor => {
-  const [editor] = useState(() => withInline(withVoid(withReact(withHistory(createEditor())))));
+  const [editor] = useState(() =>
+    withLinkEdgeEscape(withInline(withVoid(withReact(withHistory(createEditor())))))
+  );
   return editor;
 };
 

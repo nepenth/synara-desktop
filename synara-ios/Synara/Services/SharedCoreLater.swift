@@ -16,6 +16,23 @@ enum SharedCoreLater {
         try await core.laterUpsert(item: item)
     }
 
+    /// A "saved" item for one message, field for field what desktop's
+    /// `createLaterItemFromIds(roomId, eventId, 'saved')` writes: the shared
+    /// `roomId\neventId` id, `createdAt` in epoch milliseconds, and no due,
+    /// reminded or completed time (saving again reopens a completed save).
+    static func savedItem(roomID: String, eventID: String, createdAt: Date = Date()) -> LaterItemDto {
+        LaterItemDto(
+            id: LaterItemIdentity.itemID(roomID: roomID, eventID: eventID),
+            kind: .saved,
+            roomId: roomID,
+            eventId: eventID,
+            createdAt: (createdAt.timeIntervalSince1970 * 1000).rounded(.down),
+            dueTs: nil,
+            remindedAt: nil,
+            completedAt: nil
+        )
+    }
+
     static func laterComplete(
         core: SharedCore,
         itemId: String,

@@ -509,10 +509,28 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(NotificationsInboxSections.notificationRooms(from: rooms).count, 3)
     }
 
+    /// Space groups collapse per space and stay that way across launches,
+    /// next to the fixed sections (review-2 IOSS-2).
+    func testCollapsedSpaceSectionsPersistPerSpace() throws {
+        let suite = "RoomListSectionCollapseTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        XCTAssertEqual(RoomListSectionCollapse.stored(defaults: defaults), [])
+
+        let collapsed: Set<String> = [RoomListSectionKey.space("!eng:example.org"), RoomListSectionKey.directs]
+        RoomListSectionCollapse.persist(collapsed, defaults: defaults)
+
+        XCTAssertEqual(RoomListSectionCollapse.stored(defaults: defaults), collapsed)
+        XCTAssertFalse(
+            RoomListSectionCollapse.stored(defaults: defaults).contains(RoomListSectionKey.space("!design:example.org"))
+        )
+    }
+
     func testTabBadgeCountsUseRoomListState() {
         let badges = TabBadgeCounts.make(from: RoomListFixtures.small())
 
-        XCTAssertEqual(badges.notifications, 8)
+        XCTAssertEqual(badges.activity, 8)
         XCTAssertEqual(badges.rooms, 13)
     }
 

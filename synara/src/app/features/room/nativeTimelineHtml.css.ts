@@ -5,7 +5,6 @@ import { NATIVE_SYNTAX_PALETTES, type NativeSyntaxPalette } from './nativeTimeli
 import {
   avatarSurface,
   floatingSurface,
-  quietEdgeLight,
   raisedShadow,
   tactileSurface,
 } from '../../styles/Depth.css';
@@ -47,12 +46,14 @@ export const MessageSwipeContent = style({
   zIndex: 1,
 });
 
+/**
+ * A grouped row's time, revealed on hover in the empty avatar column (as in
+ * Slack), so it never collides with the action rail on the right.
+ */
 export const GroupedTimestampReveal = style({
-  position: 'absolute',
-  zIndex: 2,
-  top: '50%',
-  right: config.space.S300,
-  transform: 'translateY(-50%)',
+  width: '100%',
+  paddingTop: toRem(4),
+  textAlign: 'right',
   color: 'var(--synara-content-secondary)',
   opacity: 0,
   transition: 'opacity 120ms ease-out',
@@ -73,18 +74,79 @@ export const GroupedTimestampReveal = style({
   },
 });
 
+export const GroupedTimestampText = style({
+  fontSize: toRem(11),
+  lineHeight: toRem(14),
+  color: 'var(--synara-content-secondary)',
+});
+
+// The rail straddles the row's top edge (Slack-style) so the wider set of
+// actions overlaps the previous row's bottom padding, not the message's text.
 export const MessageActionRail = style([
   floatingSurface,
   tactileSurface,
   {
     position: 'absolute',
-    top: config.space.S100,
-    right: `calc(${config.space.S400} + ${config.space.S200})`,
+    top: `calc(-1 * ${config.space.S300})`,
+    right: config.space.S400,
     zIndex: 2,
     borderRadius: config.radii.R400,
     overflow: 'hidden',
   },
 ]);
+
+/** Lowercase "(edited)" after the last word, at meta size and tertiary colour. */
+export const EditedMarker = style({
+  display: 'inline',
+  marginLeft: toRem(4),
+  fontSize: toRem(12),
+  fontStyle: 'normal',
+  fontWeight: 400,
+  lineHeight: 1,
+  color: 'var(--synara-content-tertiary)',
+  userSelect: 'none',
+});
+
+/** Redacted / undecryptable: italic tertiary text with a small glyph, in the message column. */
+export const SystemNotice = style({
+  minWidth: 0,
+  minHeight: toRem(24),
+  fontStyle: 'italic',
+  fontSize: toRem(15),
+  lineHeight: 1.47,
+  color: 'var(--synara-content-tertiary)',
+});
+
+/** The start of history: what this room is, so the first message has a place to land. */
+export const TimelineIntro = style({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  gap: config.space.S200,
+  width: '100%',
+  padding: `${config.space.S400} 0 ${config.space.S300}`,
+  color: 'var(--synara-message-foreground)',
+});
+
+export const TimelineIntroGlyph = style({
+  backgroundColor: `color-mix(in srgb, ${color.Primary.Main} 16%, transparent)`,
+  color: color.Primary.Main,
+});
+
+export const TimelineIntroHeading = style({
+  margin: 0,
+  color: 'var(--synara-content-heading)',
+  fontSize: toRem(20),
+  fontWeight: 700,
+  lineHeight: 1.3,
+  overflowWrap: 'anywhere',
+});
+
+export const TimelineIntroCaption = style({
+  color: 'var(--synara-content-secondary)',
+  fontSize: toRem(15),
+  lineHeight: 1.47,
+});
 
 // Popouts use the same floating plane as the reaction picker and action rail.
 export const MessageActionMenu = style([
@@ -250,7 +312,7 @@ export const MessageRow = recipe({
     paddingTop: config.space.S200,
     paddingBottom: config.space.S200,
     paddingLeft: toRem(16),
-    paddingRight: toRem(96),
+    paddingRight: toRem(40),
     marginLeft: config.space.S200,
     marginRight: config.space.S200,
     boxSizing: 'border-box',
@@ -310,12 +372,6 @@ export const MessageRow = recipe({
   },
 });
 
-/** A message that mentions the signed-in user: an accent edge and a light tint. */
-export const MentionsMeRow = style({
-  boxShadow: `inset ${toRem(3)} 0 0 ${color.Primary.Main}`,
-  backgroundColor: `color-mix(in srgb, ${color.Primary.Container} 45%, transparent)`,
-});
-
 export const UnsentDelivery = style({
   display: 'flex',
   flexWrap: 'wrap',
@@ -356,18 +412,18 @@ export const MessageBody = style({
   width: '100%',
   maxWidth: '100%',
   minWidth: 0,
-  fontSize: toRem(16),
+  fontSize: toRem(15),
   fontWeight: 400,
-  lineHeight: 1.55,
+  lineHeight: 1.47,
   color: 'var(--synara-message-foreground)',
 });
 
 export const FormattedBody = style({
   overflowWrap: 'break-word',
   wordBreak: 'normal',
-  fontSize: toRem(16),
+  fontSize: toRem(15),
   fontWeight: 400,
-  lineHeight: 1.55,
+  lineHeight: 1.47,
   color: 'var(--synara-message-foreground)',
   vars: syntaxPaletteVars(NATIVE_SYNTAX_PALETTES.light),
 });
@@ -452,7 +508,8 @@ export const InlineImageFallback = style({
 
 export const SenderName = style({
   color: 'var(--synara-content-heading)',
-  fontWeight: 600,
+  fontSize: toRem(15),
+  fontWeight: 700,
 });
 
 export const Metadata = style({
@@ -527,34 +584,11 @@ export const InlineThreadStatus = style({
   paddingLeft: config.space.S300,
 });
 
+/** Timeline placement of the shared `ReplyQuote` recipe: full measure, a hair of spacing. */
 export const ReplySurface = style({
   width: '100%',
   maxWidth: '100%',
-  padding: `${config.space.S200} ${config.space.S300}`,
   margin: `${config.space.S100} 0`,
-  border: 'none',
-  borderLeft: `3px solid var(--synara-content-separator)`,
-  borderRadius: `0 ${config.radii.R300} ${config.radii.R300} 0`,
-  background: 'var(--synara-table-even)',
-  // Quiet edge light only: a quote sits on the reading plane, not above it.
-  boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
-  color: 'var(--synara-message-foreground)',
-  textAlign: 'left',
-  cursor: 'pointer',
-  selectors: {
-    '&:hover, &:focus-visible': {
-      background: 'var(--synara-table-hover)',
-    },
-    '&:focus-visible': {
-      outline: `2px solid ${color.Primary.Main}`,
-      outlineOffset: toRem(2),
-    },
-  },
-  '@media': {
-    '(prefers-contrast: more)': {
-      boxShadow: 'none',
-    },
-  },
 });
 
 export const SystemRow = style({
@@ -571,13 +605,90 @@ export const SystemRow = style({
 export const SystemRule = style({
   flex: 1,
   height: 1,
-  maxWidth: toRem(160),
   background: 'var(--synara-content-separator)',
 });
 
-export const UnreadSystemRow = style({
-  color: color.Primary.Main,
+/** A day's heading: the day in bold over a full-width rule, as on iOS. */
+export const DayHeader = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: config.space.S200,
+  paddingTop: config.space.S500,
+});
+
+export const DayHeaderLabel = style({
+  color: 'var(--synara-content-heading)',
+  fontSize: toRem(15),
+  fontWeight: 700,
+  lineHeight: 1.3,
+});
+
+export const DayHeaderRule = style({
+  height: 1,
+  background: 'var(--synara-content-separator)',
+});
+
+/** Reactions: roomy pills with a quiet fill; yours carry the accent. */
+export const ReactionPill = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: toRem(5),
+  height: toRem(28),
+  padding: `0 ${toRem(9)}`,
+  border: `${config.borderWidth.B300} solid transparent`,
+  borderRadius: config.radii.Pill,
+  backgroundColor: 'color-mix(in srgb, var(--synara-content-heading) 8%, transparent)',
+  color: 'var(--synara-content-heading)',
+  fontSize: toRem(13),
   fontWeight: 600,
+  lineHeight: 1,
+  cursor: 'pointer',
+  selectors: {
+    '&:hover': {
+      backgroundColor: 'color-mix(in srgb, var(--synara-content-heading) 13%, transparent)',
+    },
+    '&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: 1,
+    },
+    '&:disabled': {
+      cursor: 'default',
+    },
+  },
+});
+
+export const ReactionPillOwn = style({
+  backgroundColor: `color-mix(in srgb, ${color.Primary.Main} 18%, transparent)`,
+  borderColor: color.Primary.Main,
+  color: color.Primary.Main,
+  selectors: {
+    '&:hover': {
+      backgroundColor: `color-mix(in srgb, ${color.Primary.Main} 24%, transparent)`,
+    },
+  },
+});
+
+export const ReactionEmoji = style({
+  fontSize: toRem(16),
+  lineHeight: 1,
+});
+
+export const AddReactionPill = style({
+  color: 'var(--synara-content-secondary)',
+  padding: `0 ${toRem(7)}`,
+});
+
+/** The unread divider: a thin Critical rule with its caption at the right end (Slack-style). */
+export const UnreadSystemRow = style({
+  color: color.Critical.Main,
+  fontWeight: 600,
+  fontSize: toRem(12),
+  justifyContent: 'flex-end',
+  gap: config.space.S200,
+});
+
+globalStyle(`${UnreadSystemRow} ${SystemRule}`, {
+  background: color.Critical.Main,
 });
 
 globalStyle(`.prism-light ${FormattedBody}`, {
@@ -789,7 +900,8 @@ globalStyle(`${FormattedBody} pre code`, {
   lineHeight: 1.5,
   tabSize: 4,
 });
-globalStyle(`${FormattedBody} a`, {
+// Mention pills carry their own colour and no underline.
+globalStyle(`${FormattedBody} a:not([data-mention-pill])`, {
   color: 'var(--tc-link)',
   textDecoration: 'underline',
   textUnderlineOffset: toRem(2),
@@ -950,7 +1062,7 @@ export const UnfurlLink = style({
 
 // Links in plain bodies are underlined like formatted ones: colour alone is
 // 1.75:1 against dark body text. Unfurl cards are whole-card links.
-globalStyle(`${MessageBody} a:not(.${UnfurlLink})`, {
+globalStyle(`${MessageBody} a:not(.${UnfurlLink}):not([data-mention-pill])`, {
   textDecoration: 'underline',
   textUnderlineOffset: toRem(2),
 });

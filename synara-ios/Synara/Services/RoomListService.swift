@@ -40,9 +40,14 @@ struct RoomSummary: Identifiable, Equatable {
     let directUserId: String?
     /// Authoritative Core tri-state. Security decisions must consume this value.
     let encryptionStatus: SynaraRoomEncryptionStatus
+    /// Core's per-room push override; `.mute` dims the row and flips the
+    /// swipe action to Unmute.
+    let notificationMode: SynaraRoomNotificationMode
 
     /// Legacy display convenience. Unknown never becomes authoritative cleartext.
     var isEncrypted: Bool { encryptionStatus == .encrypted }
+
+    var isMuted: Bool { notificationMode == .mute }
 
     init(
         id: String,
@@ -68,7 +73,8 @@ struct RoomSummary: Identifiable, Equatable {
         activeCallParticipantCount: Int = 0,
         directUserId: String? = nil,
         isEncrypted: Bool? = nil,
-        encryptionStatus: SynaraRoomEncryptionStatus? = nil
+        encryptionStatus: SynaraRoomEncryptionStatus? = nil,
+        notificationMode: SynaraRoomNotificationMode = .default
     ) {
         self.id = id
         self.name = name
@@ -92,6 +98,7 @@ struct RoomSummary: Identifiable, Equatable {
         self.hasActiveCall = hasActiveCall
         self.activeCallParticipantCount = activeCallParticipantCount
         self.directUserId = directUserId
+        self.notificationMode = notificationMode
         if let encryptionStatus {
             self.encryptionStatus = encryptionStatus
         } else if let isEncrypted {
@@ -182,6 +189,25 @@ enum RoomListSortOrder: String, CaseIterable, Identifiable {
         defaults: UserDefaults = .standard
     ) {
         defaults.set(order.rawValue, forKey: section.storageKey)
+    }
+
+    /// One order for the whole list. Reads the shared key first, then any
+    /// per-section key an earlier build wrote, so a stored choice survives.
+    static func storedShared(defaults: UserDefaults = .standard) -> RoomListSortOrder {
+        if let raw = defaults.string(forKey: storageKey),
+           let order = RoomListSortOrder(rawValue: raw) {
+            return order
+        }
+        return stored(for: .rooms, defaults: defaults)
+    }
+
+    /// Writes the shared key and every section key, so the per-section
+    /// readers agree with the single control.
+    static func persistShared(_ order: RoomListSortOrder, defaults: UserDefaults = .standard) {
+        defaults.set(order.rawValue, forKey: storageKey)
+        for section in [RoomListSortSection.favorites, .rooms, .directs] {
+            persist(order, for: section, defaults: defaults)
+        }
     }
 
     var title: String {
@@ -556,7 +582,7 @@ enum RoomListFixtures {
             ("Ivan Petrov", "You: See you at the meetup", .directMessage, []),
             ("Random", "lol", .room, []),
             ("Data Platform", "Nightly export finished in 14 min", .room, [ops]),
-            ("Product Planning", "Q1 roadmap draft shared", .room, [workspace]),
+            ("Household Operations Project - Home Management", "Q1 roadmap draft shared", .room, [workspace]),
             ("Mei Lin", "Sticker", .directMessage, []),
             ("Encryption", "Cross-signing reset flow reviewed", .room, [community]),
             ("Support", "3 tickets waiting for triage", .room, [ops]),
@@ -601,11 +627,38 @@ enum RoomListFixtures {
                     parentSpaces: room.3,
                     hasAgentActivity: index == 2 || index == 17,
                     isFavorite: index == 3 || index == 7,
-                    isEncrypted: room.2 == .directMessage || index % 3 == 0
+                    directUserId: room.2 == .directMessage ? reviewPeerID(room.0) : nil,
+                    isEncrypted: room.2 == .directMessage || index % 3 == 0,
+                    // One muted room with unread messages, one read.
+                    notificationMode: index == 8 || index == 20 ? .mute : .default
                 )
             )
         }
         return summaries
+    }
+
+    static func reviewPeerID(_ name: String) -> String {
+        let localpart = name.split(separator: " ").first.map(String.init)?.lowercased() ?? "peer"
+        return "@\(localpart.folding(options: .diacriticInsensitive, locale: nil)):example.org"
+    }
+
+    /// Presence for some review-fixture peers; the rest stay unknown.
+    static func reviewPresence() -> [String: SharedCorePresence] {
+        let states: [(String, String)] = [
+            ("Priya Raman", "online"), ("Tomás", "offline"), ("Hiro Tanaka", "online"),
+            ("Sam Whitfield", "unavailable"), ("Lena Fischer", "online"), ("Marco Bellini", "offline"),
+        ]
+        var presence: [String: SharedCorePresence] = [:]
+        for (name, state) in states {
+            let userID = reviewPeerID(name)
+            presence[userID] = SharedCorePresenceLive.presence(
+                userId: userID,
+                state: state,
+                currentlyActive: state == "online",
+                statusMsg: nil
+            )
+        }
+        return presence
     }
 
     static func large(count: Int = 1_000) -> [RoomSummary] {
@@ -882,12 +935,12 @@ struct NotificationsInboxSections: Equatable {
 }
 
 struct TabBadgeCounts: Equatable {
-    var notifications: Int = 0
+    var activity: Int = 0
     var rooms: Int = 0
 
     static func make(from rooms: [RoomSummary]) -> TabBadgeCounts {
         TabBadgeCounts(
-            notifications: NotificationBadgeSummary.notificationsTabBadgeCount(from: rooms),
+            activity: NotificationBadgeSummary.notificationsTabBadgeCount(from: rooms),
             rooms: NotificationBadgeSummary.roomsTabBadgeCount(from: rooms)
         )
     }
@@ -930,6 +983,51 @@ enum RoomListPeerCallStatus {
             return nil
         }
         return peerID
+    }
+}
+
+/// A direct-message peer's presence for the room list's dot, read from Core's
+/// `matrix_presence_snapshot` (wave 3). Unknown presence has no case: the
+/// row draws no dot rather than guessing.
+enum RoomListPeerPresence: Equatable {
+    case online
+    case offline
+
+    struct Key: Equatable {
+        let peerIDs: [String]
+        let generation: UInt64
+    }
+
+    /// Sorted, unique peers of joined direct rooms.
+    static func peerIDs(in rooms: [RoomSummary]) -> [String] {
+        Set(rooms.compactMap(peerID(for:))).sorted()
+    }
+
+    static func peerID(for room: RoomSummary) -> String? {
+        guard room.kind == .directMessage,
+              room.membership == .joined,
+              let peerID = room.directUserId,
+              peerID.isEmpty == false
+        else {
+            return nil
+        }
+        return peerID
+    }
+
+    /// `online` (or currently active) is online; `offline` and `unavailable`
+    /// (away) read as offline; anything else, or no snapshot, is unknown.
+    static func presence(from snapshot: SharedCorePresence?) -> RoomListPeerPresence? {
+        guard let snapshot else {
+            return nil
+        }
+        switch snapshot.state.lowercased() {
+        case "online":
+            return .online
+        case "offline", "unavailable":
+            return .offline
+        default:
+            return snapshot.currentlyActive ? .online : nil
+        }
     }
 }
 

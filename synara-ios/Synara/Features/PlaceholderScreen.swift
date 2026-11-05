@@ -54,8 +54,8 @@ struct RoutePlaceholderView: View {
             .environment(\.synaraAllowsConversationSwipeBack, true)
         case .settings:
             EmptyView()
-        case .notifications:
-            PlaceholderScreen(title: String(localized: "Notifications"), systemImage: "bell", identifier: "Notifications")
+        case .activity:
+            PlaceholderScreen(title: String(localized: "Activity"), systemImage: "bell", identifier: "Activity")
         case .later:
             LaterListView()
         }

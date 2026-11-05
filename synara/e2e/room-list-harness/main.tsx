@@ -4,12 +4,15 @@ import React, { useCallback, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
+// Reading-role variables (`--synara-content-*`, `--synara-selected-surface`).
+import '../../src/index.css';
 import { useSharedScrollVirtualizer } from '../../src/app/hooks/useSharedScrollVirtualizer';
 import { NotificationsFixture } from './NotificationsFixture';
 import { LiveCallFixture } from './LiveCallFixture';
 import { NavigationUnreadFixture } from './NavigationUnreadFixture';
 import { RoomGlyphFixture } from './RoomGlyphFixture';
 import { RoomNameFixture } from './RoomNameFixture';
+import { RoomRowsFixture } from './RoomRowsFixture';
 import { GifPickerFixture } from './GifPickerFixture';
 import { VirtualTile } from '../../src/app/components/virtualizer/VirtualTile';
 
@@ -102,6 +105,8 @@ createRoot(document.getElementById('root')!).render(
     <NotificationsFixture />
   ) : new URLSearchParams(window.location.search).has('livecall') ? (
     <LiveCallFixture />
+  ) : new URLSearchParams(window.location.search).has('roomRows') ? (
+    <RoomRowsFixture />
   ) : new URLSearchParams(window.location.search).has('roomGlyph') ? (
     <RoomGlyphFixture />
   ) : new URLSearchParams(window.location.search).has('gifPicker') ? (

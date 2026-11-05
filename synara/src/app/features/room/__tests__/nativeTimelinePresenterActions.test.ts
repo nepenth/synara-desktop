@@ -128,7 +128,10 @@ test('message, poll, and sticker rows share Core relation and reaction presentat
   assert.match(presenter, /onOpenThread\?\.\(threadRoot \?\? eventId\)/);
   assert.doesNotMatch(presenter, /onFocusEvent\(latestEventId \?\? rootEventId\)/);
   assert.doesNotMatch(presenter, /nativeThreadFocusEventId\(thread\) \?\? threadRoot/);
-  assert.match(presenter, /variant=\{reaction\.own \? 'Primary' : 'Secondary'\}/);
+  // Your reactions carry the accent; every pill is a real, pressable button.
+  assert.match(presenter, /reaction\.own \? ` \$\{htmlCss\.ReactionPillOwn\}` : ''/);
+  assert.match(presenter, /aria-pressed=\{reaction\.own\}/);
+  assert.match(presenter, /data-native-timeline-add-reaction="true"/);
   assert.match(presenter, /onViewReactions=\{openReactionViewer\}/);
   assert.match(presenter, /nativeReactionViewFromEventReadback/);
   assert.match(presenter, /canRedactOwn=\{Boolean\(snapshot\.capabilities\.canRedactOwn\)\}/);
@@ -506,8 +509,8 @@ test('formatted messages use the available timeline measure, body size, and laye
 
   assert.match(messageBodyCss, /maxWidth: '100%'/);
   assert.match(messageBodyCss, /width: '100%'/);
-  assert.match(messageBodyCss, /fontSize: toRem\(16\)/);
-  assert.match(messageBodyCss, /lineHeight: 1\.55/);
+  assert.match(messageBodyCss, /fontSize: toRem\(15\)/);
+  assert.match(messageBodyCss, /lineHeight: 1\.47/);
   assert.match(htmlCss, /export const ReplySurface = style\(\{[\s\S]*?maxWidth: '100%'/);
   assert.doesNotMatch(htmlCss, /maxWidth: toRem\(672\)/);
   assert.match(htmlCss, /borderCollapse: 'separate'/);
