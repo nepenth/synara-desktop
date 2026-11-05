@@ -12,6 +12,8 @@ type RoomComposerProps = {
   /** The textbox's accessible name, e.g. "Message #general"; defaults to the placeholder. */
   ariaLabel?: string;
   maxHeight?: string;
+  /** Markdown mode: typed list markers continue on the next line. */
+  markdown?: boolean;
   replyPreview?: ReactNode;
   linkPreview?: ReactNode;
   leadingAction?: ReactNode;
@@ -32,6 +34,7 @@ export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
       placeholder,
       ariaLabel,
       maxHeight,
+      markdown,
       replyPreview,
       linkPreview,
       leadingAction,
@@ -54,6 +57,7 @@ export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
         placeholder={placeholder}
         ariaLabel={ariaLabel}
         maxHeight={maxHeight}
+        markdown={markdown}
         onKeyDown={onKeyDown}
         onKeyUp={onKeyUp}
         onPaste={onPaste}

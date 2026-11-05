@@ -61,6 +61,7 @@ import {
   customHtmlEqualsPlainText,
   trimCustomHtml,
   isEmptyEditor,
+  exitFormatting,
   getBeginCommand,
   trimCommand,
   getMentions,
@@ -170,6 +171,7 @@ import { getMyUserId, getSafeMyUserId } from '../../state/nativeIdentity';
 import {
   ComposerSendQueue,
   cloneComposerContent,
+  composerContentIsEmpty,
   mergeRestoredComposerContent,
   restoreComposerContent,
   stashComposerSendError,
@@ -588,7 +590,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     useEffect(() => {
       const storedDraft = loadRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
       const draft = msgDraft.length > 0 ? msgDraft : storedDraft;
-      if (draft && draft.length > 0) {
+      // A blank draft (an empty list older builds kept) is dropped rather than
+      // shown as a stray bullet beside the placeholder.
+      if (draft && !composerContentIsEmpty(draft)) {
         Transforms.insertFragment(editor, draft);
       }
     }, [roomId, draftKey, editor, msgDraft]);
@@ -1142,6 +1146,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           submit();
           return;
         }
+        // Escape stays in the composer (an open thread pane must not close)
+        // and does one thing per press: close suggestions, cancel the reply,
+        // then leave formatting.
         if (isKeyHotkey('escape', evt)) {
           evt.preventDefault();
           if (autocompleteQuery) {
@@ -1152,10 +1159,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             void clearReplyDraft(replyDraft.draftRevision).catch(() => {
               setSendError(t('composer.reply_clear_failed', 'Could not cancel reply.'));
             });
+            return;
           }
+          exitFormatting(editor);
         }
       },
-      [submit, clearReplyDraft, enterForNewline, autocompleteQuery, isComposing, replyDraft, t]
+      [
+        submit,
+        clearReplyDraft,
+        enterForNewline,
+        autocompleteQuery,
+        isComposing,
+        replyDraft,
+        t,
+        editor,
+      ]
     );
 
     const handleKeyUp: KeyboardEventHandler = useCallback(
@@ -1359,6 +1377,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         <RoomComposer
           editableName="RoomInput"
           editor={editor}
+          markdown={!!isMarkdown}
           placeholder={composerPlaceholder}
           ariaLabel={
             threadRootEventId

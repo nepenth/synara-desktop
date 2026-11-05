@@ -5,6 +5,7 @@ import React, {
   ReactNode,
   forwardRef,
   useCallback,
+  useEffect,
   useState,
 } from 'react';
 import { Box, Scroll, Text } from 'folds';
@@ -23,7 +24,7 @@ import { RenderElement, RenderLeaf } from './Elements';
 import { CustomElement } from './slate';
 import * as css from './Editor.css';
 import { toggleKeyboardShortcut } from './keyboard';
-import { withLinkEdgeEscape } from './utils';
+import { withComposer } from './composerEditor';
 import { enableDesktopSpellcheck } from '../../utils/desktop';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 
@@ -34,31 +35,8 @@ const initialValue: CustomElement[] = [
   },
 ];
 
-const withInline = (editor: Editor): Editor => {
-  const { isInline } = editor;
-
-  editor.isInline = (element) =>
-    [BlockType.Mention, BlockType.Emoticon, BlockType.Link, BlockType.Command].includes(
-      element.type
-    ) || isInline(element);
-
-  return editor;
-};
-
-const withVoid = (editor: Editor): Editor => {
-  const { isVoid } = editor;
-
-  editor.isVoid = (element) =>
-    [BlockType.Mention, BlockType.Emoticon, BlockType.Command].includes(element.type) ||
-    isVoid(element);
-
-  return editor;
-};
-
 export const useEditor = (): Editor => {
-  const [editor] = useState(() =>
-    withLinkEdgeEscape(withInline(withVoid(withReact(withHistory(createEditor())))))
-  );
+  const [editor] = useState(() => withComposer(withReact(withHistory(createEditor()))));
   return editor;
 };
 
@@ -74,6 +52,8 @@ type CustomEditorProps = {
   after?: ReactNode;
   maxHeight?: string;
   spellCheck?: boolean;
+  /** Markdown mode: typed list markers continue on the next line. */
+  markdown?: boolean;
   editor: Editor;
   placeholder?: string;
   onKeyDown?: KeyboardEventHandler;
@@ -93,6 +73,7 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
       after,
       maxHeight = '50vh',
       spellCheck = true,
+      markdown = false,
       editor,
       placeholder,
       onKeyDown,
@@ -102,6 +83,10 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
     },
     ref
   ) => {
+    useEffect(() => {
+      editor.markdown = markdown;
+    }, [editor, markdown]);
+
     const renderElement = useCallback(
       (props: RenderElementProps) => <RenderElement {...props} />,
       []

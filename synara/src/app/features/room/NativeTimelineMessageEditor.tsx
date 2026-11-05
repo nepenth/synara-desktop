@@ -253,6 +253,7 @@ export function NativeTimelineMessageEditor({
       <CustomEditor
         editor={editor}
         editableName="NativeTimelineMessageEditor"
+        markdown={!!isMarkdown}
         ariaLabel="Edit message"
         placeholder="Edit message…"
         onKeyDown={handleKeyDown}

@@ -177,6 +177,58 @@ const getInlineElement = (node: ChildNode, processText: ProcessTextCallback): In
   return [{ text: '' }];
 };
 
+/** Inline content of an element, split into lines at each `<br>`. */
+const inlineLines = (node: Element, processText: ProcessTextCallback): InlineElement[][] => {
+  const lines: InlineElement[][] = [[]];
+  node.children.forEach((child) => {
+    if (isTag(child) && child.name === 'br') {
+      lines.push([]);
+      return;
+    }
+    lines[lines.length - 1].push(...getInlineElement(child, processText));
+  });
+  return lines.map((line) => (line.length > 0 ? line : [{ text: '' }]));
+};
+
+const paragraphs = (lines: InlineElement[][]): ParagraphElement[] =>
+  lines.map((children) => ({ type: BlockType.Paragraph, children }));
+
+/**
+ * Lines of a block that sits inside a quote: quotes hold lines only, so a
+ * list keeps its markers as text and a heading or code block keeps its text.
+ */
+const quotedBlockLines = (node: Element, processText: ProcessTextCallback): InlineElement[][] => {
+  if (node.name === 'ol' || node.name === 'ul') {
+    const parsedStart = Number.parseInt(node.attribs.start, 10);
+    let number = Number.isSafeInteger(parsedStart) && parsedStart > 0 ? parsedStart : 1;
+    return node.children
+      .filter((child): child is Element => isTag(child) && child.name === 'li')
+      .flatMap((item) => {
+        const marker = node.name === 'ol' ? `${number}. ` : '- ';
+        number += 1;
+        const [first, ...rest] = item.children
+          .filter((child) => !isListTagName(child))
+          .flatMap((child: ChildNode) =>
+            isTag(child) && child.name === 'p'
+              ? inlineLines(child, processText)
+              : [getInlineElement(child, processText)]
+          );
+        const nested = item.children
+          .filter(isListTag)
+          .flatMap((child) => quotedBlockLines(child, processText))
+          .map((line) => [{ text: '  ' }, ...line]);
+        return [[{ text: marker }, ...(first ?? [])], ...rest, ...nested];
+      });
+  }
+  if (node.name === 'pre') {
+    return getText(node)
+      .replace(/\n$/, '')
+      .split('\n')
+      .map((text) => [{ text }]);
+  }
+  return inlineLines(node, processText);
+};
+
 const parseBlockquoteNode = (
   node: Element,
   processText: ProcessTextCallback
@@ -203,9 +255,16 @@ const parseBlockquoteNode = (
         return;
       }
 
-      if (child.name === 'p') {
+      if (
+        child.name === 'p' ||
+        child.name === 'ol' ||
+        child.name === 'ul' ||
+        child.name === 'pre' ||
+        child.name === 'blockquote' ||
+        /^h[1-6]$/.test(child.name)
+      ) {
         appendLine();
-        quoteLines.push(child.children.flatMap((c) => getInlineElement(c, processText)));
+        quoteLines.push(...quotedBlockLines(child, processText));
         return;
       }
 
@@ -269,36 +328,49 @@ const parseCodeBlockNode = (node: Element): CodeBlockElement[] | ParagraphElemen
 };
 const isListTag = (node: ChildNode): node is Element =>
   isTag(node) && (node.name === 'ol' || node.name === 'ul');
+const isListTagName = (node: ChildNode): boolean => isListTag(node);
 
 const isListNode = (
   node: OrderedListElement | UnorderedListElement | ParagraphElement
 ): node is OrderedListElement | UnorderedListElement =>
   node.type === BlockType.OrderedList || node.type === BlockType.UnorderedList;
 
+/**
+ * A list item's lines, then its sub-lists. Each `<p>` or `<br>`-separated line
+ * is its own paragraph; the editor makes every line after the first its own
+ * item, since every line in a list carries a marker.
+ */
 const getListItemChildren = (
   node: Element,
   processText: ProcessTextCallback
-): Array<InlineElement | ParagraphElement | OrderedListElement | UnorderedListElement> => {
-  const inlineChildren: InlineElement[] = [];
+): Array<ParagraphElement | OrderedListElement | UnorderedListElement> => {
+  const lines: InlineElement[][] = [[]];
   const nestedLists: Array<OrderedListElement | UnorderedListElement> = [];
 
-  node.children.forEach((child) => {
+  node.children.forEach((child: ChildNode) => {
     if (isListTag(child)) {
       nestedLists.push(...parseListNode(child, processText).filter(isListNode));
       return;
     }
-    inlineChildren.push(...getInlineElement(child, processText));
+    const tag = child as ChildNode;
+    if (isTag(tag) && tag.name === 'br') {
+      lines.push([]);
+      return;
+    }
+    if (isTag(tag) && tag.name === 'p') {
+      if (lines[lines.length - 1].length > 0) lines.push([]);
+      inlineLines(tag, processText).forEach((line, index) => {
+        if (index > 0) lines.push([]);
+        lines[lines.length - 1].push(...line);
+      });
+      lines.push([]);
+      return;
+    }
+    lines[lines.length - 1].push(...getInlineElement(child, processText));
   });
 
-  if (nestedLists.length === 0) return inlineChildren.length > 0 ? inlineChildren : [{ text: '' }];
-
-  return [
-    {
-      type: BlockType.Paragraph,
-      children: inlineChildren.length > 0 ? inlineChildren : [{ text: '' }],
-    },
-    ...nestedLists,
-  ];
+  const filled = lines.filter((line) => line.length > 0);
+  return [...paragraphs(filled.length > 0 ? filled : [[{ text: '' }]]), ...nestedLists];
 };
 
 const parseListNode = (
@@ -362,7 +434,7 @@ const parseListNode = (
           if (!isTag(child)) {
             return {
               type: BlockType.ListItem,
-              children: [{ text: '' }],
+              children: paragraphs([[{ text: '' }]]),
             };
           }
           return {
@@ -384,7 +456,7 @@ const parseListNode = (
           if (!isTag(child)) {
             return {
               type: BlockType.ListItem,
-              children: [{ text: '' }],
+              children: paragraphs([[{ text: '' }]]),
             };
           }
           return {
@@ -460,10 +532,7 @@ export const domToEditorInput = (
 
       if (node.name === 'p') {
         appendLine();
-        children.push({
-          type: BlockType.Paragraph,
-          children: node.children.flatMap((child) => getInlineElement(child, processText)),
-        });
+        children.push(...paragraphs(inlineLines(node, processText)));
         return;
       }
 
