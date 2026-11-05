@@ -342,6 +342,27 @@ struct ComposerTextView: UIViewRepresentable {
             syncPlaceholder()
         }
 
+        /// Return on a list or quote line continues it, or leaves it from an
+        /// empty item (`ComposerMarkdown.lineBreak`). The edit goes through
+        /// `replace(_:withText:)`, so undo and the change events still run.
+        func textView(
+            _ textView: UITextView,
+            shouldChangeTextIn range: NSRange,
+            replacementText text: String
+        ) -> Bool {
+            guard text == "\n", range.length == 0, textView.markedTextRange == nil,
+                  let edit = ComposerMarkdown.lineBreak(in: textView.text ?? "", at: range.location),
+                  let start = textView.position(from: textView.beginningOfDocument, offset: edit.range.location),
+                  let end = textView.position(from: start, offset: edit.range.length),
+                  let target = textView.textRange(from: start, to: end)
+            else {
+                return true
+            }
+            textView.replace(target, withText: edit.replacement)
+            textView.selectedRange = NSRange(location: edit.caret, length: 0)
+            return false
+        }
+
         func textViewDidChange(_ textView: UITextView) {
             guard !isFocusOwnerRetired, focusEditor === textView else { return }
             guard isApplyingProgrammaticState == false else {
