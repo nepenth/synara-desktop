@@ -20,7 +20,11 @@ import {
 import { BlockType } from '../types';
 import { sanitizeCustomHtml } from '../../../utils/sanitize';
 import { MATRIX_HTML_PROFILE } from '../../../utils/matrixHtmlProfile';
-import { toComposerMarkdown } from '../composerMarkdown';
+import {
+  draftMarkdownToEditorInput,
+  toComposerMarkdown,
+  toDraftMarkdown,
+} from '../composerMarkdown';
 
 test('ordered list output preserves start attribute and plain-text numbering', () => {
   const nodes: Descendant[] = [
@@ -642,4 +646,67 @@ test('typed markdown reaches Core verbatim while mentions travel as fragments', 
   assert.equal(fragments.length, 2);
   assert.match(fragments[0], /^<a href="https:\/\/matrix\.to\/#\/@alice:example\.org">Alice<\/a>$/);
   assert.equal(fragments[1], '<u> </u>');
+});
+
+test('synced drafts reach iOS as the Markdown its composer writes', () => {
+  const nodes: Descendant[] = [
+    { type: BlockType.Heading, level: 2, children: [{ text: 'Plan' }] },
+    {
+      type: BlockType.Paragraph,
+      children: [
+        { text: 'Ask ' },
+        {
+          type: BlockType.Mention,
+          id: '@alice:example.org',
+          name: 'Alice',
+          highlight: false,
+          children: [{ text: '' }],
+        },
+        { text: ' about ' },
+        { type: BlockType.Link, href: 'https://example.org/a b', children: [{ text: 'the spec' }] },
+        { text: ' ' },
+        { text: 'soon', bold: true, underline: true },
+        { text: ' and ' },
+        { text: 'this', spoiler: true },
+        { text: ' ' },
+        {
+          type: BlockType.Emoticon,
+          key: 'mxc://example.org/party',
+          shortcode: 'party',
+          children: [{ text: '' }],
+        },
+      ],
+    },
+    {
+      type: BlockType.OrderedList,
+      start: 3,
+      children: [
+        {
+          type: BlockType.ListItem,
+          children: [{ type: BlockType.Paragraph, children: [{ text: 'three' }] }],
+        },
+      ],
+    },
+  ];
+  assert.equal(
+    toDraftMarkdown(nodes, true),
+    '## Plan\nAsk [@Alice](https://matrix.to/#/@alice:example.org) about [the spec](https://example.org/a%20b) <u>**soon**</u> and <span data-mx-spoiler>this</span> :party:\n3. three'
+  );
+});
+
+test('a draft typed with Markdown off keeps its characters literal on iOS', () => {
+  const nodes: Descendant[] = [
+    { type: BlockType.Paragraph, children: [{ text: '1. not a list, *not* bold' }] },
+    { type: BlockType.Paragraph, children: [{ text: '# not a heading' }] },
+  ];
+  assert.equal(toDraftMarkdown(nodes, false), '1\\. not a list, \\*not\\* bold\n\\# not a heading');
+  // With Markdown on, typed Markdown is the draft as written.
+  assert.equal(toDraftMarkdown(nodes, true), '1. not a list, *not* bold\n# not a heading');
+});
+
+test('a Markdown draft from iOS arrives as typed when Markdown is on', async () => {
+  assert.deepEqual(await draftMarkdownToEditorInput('**hi**\n- one', true), [
+    { type: BlockType.Paragraph, children: [{ text: '**hi**' }] },
+    { type: BlockType.Paragraph, children: [{ text: '- one' }] },
+  ]);
 });

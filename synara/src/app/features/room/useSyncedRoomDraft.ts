@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Descendant, Editor, Transforms } from 'slate';
 import { ReactEditor } from 'slate-react';
+import { resetEditor, resetEditorHistory } from '../../components/editor';
 import {
-  plainToEditorInput,
-  resetEditor,
-  resetEditorHistory,
-  toPlainText,
-} from '../../components/editor';
+  draftMarkdownToEditorInput,
+  toDraftMarkdown,
+} from '../../components/editor/composerMarkdown';
+import { composerContentIsEmpty } from './composerSendQueue';
 import { isSynaraDesktop } from '../../utils/desktop';
 import {
   clearSyncedDraft,
@@ -24,10 +24,17 @@ import {
 const ACTIVE_TYPING_MS = 3_000;
 
 /** What a remote draft puts in the composer: desktop's rich value, else its markdown. */
-const remoteDraftNodes = (draft: RemoteDraft): Descendant[] =>
+const remoteDraftNodes = async (draft: RemoteDraft, isMarkdown: boolean): Promise<Descendant[]> =>
   isSlateValue(draft.desktopSlate)
     ? (draft.desktopSlate as Descendant[])
-    : plainToEditorInput(draft.markdown ?? '', false);
+    : draftMarkdownToEditorInput(draft.markdown ?? '', isMarkdown);
+
+/**
+ * The draft's text as other devices see it, and the text compared to tell a
+ * local edit from an applied one: Markdown, as iOS keeps drafts.
+ */
+export const draftMarkdownOf = (nodes: Descendant[], isMarkdown: boolean): string =>
+  toDraftMarkdown(nodes, isMarkdown).trim();
 
 type SyncedRoomDraftOptions = {
   editor: Editor;
@@ -109,17 +116,19 @@ export function useSyncedRoomDraft({
   }, [roomId, slot]);
 
   const currentMarkdown = useCallback(
-    () => toPlainText(editor.children, isMarkdown).trim(),
+    () => draftMarkdownOf(editor.children, isMarkdown),
     [editor, isMarkdown]
   );
 
   const apply = useCallback(
-    (draft: RemoteDraft) => {
-      const nodes = draft.cleared ? [] : remoteDraftNodes(draft);
-      appliedRef.current = draft.cleared ? '' : toPlainText(nodes, isMarkdown).trim();
+    async (draft: RemoteDraft) => {
+      const nodes = draft.cleared ? [] : await remoteDraftNodes(draft, isMarkdown);
+      // A blank draft (an empty list) is no text: never a stray bullet.
+      const blank = composerContentIsEmpty(nodes);
+      appliedRef.current = blank ? '' : draftMarkdownOf(nodes, isMarkdown);
       baselineRef.current = undefined;
       resetEditor(editor);
-      if (nodes.length > 0) Transforms.insertFragment(editor, nodes);
+      if (!blank) Transforms.insertFragment(editor, nodes);
       resetEditorHistory(editor);
       stampRef.current = draft.updatedAt;
       dirtyRef.current = false;
@@ -145,7 +154,7 @@ export function useSyncedRoomDraft({
       if (!resolution?.draft) return;
       if (resolution.decision === 'apply') {
         setPrompt(undefined);
-        apply(resolution.draft);
+        await apply(resolution.draft);
       } else if (resolution.decision === 'prompt') {
         setPrompt(resolution.draft);
       }
@@ -241,7 +250,7 @@ export function useSyncedRoomDraft({
   );
 
   const takeRemote = useCallback(() => {
-    if (prompt) apply(prompt);
+    if (prompt) void apply(prompt);
     setPrompt(undefined);
   }, [apply, prompt]);
 

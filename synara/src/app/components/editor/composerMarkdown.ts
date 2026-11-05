@@ -2,6 +2,7 @@ import { Descendant, Element, Text } from 'slate';
 import { invokeDesktopWithAvailability } from '../../utils/desktop';
 import { BlockType } from './types';
 import { toMatrixCustomHTML } from './output';
+import { htmlToEditorInput, plainToEditorInput } from './input';
 
 /**
  * Markdown composer output, rendered by Core (`render_composer_markdown`), the
@@ -39,7 +40,30 @@ const isList = (node: Descendant): boolean =>
   Element.isElement(node) &&
   (node.type === BlockType.OrderedList || node.type === BlockType.UnorderedList);
 
-export const toComposerMarkdown = (nodes: Descendant[]): ComposerMarkdown => {
+/**
+ * - `draft`: Markdown for a synced draft, in the form the iOS composer writes:
+ *   no placeholders; mentions and links are Markdown links, underline and
+ *   spoilers the inline HTML tags iOS uses, custom emoji their `:shortcode:`.
+ * - `literal`: the text was typed with Markdown off, so its Markdown
+ *   characters are escaped and read back as typed.
+ */
+export type ComposerMarkdownOptions = { draft?: boolean; literal?: boolean };
+
+const INLINE_MARKDOWN = /[\\`*_[\]<>~|]/g;
+const BLOCK_MARKER = /^(\s*)(#{1,6}\s|>|[-+*]\s|\d{1,9}[.)]\s)/;
+const escapeInline = (text: string) => text.replace(INLINE_MARKDOWN, (char) => `\\${char}`);
+const escapeLineStart = (line: string) =>
+  line.replace(BLOCK_MARKER, (_match, space: string, marker: string) =>
+    /^\d/.test(marker) ? `${space}${marker.replace(/([.)])/, '\\$1')}` : `${space}\\${marker}`
+  );
+const linkLabel = (text: string) => text.replace(/[\\[\]*_`<>]/g, (char) => `\\${char}`);
+const linkTarget = (href: string) => href.replace(/[()\s]/g, encodeURIComponent);
+
+export const toComposerMarkdown = (
+  nodes: Descendant[],
+  options: ComposerMarkdownOptions = {}
+): ComposerMarkdown => {
+  const { draft = false, literal = false } = options;
   const fragments: string[] = [];
   const fragment = (html: string): string => {
     fragments.push(html);
@@ -51,14 +75,32 @@ export const toComposerMarkdown = (nodes: Descendant[]): ComposerMarkdown => {
       const text = node.text.replace(RESERVED_CHARS, '');
       if (!text) return '';
       // Marks markdown has no syntax for travel as HTML.
-      if (node.underline || node.spoiler) {
+      if (!draft && (node.underline || node.spoiler)) {
         return fragment(toMatrixCustomHTML({ ...node, text }, { allowTextFormatting: true }));
       }
-      let out = node.code ? codeSpan(text) : text;
+      let out = node.code ? codeSpan(text) : literal ? escapeInline(text) : text;
       if (node.strikeThrough) out = `~~${out}~~`;
       if (node.italic) out = `_${out}_`;
       if (node.bold) out = `**${out}**`;
+      if (draft && node.underline) out = `<u>${out}</u>`;
+      if (draft && node.spoiler) out = `<span data-mx-spoiler>${out}</span>`;
       return out;
+    }
+    if (draft) {
+      switch (node.type) {
+        case BlockType.Mention: {
+          const label = node.name.startsWith('@') ? node.name : `@${node.name}`;
+          let target = node.id;
+          if (node.eventId) target += `/${node.eventId}`;
+          return `[${linkLabel(label)}](https://matrix.to/#/${linkTarget(encodeURI(target))})`;
+        }
+        case BlockType.Emoticon:
+          return node.key.startsWith('mxc://') ? `:${node.shortcode}:` : node.key;
+        case BlockType.Link:
+          return `[${node.children.map(inline).join('')}](${linkTarget(node.href)})`;
+        default:
+          break;
+      }
     }
     switch (node.type) {
       case BlockType.Mention:
@@ -75,8 +117,10 @@ export const toComposerMarkdown = (nodes: Descendant[]): ComposerMarkdown => {
   const block = (node: Descendant, indent: string): string => {
     if (Text.isText(node) || !Element.isElement(node)) return `${indent}${inline(node)}\n`;
     switch (node.type) {
-      case BlockType.Paragraph:
-        return `${indent}${node.children.map(inline).join('')}\n`;
+      case BlockType.Paragraph: {
+        const text = node.children.map(inline).join('');
+        return `${indent}${literal ? escapeLineStart(text) : text}\n`;
+      }
       case BlockType.Heading:
         return `${indent}${'#'.repeat(node.level)} ${node.children.map(inline).join('')}\n`;
       case BlockType.CodeBlock: {
@@ -155,4 +199,37 @@ export const renderComposerHtml = async (nodes: Descendant[]): Promise<string> =
     // Core could not format the message; send the editor's own HTML.
   }
   return fallback;
+};
+
+/**
+ * A draft as Markdown for the account's other devices (iOS keeps drafts as
+ * Markdown text). Desktop keeps the rich value alongside it.
+ */
+export const toDraftMarkdown = (nodes: Descendant[], isMarkdown: boolean): string =>
+  toComposerMarkdown(nodes, { draft: true, literal: !isMarkdown }).source;
+
+/**
+ * Editor content for Markdown from another device. With Markdown on the
+ * composer holds Markdown source, so the text goes in as typed; with it off
+ * Core renders it first, so formatting shows as formatting and is not sent
+ * as literal asterisks.
+ */
+export const draftMarkdownToEditorInput = async (
+  markdown: string,
+  isMarkdown: boolean
+): Promise<Descendant[]> => {
+  const lines = plainToEditorInput(markdown, false);
+  if (isMarkdown || !markdown.trim()) return lines;
+  try {
+    const result = await invokeDesktopWithAvailability<string | null>('desktop_render_markdown', {
+      source: markdown,
+      fragments: [],
+    });
+    if (result.available && typeof result.value === 'string') {
+      return htmlToEditorInput(result.value);
+    }
+  } catch {
+    // Core could not render it; the text still arrives.
+  }
+  return lines;
 };

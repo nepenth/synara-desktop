@@ -133,7 +133,7 @@ import {
   loadRoomDraftUpdatedAt,
   saveRoomDraft,
 } from '../../utils/drafts';
-import { useSyncedRoomDraft } from './useSyncedRoomDraft';
+import { draftMarkdownOf, useSyncedRoomDraft } from './useSyncedRoomDraft';
 import {
   DEFAULT_POLL_SELECTIONS,
   MAX_POLL_SELECTIONS,
@@ -328,7 +328,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const openingDraft = msgDraft.length > 0 ? msgDraft : undefined;
     const storedMarkdown = useMemo(() => {
       const nodes = openingDraft ?? loadRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
-      return nodes ? toPlainText(nodes, isMarkdown).trim() : '';
+      return nodes ? draftMarkdownOf(nodes, isMarkdown) : '';
     }, [draftKey, isMarkdown, openingDraft]);
     const syncedDraft = useSyncedRoomDraft({
       editor,

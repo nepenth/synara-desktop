@@ -321,7 +321,11 @@ Left out of Phase 1, on purpose:
   target (that needs the event loaded to build a `ComposerRelationTarget`).
 - Edit targets (`edit_of`) are carried by the format, but neither shell
   writes them. An in-progress edit is never synced as a draft.
-- Desktop rich formatting reaches iOS as its plain-text form (`toPlainText`).
+- Desktop rich formatting reaches iOS as Markdown in the iOS composer's own form
+  (`toDraftMarkdown`): mentions as matrix.to Markdown links, underline and spoilers as
+  `<u>` and `<span data-mx-spoiler>`, custom emoji as `:shortcode:`. Text typed with
+  Markdown off is escaped. iOS syncs its draft with picked mentions resolved to the same
+  links. A Markdown draft from iOS is rendered by Core on a desktop with Markdown off.
   Desktop-to-desktop keeps the full Slate value.
 - No UI yet for `keyState` ("enter your recovery key to sync drafts"), and
   no "Delete synced drafts" button. The Core commands exist for both.

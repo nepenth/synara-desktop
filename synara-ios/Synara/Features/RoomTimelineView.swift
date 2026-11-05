@@ -743,11 +743,13 @@ struct RoomTimelineView: View {
                     truncated: prompt.truncated,
                     onUse: {
                         if let remote = draftSync.takeRemote() {
+                            // Its mentions arrive as Markdown links; none of ours apply.
+                            composerMentions = []
                             draft = remote.markdown
                         }
                     },
                     onKeep: {
-                        draftSync.keepLocal(draft, replyToEventID: replyTarget?.eventID)
+                        draftSync.keepLocal(syncedDraftMarkdown(draft), replyToEventID: replyTarget?.eventID)
                     }
                 )
             }
@@ -1088,7 +1090,7 @@ struct RoomTimelineView: View {
             environment.drafts.setDraft(value, roomID: roomID)
             // An edit borrows the composer; its text is not a draft.
             if editSession == nil {
-                draftSync.noteChange(value, replyToEventID: replyTarget?.eventID)
+                draftSync.noteChange(syncedDraftMarkdown(value), replyToEventID: replyTarget?.eventID)
             }
         }
         .task(id: roomID) {
@@ -2067,11 +2069,14 @@ struct RoomTimelineView: View {
         let current = draft
         let resolvingRoomID = roomID
         Task { @MainActor in
-            let remote = await draftSync.resolve(currentText: current, isFocused: false, fetchFresh: fetchFresh)
+            let remote = await draftSync.resolve(
+                currentText: syncedDraftMarkdown(current), isFocused: false, fetchFresh: fetchFresh
+            )
             // Typed or switched rooms meanwhile: the comparison is stale.
             guard let remote, roomID == resolvingRoomID, draft == current, editSession == nil else {
                 return
             }
+            composerMentions = []
             draft = remote.markdown
         }
     }
@@ -2874,6 +2879,12 @@ struct RoomTimelineView: View {
     /// `sentText` is the composer text when the send began; only that is
     /// cleared once the send is accepted.
     @MainActor
+
+    /// The draft as other devices get it: picked mentions become the
+    /// matrix.to links the send would make, so they stay mentions there.
+    private func syncedDraftMarkdown(_ text: String) -> String {
+        ComposerMentions.resolve(text, mentions: composerMentions, currentUserID: currentUserID).markdown
+    }
     private func performSend(
         body rawBody: String,
         replyToEventID: String?,
