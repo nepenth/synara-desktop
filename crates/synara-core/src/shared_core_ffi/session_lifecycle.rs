@@ -1830,8 +1830,14 @@ impl SharedCore {
                 }
             })
         };
+        let drafts_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: crate::app::drafts::NativeDraftUpdateSignal| {
+                push_owner_update(&queue, "drafts", update.session_generation, update.room_id);
+            })
+        };
         let image_packs = Arc::new(
-            NativeImagePackOwner::start(&client, image_packs_emit, generation)
+            NativeImagePackOwner::start(&client, image_packs_emit, drafts_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
         let http_pusher = Arc::new(

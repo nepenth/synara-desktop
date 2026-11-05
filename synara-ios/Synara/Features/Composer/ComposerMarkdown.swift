@@ -209,9 +209,17 @@ enum ComposerMarkdown {
         let selected = selection.length > 0
             ? nsText.substring(with: NSRange(location: selection.location, length: selection.length))
             : "code"
-        let block = "\n```\n\(selected)\n```\n"
+        // The fence needs lines of its own: break only where the text does not.
+        let before = selection.location > 0
+            && nsText.substring(with: NSRange(location: selection.location - 1, length: 1)) != "\n"
+            ? "\n" : ""
+        let after = selection.upperBound < nsText.length
+            && nsText.substring(with: NSRange(location: selection.upperBound, length: 1)) != "\n"
+            ? "\n" : ""
+        let opening = "\(before)```\n"
+        let block = "\(opening)\(selected)\n```\(after)"
         let updated = nsText.replacingCharacters(in: NSRange(location: selection.location, length: selection.length), with: block)
-        let contentStart = selection.location + "\n```\n".utf16.count
+        let contentStart = selection.location + opening.utf16.count
         return (updated, ComposerTextSelection(location: contentStart, length: selected.utf16.count))
     }
 
@@ -246,9 +254,10 @@ enum ComposerMarkdown {
             return (updated, ComposerTextSelection(location: lineRange.location, length: length))
         }
 
+        // A line keeps one block marker: a bullet made a quote loses its bullet.
         let prefixed = lines
             .map { line in
-                "\(prefix)\(line)"
+                "\(prefix)\(strippingBlockMarker(line))"
             }
             .joined(separator: "\n")
 
@@ -299,13 +308,14 @@ enum ComposerMarkdown {
             return (updated, ComposerTextSelection(location: lineRange.location, length: length))
         }
 
+        let first = continuedListNumber(in: nsText, before: lineRange.location)
         let prefixed = lines.enumerated().map { index, line in
-            "\(index + 1). \(line)"
+            "\(first + index). \(strippingBlockMarker(line))"
         }.joined(separator: "\n")
 
         let replacement = prefixed + (hasTrailingNewline ? "\n" : "")
         let updated = nsText.replacingCharacters(in: lineRange, with: replacement)
-        let prefix = "1. "
+        let prefix = "\(first). "
         let contentStart = lineRange.location + prefix.utf16.count
         let selectedLength = selection.length > 0
             ? (prefixed as NSString).length - prefix.utf16.count
@@ -324,12 +334,12 @@ enum ComposerMarkdown {
         let trailingNewline = selectedLines.hasSuffix("\n")
         let content = trailingNewline ? String(selectedLines.dropLast()) : selectedLines
         let lines = content.isEmpty ? ["Heading"] : content.components(separatedBy: "\n")
-        // Desktop's three heading choices render as h2, h3, and h4.
-        let requestedPrefix = String(repeating: "#", count: level + 1) + " "
+        // Heading 1-3 are <h1>-<h3> on the wire, as desktop sends them.
+        let requestedPrefix = String(repeating: "#", count: level) + " "
         let allAtRequestedLevel = content.isEmpty == false
             && lines.allSatisfy { $0.hasPrefix(requestedPrefix) }
         let transformed = lines.map { line -> String in
-            let bare = line.replacingOccurrences(of: #"^#{1,4} "#, with: "", options: .regularExpression)
+            let bare = strippingBlockMarker(line)
             return allAtRequestedLevel ? bare : requestedPrefix + bare
         }.joined(separator: "\n")
         let updated = nsText.replacingCharacters(
@@ -358,4 +368,101 @@ enum ComposerMarkdown {
         return text.lineRange(for: NSRange(location: selection.location, length: length))
     }
 
+
+    // MARK: - Block markers and line breaks
+
+    private static let blockMarker = try? NSRegularExpression(
+        pattern: #"^(#{1,6} |> |[-*+] |\d{1,9}[.)] )"#
+    )
+    private static let listMarker = try? NSRegularExpression(
+        pattern: #"^([ \t]*)(?:([-*+])|(\d{1,9})([.)])|(>))( +)"#
+    )
+
+    /// The line without its heading, quote or list marker.
+    static func strippingBlockMarker(_ line: String) -> String {
+        let ns = line as NSString
+        guard let match = blockMarker?.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else {
+            return line
+        }
+        return ns.substring(from: match.range.length)
+    }
+
+    /// The number a numbered list starting at `location` continues from:
+    /// the nearest top-level numbered line above it, across plain lines,
+    /// quotes and code. A heading or a bulleted line restarts at 1, as on
+    /// desktop.
+    static func continuedListNumber(in text: NSString, before location: Int) -> Int {
+        let preceding = text.substring(to: max(0, min(location, text.length)))
+        for line in preceding.components(separatedBy: "\n").reversed() {
+            if let range = line.range(of: #"^\d{1,9}(?=[.)] )"#, options: .regularExpression),
+               let number = Int(line[range])
+            {
+                return number + 1
+            }
+            if line.range(of: #"^(#{1,6} |[-*+] )"#, options: .regularExpression) != nil {
+                return 1
+            }
+        }
+        return 1
+    }
+
+    /// What Return does on a list or quote line: continue it with the next
+    /// marker, or, on a line that holds only a marker, clear the marker and
+    /// leave the list. `nil` means an ordinary new line.
+    struct LineBreakEdit: Equatable {
+        /// UTF-16 range to replace, and its replacement.
+        var range: NSRange
+        var replacement: String
+        /// Caret after the edit.
+        var caret: Int
+    }
+
+    static func lineBreak(in text: String, at location: Int) -> LineBreakEdit? {
+        let ns = text as NSString
+        guard location >= 0, location <= ns.length else { return nil }
+        var lineRange = ns.lineRange(for: NSRange(location: location, length: 0))
+        if lineRange.length > 0,
+           ns.substring(with: NSRange(location: NSMaxRange(lineRange) - 1, length: 1)) == "\n"
+        {
+            lineRange.length -= 1
+        }
+        // Inside a code fence a new line is code.
+        let fences = ns.substring(to: lineRange.location)
+            .components(separatedBy: "\n")
+            .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("```") }
+            .count
+        guard fences % 2 == 0 else { return nil }
+
+        let line = ns.substring(with: lineRange)
+        let lineNS = line as NSString
+        guard let match = listMarker?.firstMatch(in: line, range: NSRange(location: 0, length: lineNS.length)),
+              location >= lineRange.location + match.range.length
+        else {
+            return nil
+        }
+        let rest = lineNS.substring(from: match.range.length)
+        if rest.trimmingCharacters(in: .whitespaces).isEmpty {
+            return LineBreakEdit(range: lineRange, replacement: "", caret: lineRange.location)
+        }
+        func group(_ index: Int) -> String? {
+            let range = match.range(at: index)
+            return range.location == NSNotFound ? nil : lineNS.substring(with: range)
+        }
+        let indent = group(1) ?? ""
+        let gap = group(6) ?? " "
+        let marker: String
+        if let bullet = group(2) {
+            marker = bullet
+        } else if let number = group(3).flatMap(Int.init) {
+            marker = "\(number + 1)\(group(4) ?? ".")"
+        } else {
+            marker = ">"
+        }
+        let insertion = "\n\(indent)\(marker)\(gap)"
+        return LineBreakEdit(
+            range: NSRange(location: location, length: 0),
+            replacement: insertion,
+            caret: location + (insertion as NSString).length
+        )
+    }
 }

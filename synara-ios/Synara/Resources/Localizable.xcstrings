@@ -1446,6 +1446,12 @@
     "Done" : {
 
     },
+    "Draft updated on another device (too long to sync in full)." : {
+
+    },
+    "Draft updated on another device." : {
+
+    },
     "Due" : {
 
     },
@@ -1789,6 +1795,9 @@
 
     },
     "Jump to latest" : {
+
+    },
+    "Keep mine" : {
 
     },
     "Key Backup" : {
@@ -3182,6 +3191,9 @@
     "Synara will create and securely store your cross-signing identity on this device. Enter your account password to continue." : {
 
     },
+    "Sync drafts across devices" : {
+
+    },
     "Syncing" : {
 
     },
@@ -3473,6 +3485,9 @@
     "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly." : {
 
     },
+    "Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them." : {
+
+    },
     "Unsupported action: %@" : {
 
     },
@@ -3486,6 +3501,9 @@
 
     },
     "Use recovery key" : {
+
+    },
+    "Use it" : {
 
     },
     "Use the Message actions button or long press for message actions" : {

@@ -6714,6 +6714,7 @@ dependencies = [
 name = "synara-core"
 version = "0.1.0"
 dependencies = [
+ "chacha20poly1305",
  "eyeball-im",
  "futures-util",
  "getrandom 0.4.3",

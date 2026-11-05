@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-drafts-resolve"
+description = "Enables the matrix_drafts_resolve command without any pre-configured scope."
+commands.allow = ["matrix_drafts_resolve"]
+
+[[permission]]
+identifier = "deny-matrix-drafts-resolve"
+description = "Denies the matrix_drafts_resolve command without any pre-configured scope."
+commands.deny = ["matrix_drafts_resolve"]

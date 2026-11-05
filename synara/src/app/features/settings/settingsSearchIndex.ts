@@ -106,6 +106,12 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   },
   {
     page: SettingsPages.GeneralPage,
+    title: 'Sync drafts across devices',
+    description: 'Keep unsent messages on your other Synara devices, end-to-end encrypted.',
+    synonyms: ['draft', 'unsent', 'composer', 'sync', 'devices', 'continue'],
+  },
+  {
+    page: SettingsPages.GeneralPage,
     title: 'Shorten long links',
     description: 'Show a long web address as its site and path.',
     synonyms: ['link', 'url', 'shorten', 'truncate', 'tracking', 'long'],

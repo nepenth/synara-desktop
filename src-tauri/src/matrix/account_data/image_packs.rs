@@ -13,6 +13,7 @@ pub use synara_core::app::account_data::{
     NativeAccountDataWakeupKind, NativeImagePackOwner, NativeImagePackUpdateSignal,
     AGENT_APPROVAL_HISTORY_UPDATED_EVENT, IMAGE_PACKS_UPDATED_EVENT,
 };
+use synara_core::app::drafts::{NativeDraftUpdateSignal, DRAFTS_UPDATED_EVENT};
 
 pub(crate) fn event_name_for_account_data_wakeup(
     kind: NativeAccountDataWakeupKind,
@@ -32,10 +33,14 @@ pub fn start(
     app: AppHandle,
     session_generation: u64,
 ) -> Result<NativeImagePackOwner, &'static str> {
+    let drafts_app = app.clone();
     NativeImagePackOwner::start(
         client,
         Arc::new(move |signal: NativeImagePackUpdateSignal| {
             let _ = app.emit(event_name_for_account_data_wakeup(signal.kind), signal);
+        }),
+        Arc::new(move |signal: NativeDraftUpdateSignal| {
+            let _ = drafts_app.emit(DRAFTS_UPDATED_EVENT, signal);
         }),
         session_generation,
     )

@@ -12,6 +12,7 @@ pub(crate) mod device_snapshot;
 pub(crate) mod directory_protocols;
 pub(crate) mod directory_search;
 pub(crate) mod directory_visibility;
+pub(crate) mod drafts;
 pub(crate) mod global_image_packs;
 pub(crate) mod identity_reset;
 pub(crate) mod ignored_users;

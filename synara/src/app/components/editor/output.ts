@@ -146,7 +146,7 @@ const elementToPlainText = (node: CustomElement, children: string): string => {
     case BlockType.CodeBlock:
       return `${children}\n`;
     case BlockType.QuoteLine:
-      return `| ${children}\n`;
+      return `> ${children}\n`;
     case BlockType.BlockQuote:
       return `${children}\n`;
     case BlockType.ListItem:

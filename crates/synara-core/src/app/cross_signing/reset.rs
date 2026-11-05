@@ -312,6 +312,8 @@ impl IdentityResetFlow {
         if !published {
             return Err(IDENTITY_RESET_FAILED);
         }
+        // Drafts sealed under the old identity's key must not follow it.
+        crate::app::drafts::on_identity_reset(client).await;
         Ok(NativeIdentityResetState {
             session_generation: self.session_generation,
             step: NativeIdentityResetStep::Complete,

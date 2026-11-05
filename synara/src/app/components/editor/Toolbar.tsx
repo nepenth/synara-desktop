@@ -19,15 +19,14 @@ import {
 } from 'folds';
 import React, { MouseEventHandler, ReactNode, useState } from 'react';
 import { ReactEditor, useSlate } from 'slate-react';
+import { isAnyMarkActive, isMarkActive, toggleMark } from './utils';
 import {
+  exitFormatting,
+  hasBlockFormatting,
   headingLevel,
-  isAnyMarkActive,
   isBlockActive,
-  isMarkActive,
-  removeAllMark,
   toggleBlock,
-  toggleMark,
-} from './utils';
+} from './formatting';
 import * as css from './Editor.css';
 import * as depthCss from '../../styles/Depth.css';
 import { BlockType, MarkType } from './types';
@@ -37,6 +36,12 @@ import { KeySymbol } from '../../utils/key-symbol';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { stopPropagation } from '../../utils/keyboard';
+
+/**
+ * Toolbar buttons act on click but never take focus on mouse down, so the
+ * editor keeps its selection and the caret stays where the user put it.
+ */
+const keepEditorFocus: MouseEventHandler = (evt) => evt.preventDefault();
 
 function BtnTooltip({ text, shortCode }: { text: string; shortCode?: string }) {
   return (
@@ -58,11 +63,8 @@ function BtnTooltip({ text, shortCode }: { text: string; shortCode?: string }) {
 type MarkButtonProps = { format: MarkType; icon: IconSrc; label: string; tooltip: ReactNode };
 export function MarkButton({ format, icon, label, tooltip }: MarkButtonProps) {
   const editor = useSlate();
+  // Code is plain text: marks are not offered there.
   const disableInline = isBlockActive(editor, BlockType.CodeBlock);
-
-  if (disableInline) {
-    removeAllMark(editor);
-  }
 
   const handleClick = () => {
     toggleMark(editor, format);
@@ -77,6 +79,7 @@ export function MarkButton({ format, icon, label, tooltip }: MarkButtonProps) {
           className={depthCss.quietActionButton}
           variant="Surface"
           fill="None"
+          onMouseDown={keepEditorFocus}
           onClick={handleClick}
           aria-label={label}
           aria-pressed={isMarkActive(editor, format)}
@@ -101,7 +104,7 @@ export function BlockButton({ format, icon, label, tooltip }: BlockButtonProps) 
   const editor = useSlate();
 
   const handleClick = () => {
-    toggleBlock(editor, format, { level: 1 });
+    toggleBlock(editor, format);
     ReactEditor.focus(editor);
   };
 
@@ -113,6 +116,7 @@ export function BlockButton({ format, icon, label, tooltip }: BlockButtonProps) 
           className={depthCss.quietActionButton}
           variant="Surface"
           fill="None"
+          onMouseDown={keepEditorFocus}
           onClick={handleClick}
           aria-label={label}
           aria-pressed={isBlockActive(editor, format)}
@@ -141,7 +145,8 @@ export function HeadingBlockButton() {
 
   const handleMenuOpen: MouseEventHandler<HTMLButtonElement> = (evt) => {
     if (isActive) {
-      toggleBlock(editor, BlockType.Heading);
+      toggleBlock(editor, BlockType.Heading, { level });
+      ReactEditor.focus(editor);
       return;
     }
     setAnchor(evt.currentTarget.getBoundingClientRect());
@@ -175,6 +180,7 @@ export function HeadingBlockButton() {
                     className={depthCss.quietActionButton}
                     variant="Surface"
                     fill="None"
+                    onMouseDown={keepEditorFocus}
                     onClick={() => handleMenuSelect(1)}
                     aria-label="Heading 1"
                     aria-pressed={level === 1}
@@ -195,6 +201,7 @@ export function HeadingBlockButton() {
                     className={depthCss.quietActionButton}
                     variant="Surface"
                     fill="None"
+                    onMouseDown={keepEditorFocus}
                     onClick={() => handleMenuSelect(2)}
                     aria-label="Heading 2"
                     aria-pressed={level === 2}
@@ -215,6 +222,7 @@ export function HeadingBlockButton() {
                     className={depthCss.quietActionButton}
                     variant="Surface"
                     fill="None"
+                    onMouseDown={keepEditorFocus}
                     onClick={() => handleMenuSelect(3)}
                     aria-label="Heading 3"
                     aria-pressed={level === 3}
@@ -235,6 +243,7 @@ export function HeadingBlockButton() {
         className={depthCss.quietActionButton}
         variant="Surface"
         fill="None"
+        onMouseDown={keepEditorFocus}
         onClick={handleMenuOpen}
         aria-label={isActive ? `Clear heading ${level ?? ''}` : 'Choose heading level'}
         aria-haspopup="menu"
@@ -255,11 +264,7 @@ export function ExitFormatting({ tooltip }: ExitFormattingProps) {
   const editor = useSlate();
 
   const handleClick = () => {
-    if (isAnyMarkActive(editor)) {
-      removeAllMark(editor);
-    } else if (!isBlockActive(editor, BlockType.Paragraph)) {
-      toggleBlock(editor, BlockType.Paragraph);
-    }
+    exitFormatting(editor);
     ReactEditor.focus(editor);
   };
 
@@ -271,6 +276,7 @@ export function ExitFormatting({ tooltip }: ExitFormattingProps) {
           className={depthCss.quietActionButton}
           variant="Surface"
           fill="None"
+          onMouseDown={keepEditorFocus}
           onClick={handleClick}
           aria-label="Exit formatting"
           size="400"
@@ -288,9 +294,7 @@ export function Toolbar() {
   const modKey = isMacOS() ? KeySymbol.Command : 'Ctrl';
   const disableInline = isBlockActive(editor, BlockType.CodeBlock);
 
-  const canEscape = isBlockActive(editor, BlockType.Paragraph)
-    ? isAnyMarkActive(editor)
-    : ReactEditor.isFocused(editor);
+  const canEscape = !!isAnyMarkActive(editor) || hasBlockFormatting(editor);
   const [isMarkdown, setIsMarkdown] = useSetting(settingsAtom, 'isMarkdown');
 
   return (
@@ -389,6 +393,7 @@ export function Toolbar() {
                   className={depthCss.quietActionButton}
                   variant="Surface"
                   fill="None"
+                  onMouseDown={keepEditorFocus}
                   onClick={() => setIsMarkdown(!isMarkdown)}
                   aria-label={
                     isMarkdown ? 'Disable Markdown shortcuts' : 'Enable Markdown shortcuts'

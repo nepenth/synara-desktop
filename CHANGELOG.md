@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Drafts (desktop and iOS): an unsent message follows you to your other Synara devices, so you can start typing in a room on one device and finish on another. Drafts are end-to-end encrypted in your room account data: the homeserver sees only that a room has a draft, when it changed and a rough size. The key is kept in secret storage, so a device that has entered your recovery key can read drafts. A device you verified with another device asks your verified devices for the key itself. Opening a room shows the newer draft. If you are typing when a newer draft arrives, Synara asks "Draft updated on another device" (Use it / Keep mine) instead of overwriting your text. Sending clears the draft everywhere. A draft over about 46 KB is cut for syncing, and the other device says so. Desktop keeps rich formatting between desktop devices; iOS receives it as Markdown (bold, lists, quotes, code, links, and mentions that still send as mentions), and a draft from iOS shows its formatting on desktop with Markdown off. iOS syncs the room composer, not yet thread composers. Turn it off per device in Settings → General (desktop) or Settings → Security & Recovery (iOS); on by default. Attachments in drafts come later.
+- Composer formatting (desktop): rebuilt on one documented model (docs/composer-formatting-model.md), shared by the room composer and the message editor.
+  - Shift+Enter (and Enter when it does not send) starts the next list item, including on an item with sub-items; on an empty item it steps out a level, then leaves the list. In a quote or code block it adds a line, and on an empty last line it leaves the block. A heading never continues into an empty heading.
+  - Backspace at the start of a line removes that line's formatting first (list marker, quote, code, heading), then joins lines. It no longer deletes text below a list.
+  - Toolbar and shortcut formats apply to every selected line: several lines become one list, quote or code block. Turning numbering on under a numbered list extends it; after a note in between it carries on from the last number (1, 2, 3, note, 4), and the composer shows the numbers that are sent.
+  - Outdenting a list item keeps reading order. Tab and Shift+Tab move every selected item.
+  - Escape removes inline formatting, then block formatting, after closing suggestions or a reply. Toolbar buttons keep the editor focused.
+  - Markdown mode: a line starting with `- ` or `3. ` continues with `- ` or `4. ` on the next line; an empty item ends the list.
+  - An empty list, quote or code block no longer stays behind as a room's draft (it showed as a stray dot beside the placeholder); deleting everything leaves a plain line.
+  - Editing and pasting keep line breaks inside paragraphs and list items, and lists inside quotes. Quotes fall back to `> ` lines in the plain-text body.
+
 ## [2.8.1] - 2026-11-02
 
 - Room list (desktop, iOS, iPad): read rooms recede to a quieter grey, unread rooms are bold with a short bar at the left edge, muted rooms are dimmer still, and the selected room sits on a filled row (the accent colour on iPad). Section headers are small captions with a visible chevron and more air above each group. Long room names keep their ending ("Project - Hom…agement"). Direct messages show a presence dot, green when the person is online and grey when offline.

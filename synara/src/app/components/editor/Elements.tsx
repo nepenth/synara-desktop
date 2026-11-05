@@ -180,7 +180,15 @@ export function RenderElement({ attributes, element, children }: RenderElementPr
       );
     case BlockType.OrderedList:
       return (
-        <ol className={css.List} {...attributes}>
+        <ol
+          className={css.List}
+          start={
+            Number.isSafeInteger(element.start) && element.start && element.start > 1
+              ? element.start
+              : undefined
+          }
+          {...attributes}
+        >
           {children}
         </ol>
       );
