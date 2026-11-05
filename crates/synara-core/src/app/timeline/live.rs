@@ -178,6 +178,10 @@ const FOCUSED_BUILD_TIMEOUT: Duration = Duration::from_secs(10);
 /// Live and permalink Event timelines hide in-thread replies now that
 /// `NativeTimelineOpenPosition::Thread` owns the threaded stream.
 const HIDE_THREADED_EVENTS: bool = true;
+/// When an event-focused window renders no items at all, how many extra
+/// backward pages (and how long) to spend finding a visible predecessor.
+const FOCUSED_EMPTY_WINDOW_PAGES: usize = 3;
+const FOCUSED_EMPTY_WINDOW_BUDGET: Duration = Duration::from_secs(8);
 
 /// Follow one queued text send after `send_text` has returned, recording the
 /// SDK outcome so a repeat request with the same caller txn answers Sent with
@@ -4890,18 +4894,30 @@ async fn resolve_rendered_focus_target(
     timeline: &Timeline,
     target: &matrix_sdk::ruma::EventId,
 ) -> String {
-    let rendered: Vec<(String, u64)> = timeline
-        .items()
-        .await
-        .iter()
-        .filter_map(|item| {
-            let event = item.as_event()?;
-            Some((
-                event.event_id()?.to_string(),
-                u64::from(event.timestamp().0),
-            ))
-        })
-        .collect();
+    let mut rendered = rendered_focus_items(timeline).await;
+    if rendered.is_empty() {
+        // The whole `/context` window was hidden events (membership churn,
+        // bridge state, reactions). Page back a little so there is a visible
+        // predecessor to place on; without one the presenter has no row.
+        let budget = Instant::now() + FOCUSED_EMPTY_WINDOW_BUDGET;
+        for _ in 0..FOCUSED_EMPTY_WINDOW_PAGES {
+            let remaining = budget.saturating_duration_since(Instant::now());
+            match timeout(
+                remaining,
+                timeline.paginate_backwards(PAGINATION_BATCH_SIZE),
+            )
+            .await
+            {
+                Ok(Ok(hit_start)) => {
+                    rendered = rendered_focus_items(timeline).await;
+                    if hit_start || !rendered.is_empty() {
+                        break;
+                    }
+                }
+                Ok(Err(_)) | Err(_) => break,
+            }
+        }
+    }
     if rendered.iter().any(|(id, _)| id == target.as_str()) {
         return target.to_string();
     }
@@ -4916,6 +4932,22 @@ async fn resolve_rendered_focus_target(
     };
     rendered_focus_anchor(&rendered, target.as_str(), target_ts_ms)
         .unwrap_or_else(|| target.to_string())
+}
+
+/// Rendered event items of a timeline as (event id, origin timestamp ms).
+async fn rendered_focus_items(timeline: &Timeline) -> Vec<(String, u64)> {
+    timeline
+        .items()
+        .await
+        .iter()
+        .filter_map(|item| {
+            let event = item.as_event()?;
+            Some((
+                event.event_id()?.to_string(),
+                u64::from(event.timestamp().0),
+            ))
+        })
+        .collect()
 }
 
 /// Resolve a raw marker to the nearest rendered predecessor in stream order.

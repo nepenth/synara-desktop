@@ -450,3 +450,93 @@ async fn a_sparse_route_finds_the_room_and_thread_of_a_cached_event() {
     );
     assert!(owner.event_location("not-an-event-id").await.is_err());
 }
+
+#[tokio::test]
+async fn a_focused_window_of_hidden_events_pages_back_to_a_visible_anchor() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let room_id = room_id!("!hidden-window:example.org");
+    let live_id = event_id!("$hidden-window-live");
+    let visible_id = event_id!("$hidden-window-visible");
+    let marker_id = event_id!("$hidden-window-marker");
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11))
+                .add_timeline_event(
+                    f.text_msg("live tail")
+                        .sender(*BOB)
+                        .event_id(live_id)
+                        .server_ts(3_000),
+                ),
+        )
+        .await;
+    server.mock_room_state_encryption().plain().mount().await;
+    // The read marker is a reaction: the SDK centres `/context` on it but
+    // never renders it, and nothing else in the window renders either.
+    let marker = f
+        .reaction(event_id!("$hidden-window-elsewhere"), "👍")
+        .sender(*BOB)
+        .event_id(marker_id)
+        .server_ts(2_000)
+        .into_event();
+    server
+        .mock_room_event()
+        .room(room_id)
+        .ok(marker.clone())
+        .mount()
+        .await;
+    server
+        .mock_room_event_context()
+        .room(room_id)
+        .ok(RoomContextResponseTemplate::new(marker)
+            .start("hidden-window-prev")
+            .end("hidden-window-next"))
+        .mount()
+        .await;
+    // One page back holds the message the marker followed.
+    server
+        .mock_room_messages()
+        .match_from("hidden-window-prev")
+        .ok(RoomMessagesResponseTemplate::default()
+            .events(vec![f
+                .text_msg("read up to here")
+                .sender(*BOB)
+                .event_id(visible_id)
+                .server_ts(1_000)
+                .into_raw_timeline()])
+            .end_token("hidden-window-older"))
+        .mount()
+        .await;
+    server
+        .mock_room_messages()
+        .ok(RoomMessagesResponseTemplate::default())
+        .mount()
+        .await;
+
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 54);
+    let opened = timeout(
+        Duration::from_secs(12),
+        owner.open_at(NativeTimelineOpenRequest {
+            room_id: room_id.to_string(),
+            position: NativeTimelineOpenPosition::Focused {
+                event_id: marker_id.to_string(),
+            },
+        }),
+    )
+    .await
+    .expect("focused open should finish")
+    .expect("the open places the marker");
+    assert_eq!(opened.focus_route, Some(NativeTimelineEventRoute::Room));
+    assert_eq!(
+        opened.position,
+        TimelineViewPosition::Focused {
+            target_event_id: visible_id.to_string()
+        },
+        "the anchor is the nearest visible message before the marker"
+    );
+    assert!(row_event_ids(&opened.snapshot.rows).contains(&visible_id.as_str()));
+}
