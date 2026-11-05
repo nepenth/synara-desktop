@@ -220,6 +220,7 @@ const tests = [
   'src/app/state/__tests__/mDirectList.test.ts',
   'src/app/state/__tests__/typingMembers.test.ts',
   'src/app/components/editor/__tests__/richText.test.ts',
+  'src/app/components/editor/__tests__/formatting.test.ts',
   'src/app/components/editor/__tests__/linkEdge.test.ts',
   'src/app/pages/auth/login/__tests__/nativeLoginFlows.test.ts',
   'src/app/pages/auth/reset-password/__tests__/nativePasswordReset.test.ts',

@@ -4,10 +4,10 @@ import {
   CommandElement,
   EmoticonElement,
   FormattedText,
-  HeadingLevel,
   LinkElement,
   MentionElement,
 } from './slate';
+import { isBlankContent } from './formatting';
 
 const ALL_MARK_TYPE: MarkType[] = [
   MarkType.Bold,
@@ -44,107 +44,21 @@ export const removeAllMark = (editor: Editor) => {
   });
 };
 
-export const isBlockActive = (editor: Editor, format: BlockType) => {
-  const [match] = Editor.nodes(editor, {
-    match: (node) => Element.isElement(node) && node.type === format,
-  });
-
-  return !!match;
-};
-
-export const headingLevel = (editor: Editor): HeadingLevel | undefined => {
-  const [nodeEntry] = Editor.nodes(editor, {
-    match: (node) => Element.isElement(node) && node.type === BlockType.Heading,
-  });
-  const [node] = nodeEntry ?? [];
-  if (!node) return undefined;
-  if ('level' in node) return node.level;
-  return undefined;
-};
-
-type BlockOption = { level: HeadingLevel };
-const NESTED_BLOCK = [
-  BlockType.OrderedList,
-  BlockType.UnorderedList,
-  BlockType.BlockQuote,
-  BlockType.CodeBlock,
-];
-
-export const toggleBlock = (editor: Editor, format: BlockType, option?: BlockOption) => {
-  Transforms.collapse(editor, {
-    edge: 'end',
-  });
-  const isActive = isBlockActive(editor, format);
-
-  Transforms.unwrapNodes(editor, {
-    match: (node) => Element.isElement(node) && NESTED_BLOCK.includes(node.type),
-    split: true,
-  });
-
-  if (isActive) {
-    Transforms.setNodes(editor, {
-      type: BlockType.Paragraph,
-    });
-    return;
-  }
-
-  if (format === BlockType.OrderedList || format === BlockType.UnorderedList) {
-    Transforms.setNodes(editor, {
-      type: BlockType.ListItem,
-    });
-    const block = {
-      type: format,
-      children: [],
-    };
-    Transforms.wrapNodes(editor, block);
-    return;
-  }
-  if (format === BlockType.CodeBlock) {
-    Transforms.setNodes(editor, {
-      type: BlockType.CodeLine,
-    });
-    const block = {
-      type: format,
-      children: [],
-    };
-    Transforms.wrapNodes(editor, block);
-    return;
-  }
-
-  if (format === BlockType.BlockQuote) {
-    Transforms.setNodes(editor, {
-      type: BlockType.QuoteLine,
-    });
-    const block = {
-      type: format,
-      children: [],
-    };
-    Transforms.wrapNodes(editor, block);
-    return;
-  }
-
-  if (format === BlockType.Heading) {
-    Transforms.setNodes(editor, {
-      type: format,
-      level: option?.level ?? 1,
-    });
-  }
-
-  Transforms.setNodes(editor, {
-    type: format,
-  });
-};
-
+/** Empties the composer to one plain paragraph, with no marks pending. */
 export const resetEditor = (editor: Editor) => {
-  Transforms.delete(editor, {
-    at: {
-      anchor: Editor.start(editor, []),
-      focus: Editor.end(editor, []),
-    },
+  const hadSelection = !!editor.selection;
+  Editor.withoutNormalizing(editor, () => {
+    for (let index = editor.children.length - 1; index >= 0; index -= 1) {
+      Transforms.removeNodes(editor, { at: [index] });
+    }
+    Transforms.insertNodes(
+      editor,
+      { type: BlockType.Paragraph, children: [{ text: '' }] },
+      { at: [0] }
+    );
   });
-
-  toggleBlock(editor, BlockType.Paragraph);
-  removeAllMark(editor);
+  if (hadSelection) Transforms.select(editor, Editor.start(editor, [0]));
+  editor.marks = null;
 };
 
 export const resetEditorHistory = (editor: Editor) => {
@@ -291,11 +205,15 @@ export const getPrevWorldRange = (editor: Editor): BaseRange | undefined => {
   return worldStartPoint && Editor.range(editor, worldStartPoint, cursorPoint);
 };
 
+/**
+ * True when the composer holds nothing to send. A lone empty list, quote or
+ * code block counts as empty, so it is not kept as the room's draft (where it
+ * showed a stray bullet beside the placeholder on every visit).
+ */
 export const isEmptyEditor = (editor: Editor): boolean => {
   const firstChildren = editor.children[0];
   if (firstChildren && Element.isElement(firstChildren)) {
-    const isEmpty = editor.children.length === 1 && Editor.isEmpty(editor, firstChildren);
-    return isEmpty;
+    return editor.children.length === 1 && isBlankContent(editor.children);
   }
   return false;
 };

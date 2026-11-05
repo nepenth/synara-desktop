@@ -57,7 +57,7 @@ Implementation notes:
 
 ### Phase 3: List and block editing UX
 
-Status: Core list behavior implemented.
+Status: Implemented; rules in [composer-formatting-model.md](composer-formatting-model.md).
 
 Requirements:
 
@@ -69,14 +69,19 @@ Requirements:
 Acceptance criteria:
 
 - Empty list item + Enter exits the list.
-- Shift+Enter inserts a soft line break without leaving the current block.
+- Shift+Enter starts a new line in the same block (the next list item, quote line or code line);
+  on an empty line it leaves the block.
 - Tab indents and Shift+Tab outdents list items without corrupting surrounding content.
 - Nested lists round-trip through send and edit.
 
 Implementation notes:
 
-- List items now support a stable nested-list Slate shape by promoting mixed inline/nested content
-  into paragraph-plus-list children.
+- A list item always holds one paragraph followed by its sub-lists; normalization enforces it,
+  including for drafts written by older builds.
+- The editing rules (schema, keys, block commands, drafts) are specified in
+  [composer-formatting-model.md](composer-formatting-model.md) and implemented in
+  `components/editor/formatting.ts`; `__tests__/formatting.test.ts` and
+  `e2e/composer-formatting.spec.ts` follow it case by case.
 - Ordered and unordered nested lists serialize to Matrix HTML and readable plain-text fallbacks.
 - Tab and Shift+Tab are wired to explicit list-item indent/outdent transforms with golden coverage.
 

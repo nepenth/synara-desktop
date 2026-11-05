@@ -109,7 +109,9 @@ document.body.style.color = color.Background.OnContainer;
 
 function ComposerPreview() {
   const editor = useEditor();
-  const [toolbar, setToolbar] = useState(false);
+  // Browser specs drive and inspect the Slate document through this handle.
+  Object.assign(window, { synaraComposerEditor: editor });
+  const [toolbar, setToolbar] = useState(query.has('toolbar'));
   return (
     <>
       <Text size="H5">Composer preview</Text>

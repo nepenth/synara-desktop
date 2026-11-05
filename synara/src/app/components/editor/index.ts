@@ -3,6 +3,8 @@ export * from './utils';
 export * from './Editor';
 export * from './Elements';
 export * from './keyboard';
+export * from './formatting';
+export * from './composerEditor';
 export * from './output';
 export * from './Toolbar';
 export * from './input';
