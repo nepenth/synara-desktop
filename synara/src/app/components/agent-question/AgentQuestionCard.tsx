@@ -180,16 +180,19 @@ export function AgentQuestionCard({
                 size="300"
                 radii="300"
                 variant={variant}
-                fill={choice.recommended ? 'Solid' : 'Soft'}
+                // Soft, like the other choices: a solid button reads as already picked.
+                fill="Soft"
                 disabled={disabled}
                 aria-label={label}
                 before={spinner(key, variant)}
-                after={
-                  choice.recommended ? <Icon size="100" src={Icons.Star} aria-hidden /> : undefined
-                }
                 onClick={() => void submit({ kind: 'choice', index: choice.index })}
               >
                 <Text size="B300">{choice.label}</Text>
+                {choice.recommended && (
+                  <Text size="T200" priority="300">
+                    {t('modernization.question.recommended', 'Recommended')}
+                  </Text>
+                )}
               </Button>
             );
           })}
