@@ -78,6 +78,8 @@ struct AppEnvironment {
     let outgoingSends: OutgoingSendCoordinator
     /// Encrypted cross-device composer drafts (Settings → Sync drafts).
     var draftSync: DraftSyncServicing = NoDraftSync()
+    /// Answers Hermes clarifying questions (question cards) through Core.
+    var agentQuestions: AgentQuestionAnswering = UnavailableAgentQuestionService()
 
     @MainActor
     static func live() -> AppEnvironment {
@@ -188,7 +190,8 @@ struct AppEnvironment {
             sessionReadiness: sessionReadiness,
             connectionStatus: connectionStatus,
             outgoingSends: outgoingSends,
-            draftSync: SharedCoreDraftSyncService(host: host)
+            draftSync: SharedCoreDraftSyncService(host: host),
+            agentQuestions: SharedCoreAgentQuestionService(host: host)
         )
     }
 
@@ -225,7 +228,8 @@ struct AppEnvironment {
         sessionReadiness: SignedInSessionReadinessServicing = ImmediateSignedInSessionReadiness(),
         settings: SettingsStoring = InMemorySettingsStore(),
         connectionStatus: ConnectionStatusStore = ConnectionStatusStore(),
-        outgoingSends: OutgoingSendCoordinator? = nil
+        outgoingSends: OutgoingSendCoordinator? = nil,
+        agentQuestions: AgentQuestionAnswering = MockAgentQuestionService()
     ) -> AppEnvironment {
         let resolvedOutgoingSends = outgoingSends ?? OutgoingSendCoordinator(
             messageSender: messageSender,
@@ -272,7 +276,8 @@ struct AppEnvironment {
             roomManagement: roomManagement,
             sessionReadiness: sessionReadiness,
             connectionStatus: connectionStatus,
-            outgoingSends: resolvedOutgoingSends
+            outgoingSends: resolvedOutgoingSends,
+            agentQuestions: agentQuestions
         )
     }
 

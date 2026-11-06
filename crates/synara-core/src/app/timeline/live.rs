@@ -103,6 +103,7 @@ use super::{
 
 #[cfg(test)]
 mod agent_approval_history_overlay_tests;
+mod agent_question;
 mod approval_history;
 #[cfg(test)]
 mod approval_history_tests;

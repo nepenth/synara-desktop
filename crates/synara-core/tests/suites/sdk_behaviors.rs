@@ -5,6 +5,8 @@
 
 #[path = "../agent_approval_inbox.rs"]
 mod agent_approval_inbox;
+#[path = "../agent_question_cards.rs"]
+mod agent_question_cards;
 #[path = "../encrypted_state_events.rs"]
 mod encrypted_state_events;
 #[path = "../support/ffi_surface.rs"]

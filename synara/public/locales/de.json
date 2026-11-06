@@ -159,6 +159,24 @@
       "mode_mute": "Mute",
       "mode_mute_description": "Suppress push and desktop notifications for this room."
     },
+    "question": {
+      "aria_label": "Frage des Agenten",
+      "recommended": "Empfohlen",
+      "choice_recommended_aria": "{{label}} (empfohlen)",
+      "send": "Senden",
+      "send_selection": "Ausgewählte Antworten senden",
+      "other_placeholder": "Andere…",
+      "other_aria_label": "Eigene Antwort",
+      "other_send_aria": "Eigene Antwort senden",
+      "skip": "Überspringen",
+      "answered": "Beantwortet: {{answer}}",
+      "answered_plain": "Beantwortet",
+      "skipped": "Übersprungen",
+      "expired": "Keine Antwort (abgelaufen)",
+      "cancelled": "Abgebrochen",
+      "read_only": "Diese Frage richtet sich an jemand anderen.",
+      "failed": "Deine Antwort konnte nicht gesendet werden. Versuche es erneut."
+    },
     "hermes": {
       "copy_markdown": "Copy as Markdown",
       "copy_json": "Copy JSON",

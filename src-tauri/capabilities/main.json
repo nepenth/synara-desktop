@@ -250,6 +250,7 @@
     "allow-matrix-timeline-reaction-toggle",
     "allow-matrix-reaction-ensure",
     "allow-matrix-agent-approval-decide",
+    "allow-matrix-agent-question-answer",
     "allow-matrix-agent-approval-history-snapshot",
     "allow-matrix-agent-approvals-list",
     "allow-matrix-reaction-redact",

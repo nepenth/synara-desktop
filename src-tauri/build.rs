@@ -179,6 +179,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_agent_approval_decide",
     "matrix_agent_approval_history_snapshot",
     "matrix_agent_approvals_list",
+    "matrix_agent_question_answer",
     "matrix_reaction_redact",
     "matrix_space_parents_snapshot",
     "matrix_space_hierarchy_snapshot",

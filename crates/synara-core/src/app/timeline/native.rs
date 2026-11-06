@@ -312,6 +312,48 @@ pub struct NativeAgentApprovalDecisionResult {
     pub decided_at: Option<u64>,
 }
 
+/// Answer one Hermes clarifying question. Core re-recognises the exact
+/// event, enforces the requester and pending state, and picks the route.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeAgentQuestionAnswerRequest {
+    pub room_id: String,
+    pub event_id: String,
+    pub answer: crate::app::agent_questions::AgentQuestionAnswer,
+}
+
+/// How an answer reached Hermes.
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeAgentQuestionAnswerRoute {
+    /// A keycap or skip reaction on the card.
+    Reaction,
+    /// An `m.text` reply to the card, queued in the SDK send queue.
+    Reply,
+}
+
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeAgentQuestionAnswerStatus {
+    Sent,
+    /// This account already answered the card by reaction; nothing was sent.
+    AlreadyAnswered,
+}
+
+#[cfg_attr(feature = "ts-export", derive(ts_rs::TS), ts(export))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeAgentQuestionAnswerResult {
+    pub room_id: String,
+    pub event_id: String,
+    pub status: NativeAgentQuestionAnswerStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts-export", ts(optional))]
+    pub route: Option<NativeAgentQuestionAnswerRoute>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeDecryptionState {

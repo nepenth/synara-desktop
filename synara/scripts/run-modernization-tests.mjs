@@ -55,6 +55,7 @@ const tests = [
   'src/app/features/settings/notifications/__tests__/nativeAgentNotificationPreferences.test.ts',
   'src/app/routes/__tests__/synaraRoutes.test.ts',
   'src/app/utils/__tests__/agentApprovals.test.ts',
+  'src/app/utils/__tests__/agentQuestions.test.ts',
   'src/app/features/approvals/__tests__/nativeApprovalInbox.test.ts',
   'src/app/features/approvals/__tests__/nativeInboxProjection.test.ts',
   'src/app/features/approvals/__tests__/approvalHistoryProjection.test.ts',

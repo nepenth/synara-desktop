@@ -212,6 +212,24 @@
       "no_space_rooms_description": "You have not joined any rooms in this space.",
       "open_lobby": "Open lobby"
     },
+    "question": {
+      "aria_label": "Question from the agent",
+      "recommended": "Recommended",
+      "choice_recommended_aria": "{{label}} (recommended)",
+      "send": "Send",
+      "send_selection": "Send selected answers",
+      "other_placeholder": "Other…",
+      "other_aria_label": "Your own answer",
+      "other_send_aria": "Send your own answer",
+      "skip": "Skip",
+      "answered": "Answered: {{answer}}",
+      "answered_plain": "Answered",
+      "skipped": "Skipped",
+      "expired": "No answer (expired)",
+      "cancelled": "Cancelled",
+      "read_only": "This question is for someone else.",
+      "failed": "Your answer could not be sent. Try again."
+    },
     "hermes": {
       "copy_markdown": "Copy as Markdown",
       "copy_json": "Copy JSON",
