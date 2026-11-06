@@ -23,6 +23,8 @@ private final class RecordingDraftSync: DraftSyncServicing, @unchecked Sendable 
     var clears: [String] { lock.withLock { _clears } }
     var resolves: [LocalDraftState] { lock.withLock { _resolves } }
 
+    func keyState() async -> DraftSyncKeyState? { .ready }
+
     func setEnabled(_ enabled: Bool) async {}
 
     func save(roomID: String, slot: String, markdown: String, replyToEventID: String?, flush: Bool) async -> UInt64? {

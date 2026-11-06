@@ -230,6 +230,8 @@ pub async fn restore_operation(
                 .map_err(|_| "v-crypto.3-restore-rejected")?;
             let _ =
                 crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
+            // The recovery secret opens secret storage: enrol draft sync too.
+            crate::app::drafts::on_secret_store_open(client, recovery_secret).await;
             Ok(())
         },
         status(client, session_generation),
@@ -256,6 +258,8 @@ pub async fn repair(
                 .map_err(|_| "v-crypto.3-repair-rejected")?;
             let _ =
                 crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
+            // The recovery secret opens secret storage: enrol draft sync too.
+            crate::app::drafts::on_secret_store_open(client, recovery_secret).await;
             Ok(())
         },
         status(client, session_generation),

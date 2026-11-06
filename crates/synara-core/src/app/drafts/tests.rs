@@ -372,3 +372,34 @@ fn a_send_elsewhere_clears_an_idle_composer_but_not_new_typing() {
         DraftDecision::Keep
     );
 }
+
+/// Every flow that opens secret storage with the user's recovery secret must
+/// also enrol draft sync, or the drafts key is never created and sync stays
+/// silently off (2.9.0 missed backup restore and repair).
+#[test]
+fn every_recovery_secret_flow_enrols_draft_sync() {
+    for (name, source) in [
+        ("backup/live.rs", include_str!("../backup/live.rs")),
+        (
+            "secret_storage/live.rs",
+            include_str!("../secret_storage/live.rs"),
+        ),
+    ] {
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        let opens = production.matches(".recover(recovery_secret)").count()
+            + production
+                .matches(".recover_and_fix_backup(recovery_secret)")
+                .count();
+        let enrols = production
+            .matches("crate::app::drafts::on_secret_store_open(client, recovery_secret)")
+            .count();
+        assert!(
+            opens > 0,
+            "{name}: no recovery flow found; update this test"
+        );
+        assert_eq!(
+            opens, enrols,
+            "{name}: a recovery flow skips draft enrolment"
+        );
+    }
+}

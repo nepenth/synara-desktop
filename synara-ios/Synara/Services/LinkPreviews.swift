@@ -58,7 +58,9 @@ enum LinkPreviewPolicy {
         else {
             return false
         }
+        // matrix.to links are mentions and permalinks Synara opens itself.
         return (scheme == "https" || scheme == "http")
+            && components.host?.lowercased() != "matrix.to"
             && (components.user ?? "").isEmpty
             && (components.password ?? "").isEmpty
             && url.absoluteString.count <= 2048

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Drafts (desktop and iOS): draft sync now starts after restoring encryption backup with your recovery key. In 2.9.0 only secret-storage unlock and setup created the drafts key, so devices that recovered through backup restore never synced and said nothing. Settings now says when this device isn't syncing drafts yet and where to enter the recovery key.
+- Desktop: a device without the drafts key no longer asks Core to save a draft on every keystroke. Each attempt was rejected and logged, which filled the log with thousands of `matrix_drafts_save` lines.
+- Desktop and iOS: mentions and other matrix.to links no longer get a web link preview. The preview card for a mention opened matrix.to in the browser instead of the profile. A real link in the same message still gets its preview.
+- iOS approvals: approving or denying an agent action no longer shows a "decision sent" alert; the card shows the decision, and errors still alert.
+
 ## [2.9.0] - 2026-11-05
 
 - Drafts (desktop and iOS): an unsent message follows you to your other Synara devices, so you can start typing in a room on one device and finish on another. Drafts are end-to-end encrypted in your room account data: the homeserver sees only that a room has a draft, when it changed and a rough size. The key is kept in secret storage, so a device that has entered your recovery key can read drafts. A device you verified with another device asks your verified devices for the key itself. Opening a room shows the newer draft. If you are typing when a newer draft arrives, Synara asks "Draft updated on another device" (Use it / Keep mine) instead of overwriting your text. Sending clears the draft everywhere. A draft over about 46 KB is cut for syncing, and the other device says so. Desktop keeps rich formatting between desktop devices; iOS receives it as Markdown (bold, lists, quotes, code, links, and mentions that still send as mentions), and a draft from iOS shows its formatting on desktop with Markdown off. iOS syncs the room composer, not yet thread composers. Turn it off per device in Settings → General (desktop) or Settings → Security & Recovery (iOS); on by default. Attachments in drafts come later.

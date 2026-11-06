@@ -11,6 +11,7 @@ import { isSynaraDesktop } from '../../utils/desktop';
 import {
   clearSyncedDraft,
   draftSlotFor,
+  draftSyncStatus,
   flushSyncedDrafts,
   isSlateValue,
   resolveSyncedDraft,
@@ -95,10 +96,22 @@ export function useSyncedRoomDraft({
   const applyReplyRef = useRef(applyReplyTo);
   applyReplyRef.current = applyReplyTo;
 
+  /**
+   * Whether this device holds the drafts key. Without it Core rejects every
+   * write, so typing must not call it (it did once per keystroke).
+   */
+  const keyReadyRef = useRef(false);
   useEffect(() => {
     // The status read also asks this account's other devices for the key
     // when this one lacks it (Core rate-limits the request).
-    if (isSynaraDesktop()) void setDraftSyncEnabled(enabled);
+    if (!isSynaraDesktop()) return undefined;
+    let live = true;
+    void setDraftSyncEnabled(enabled).then((status) => {
+      if (live) keyReadyRef.current = status?.keyState === 'ready';
+    });
+    return () => {
+      live = false;
+    };
   }, [enabled, roomId]);
 
   /** Until the first real edit: the text the composer opened with. */
@@ -188,6 +201,12 @@ export function useSyncedRoomDraft({
     let disposed = false;
     let unsubscribe: (() => void) | undefined;
     void subscribeSyncedDrafts((updatedRoomId) => {
+      // "Every room" is also how Core announces that the key arrived.
+      if (updatedRoomId === undefined) {
+        void draftSyncStatus().then((status) => {
+          if (!disposed) keyReadyRef.current = status?.keyState === 'ready';
+        });
+      }
       if (updatedRoomId === undefined || updatedRoomId === roomId) void resolve(false);
     }).then((stop) => {
       if (disposed) stop();
@@ -233,6 +252,10 @@ export function useSyncedRoomDraft({
         baselineRef.current = undefined;
       }
       lastTypedAtRef.current = Date.now();
+      if (!keyReadyRef.current) {
+        dirtyRef.current = !empty;
+        return;
+      }
       if (empty) {
         dirtyRef.current = false;
         unsyncedRef.current = false;

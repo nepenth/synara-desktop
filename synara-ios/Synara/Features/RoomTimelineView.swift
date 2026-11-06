@@ -4273,9 +4273,7 @@ struct RoomTimelineView: View {
                     } else {
                         SynaraHaptics.trigger(.lightImpact)
                     }
-                    agentActionMessage = decision == .approve
-                        ? String(localized: "Agent action approved")
-                        : String(localized: "Agent action rejected")
+                    // The card shows the decision; a success alert adds nothing.
                 }
             } catch let error as SynaraAgentApprovalError {
                 await MainActor.run {
@@ -4306,9 +4304,10 @@ struct RoomTimelineView: View {
                     } else {
                         SynaraHaptics.trigger(.success)
                     }
-                    agentActionMessage = outcome == .alreadyDecided
-                        ? String(localized: "This approval was already decided on this account.")
-                        : String(localized: "Approval decision sent.")
+                    // A sent decision shows on the card; only a surprise gets an alert.
+                    if outcome == .alreadyDecided {
+                        agentActionMessage = String(localized: "This approval was already decided on this account.")
+                    }
                 }
             } catch let error as SynaraAgentApprovalError {
                 await MainActor.run {

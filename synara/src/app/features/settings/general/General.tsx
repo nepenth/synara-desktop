@@ -50,6 +50,7 @@ import {
 import { InlineMessage } from '../../../components/inline-message';
 import { UpdateSettingsTile } from '../../desktop-updater/DesktopUpdaterProvider';
 import { isSynaraDesktop } from '../../../utils/desktop';
+import { draftSyncStatus, type DraftKeyState } from '../../room/nativeDraftSync';
 import {
   closeExperimentalWidgets,
   widgetsSettingsDescription,
@@ -854,6 +855,46 @@ function Composer() {
   );
 }
 
+/** Says why drafts aren't syncing; without the key, sync is off silently. */
+function DraftSyncKeyHint({ enabled }: { enabled: boolean }) {
+  const { t } = useTranslation();
+  const [keyState, setKeyState] = useState<DraftKeyState>();
+  useEffect(() => {
+    if (!enabled || !isSynaraDesktop()) {
+      setKeyState(undefined);
+      return undefined;
+    }
+    let live = true;
+    draftSyncStatus().then((status) => {
+      if (live) setKeyState(status?.keyState);
+    });
+    return () => {
+      live = false;
+    };
+  }, [enabled]);
+  if (keyState === 'needsRecovery') {
+    return (
+      <InlineMessage tone="info">
+        {t(
+          'modernization.settings.sync_drafts.needs_recovery',
+          'Not syncing yet: this device needs your recovery key. Enter it under Security & recovery → Recovery.'
+        )}
+      </InlineMessage>
+    );
+  }
+  if (keyState === 'requesting') {
+    return (
+      <InlineMessage tone="info">
+        {t(
+          'modernization.settings.sync_drafts.requesting',
+          'Not syncing yet: asked your other verified devices for the drafts key. If none of them syncs drafts, enter your recovery key under Security & recovery → Recovery.'
+        )}
+      </InlineMessage>
+    );
+  }
+  return null;
+}
+
 function Messages() {
   const { t } = useTranslation();
   const clientConfig = useClientConfig();
@@ -977,6 +1018,7 @@ function Messages() {
           )}
           after={<Switch variant="Primary" value={syncDrafts} onChange={setSyncDrafts} />}
         />
+        <DraftSyncKeyHint enabled={syncDrafts} />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile

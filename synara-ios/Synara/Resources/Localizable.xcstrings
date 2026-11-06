@@ -2193,6 +2193,12 @@
     "Not encrypted." : {
 
     },
+    "Not syncing yet: asked your other verified devices for the drafts key. If none of them syncs drafts, enter your recovery key under Recovery above." : {
+
+    },
+    "Not syncing yet: this device needs your recovery key. Enter it under Recovery above." : {
+
+    },
     "Not signed in" : {
 
     },

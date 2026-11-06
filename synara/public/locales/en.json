@@ -47,7 +47,9 @@
       },
       "sync_drafts": {
         "title": "Sync drafts across devices",
-        "description": "Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them."
+        "description": "Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them.",
+        "needs_recovery": "Not syncing yet: this device needs your recovery key. Enter it under Security & recovery → Recovery.",
+        "requesting": "Not syncing yet: asked your other verified devices for the drafts key. If none of them syncs drafts, enter your recovery key under Security & recovery → Recovery."
       },
       "base_color": {
         "title": "Base color",

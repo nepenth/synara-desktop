@@ -34,7 +34,9 @@
       },
       "sync_drafts": {
         "title": "Entwürfe geräteübergreifend synchronisieren",
-        "description": "Nicht gesendete Nachrichten folgen dir auf deine anderen Synara-Geräte, Ende-zu-Ende-verschlüsselt. Geräte brauchen deinen Wiederherstellungsschlüssel oder ein anderes verifiziertes Gerät, um sie zu lesen."
+        "description": "Nicht gesendete Nachrichten folgen dir auf deine anderen Synara-Geräte, Ende-zu-Ende-verschlüsselt. Geräte brauchen deinen Wiederherstellungsschlüssel oder ein anderes verifiziertes Gerät, um sie zu lesen.",
+        "needs_recovery": "Noch keine Synchronisierung: Dieses Gerät braucht deinen Wiederherstellungsschlüssel. Gib ihn unter Sicherheit & Wiederherstellung → Wiederherstellung ein.",
+        "requesting": "Noch keine Synchronisierung: Deine anderen verifizierten Geräte wurden nach dem Entwurfsschlüssel gefragt. Wenn keines davon Entwürfe synchronisiert, gib deinen Wiederherstellungsschlüssel unter Sicherheit & Wiederherstellung → Wiederherstellung ein."
       }
     },
     "gif": {
