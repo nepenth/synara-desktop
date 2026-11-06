@@ -69,6 +69,7 @@ import {
   shouldPreventDefaultForClipboardInsert,
   insertClipboardData,
   type AutocompleteSelectFirstRef,
+  focusEditorAfterRender,
 } from '../../components/editor';
 import { EmojiBoard } from '../../components/emoji-board';
 import { TUploadContent, getMxIdLocalPart } from '../../utils/matrix';
@@ -126,7 +127,7 @@ import { isDesktopPlatform, readPlatformClipboardImage } from '../../platform';
 import { gifPickerEnabled, gifSearchAvailable, gifSendsAsLink } from '../../utils/gifProvider';
 import type { GifResult } from '../../utils/gifProvider';
 import { GifPicker } from './gif/GifPicker';
-import { isTypedGifCommand } from './typedGifCommand';
+import { typedCommandName } from './typedGifCommand';
 import {
   clearRoomDraft,
   loadRoomDraft,
@@ -895,10 +896,11 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         const { filesOnly = false } = options;
         const content = filesOnly ? [] : cloneComposerContent(editor.children);
         let plainText = filesOnly ? '' : toPlainText(content, isMarkdown).trim();
-        // `/gif` typed out, not picked from the command list, still opens the picker.
+        // A command typed out (`/kick @a:b`), not picked from the command list,
+        // runs too; an unknown one is refused below instead of sent as text.
         const commandName = filesOnly
           ? undefined
-          : (getBeginCommand(editor) ?? (isTypedGifCommand(plainText) ? Command.Gif : undefined));
+          : (getBeginCommand(editor) ?? typedCommandName(plainText));
         let msgType: 'm.text' | 'm.emote' | 'm.notice' = MsgType.Text;
         if (commandName) plainText = trimCommand(commandName, plainText);
 
@@ -1231,7 +1233,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const handleCloseAutocomplete = useCallback(() => {
       setAutocompleteQuery(undefined);
-      ReactEditor.focus(editor);
+      focusEditorAfterRender(editor);
     }, [editor]);
 
     const handleEmoticonSelect = (key: string, shortcode: string) => {

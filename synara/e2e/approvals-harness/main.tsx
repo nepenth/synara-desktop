@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { decideAgentApprovalWithNativeOwner } from '../../src/app/features/room/nativeReactionOwner';
-import { Box, Icon, IconButton, Icons, Text, configClass, varsClass, color } from 'folds';
+import { Box, Icon, IconButton, Icons, MenuItem, Text, configClass, varsClass, color } from 'folds';
 import 'folds/dist/style.css';
 import '../../src/index.css';
 import { darkTheme, synaraLightTheme } from '../../src/colors.css';
@@ -22,6 +22,20 @@ import {
   SidebarStackSeparator,
 } from '../../src/app/components/sidebar';
 import { useEditor } from '../../src/app/components/editor/Editor';
+import {
+  createMentionElement,
+  focusEditorAfterRender,
+  getPrevWorldRange,
+  moveCursor,
+  replaceWithElement,
+} from '../../src/app/components/editor/utils';
+import {
+  AUTOCOMPLETE_PREFIXES,
+  AutocompletePrefix,
+  getAutocompleteQuery,
+  type AutocompleteQuery,
+} from '../../src/app/components/editor/autocomplete/autocompleteQuery';
+import { AutocompleteMenu } from '../../src/app/components/editor/autocomplete/AutocompleteMenu';
 import { Toolbar } from '../../src/app/components/editor/Toolbar';
 import { RoomComposer } from '../../src/app/features/room/RoomComposer';
 import * as composerCss from '../../src/app/features/room/RoomComposer.css';
@@ -112,12 +126,48 @@ function ComposerPreview() {
   // Browser specs drive and inspect the Slate document through this handle.
   Object.assign(window, { synaraComposerEditor: editor });
   const [toolbar, setToolbar] = useState(query.has('toolbar'));
+  // The production autocomplete menu with fixture members, picked and closed
+  // the way RoomInput does it.
+  const [mentionQuery, setMentionQuery] = useState<AutocompleteQuery<AutocompletePrefix>>();
+  const closeMentions = () => {
+    setMentionQuery(undefined);
+    focusEditorAfterRender(editor);
+  };
+  const pickMention = (name: string) => {
+    if (!mentionQuery) return;
+    replaceWithElement(
+      editor,
+      mentionQuery.range,
+      createMentionElement(`@${name.toLowerCase()}:example.org`, `@${name}`, false)
+    );
+    moveCursor(editor, true);
+    closeMentions();
+  };
   return (
     <>
       <Text size="H5">Composer preview</Text>
       <div data-testid="composer" style={{ marginTop: 16 }}>
+        {mentionQuery && (
+          <AutocompleteMenu
+            headerContent={<Text size="L400">Mentions</Text>}
+            requestClose={closeMentions}
+          >
+            {['Alice', 'Fiona'].map((name) => (
+              <MenuItem key={name} as="button" radii="300" onClick={() => pickMention(name)}>
+                <Text size="B400">{name}</Text>
+              </MenuItem>
+            ))}
+          </AutocompleteMenu>
+        )}
         <RoomComposer
           editor={editor}
+          onChange={() => {
+            const range = getPrevWorldRange(editor);
+            const next = range
+              ? getAutocompleteQuery<AutocompletePrefix>(editor, range, AUTOCOMPLETE_PREFIXES)
+              : undefined;
+            setMentionQuery(next?.prefix === AutocompletePrefix.UserMention ? next : undefined);
+          }}
           placeholder="Send a message..."
           leadingAction={
             <IconButton

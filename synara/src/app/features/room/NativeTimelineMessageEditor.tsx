@@ -32,6 +32,7 @@ import {
   toPlainText,
   trimCustomHtml,
   useEditor,
+  focusEditorAfterRender,
 } from '../../components/editor';
 import { renderComposerHtml } from '../../components/editor/composerMarkdown';
 import { useSetting } from '../../state/hooks/settings';
@@ -217,8 +218,8 @@ export function NativeTimelineMessageEditor({
   );
 
   const handleCloseAutocomplete = useCallback(() => {
-    ReactEditor.focus(editor);
     setAutocompleteQuery(undefined);
+    focusEditorAfterRender(editor);
   }, [editor]);
 
   return (

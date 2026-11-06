@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Drafts (desktop and iOS): draft sync now starts after restoring encryption backup with your recovery key. In 2.9.0 only secret-storage unlock and setup created the drafts key, so devices that recovered through backup restore never synced and said nothing. Settings now says when this device isn't syncing drafts yet and where to enter the recovery key.
+- Desktop: picking someone from the @mention list no longer crashes the screen ("Cannot resolve a DOM node from Slate node"). Closing the list refocused the composer in the middle of React's update, before the inserted mention had any DOM. It hit Linux because WebKitGTK moves focus to the clicked row. The room composer and the message editor now refocus after the update draws. A browser spec drives the real autocomplete menu in Chromium and WebKit.
+- Desktop: slash commands typed out in full (`/kick @name:server`) now run, instead of being sent to the room as text unless picked from the command list. An unknown `/command` is refused with an error instead of being sent. `/remove` works as Element's name for `/kick`.
 - Desktop: a device without the drafts key no longer asks Core to save a draft on every keystroke. Each attempt was rejected and logged, which filled the log with thousands of `matrix_drafts_save` lines.
 - Desktop and iOS: mentions and other matrix.to links no longer get a web link preview. The preview card for a mention opened matrix.to in the browser instead of the profile. A real link in the same message still gets its preview.
 - iOS approvals: approving or denying an agent action no longer shows a "decision sent" alert; the card shows the decision, and errors still alert.

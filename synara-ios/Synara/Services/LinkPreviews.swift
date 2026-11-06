@@ -48,7 +48,7 @@ enum LinkPreviewPolicy {
         guard body.contains(".") else {
             return nil
         }
-        return SynaraPlainTextLinks.links(in: body).first?.url
+        return SynaraPlainTextLinks.links(in: body).lazy.map(\.url).first(where: isCandidate)
     }
 
     /// An http(s) link without credentials, as desktop's `isPreviewCandidateUrl`.
