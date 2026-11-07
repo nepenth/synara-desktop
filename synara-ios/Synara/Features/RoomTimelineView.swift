@@ -10164,6 +10164,9 @@ private struct ComposerView: View {
         .padding(.horizontal, SynaraSpacing.medium)
         .padding(.top, SynaraSpacing.xSmall)
         .padding(.bottom, SynaraSpacing.xSmall)
+        // The timeline gives up height first; the composer shrinks (and its
+        // field scrolls) only when the screen has no more to give.
+        .layoutPriority(1)
         .animation(.easeInOut(duration: 0.18), value: isFormattingBarVisible)
         .animation(.easeInOut(duration: 0.18), value: shouldShowPromptMetrics)
         .animation(.easeOut(duration: 0.12), value: mentionSuggestions.map(\.userID))
@@ -10418,6 +10421,8 @@ private struct ComposerView: View {
         .synaraChromeGlass(
             in: RoundedRectangle(cornerRadius: SynaraRadius.composer + 2, style: .continuous)
         )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ComposerInputSurface")
     }
 
     private var canSubmit: Bool {
@@ -10544,7 +10549,14 @@ private struct ComposerView: View {
                 isFocused: $isComposerFocused,
                 onPasteImages: onPasteImages
             )
-            .frame(height: composerFieldHeight)
+            // Flexible, not fixed: on a short screen (keyboard up) the field
+            // takes the height it is offered and scrolls, instead of keeping
+            // its full height and spilling past the composer's edges.
+            .frame(
+                minHeight: min(composerFieldHeight, ComposerTextMetrics.singleLineHeight(font: ComposerTextMetrics.font)),
+                idealHeight: composerFieldHeight,
+                maxHeight: composerFieldHeight
+            )
         #else
             TextField(resolvedPlaceholder, text: composerTextBinding, axis: .vertical)
                 .font(SynaraTypography.body)

@@ -1489,6 +1489,23 @@ final class SynaraUITests: XCTestCase {
         XCTAssertFalse(app.alerts["Agent Action"].waitForExistence(timeout: 2))
     }
 
+    func testLongComposerTextStaysInsideTheComposer() {
+        let app = launchAgentQuestionRoomApp()
+        let field = composerField(in: app)
+        tap(field)
+        field.typeText(String(repeating: "A long draft that wraps over many lines in the composer. ", count: 12))
+
+        let surface = identifiedElement(in: app, "ComposerInputSurface")
+        XCTAssertTrue(surface.waitForExistence(timeout: 5))
+        let fieldFrame = field.frame
+        let surfaceFrame = surface.frame
+        print("COMPOSER_FRAMES field=\(fieldFrame) surface=\(surfaceFrame)")
+        // The text field grows to its cap and then scrolls; it never draws
+        // past the rounded input surface (it overflowed both edges before).
+        XCTAssertGreaterThanOrEqual(fieldFrame.minY, surfaceFrame.minY - 0.5)
+        XCTAssertLessThanOrEqual(fieldFrame.maxY, surfaceFrame.maxY + 0.5)
+    }
+
     func testAgentQuestionChoiceAnswersWithoutAnAlert() {
         let app = launchAgentQuestionRoomApp()
 
