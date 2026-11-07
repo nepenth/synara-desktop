@@ -72,6 +72,22 @@ test('timeline preview uses the first formatted or plain URL and skips attachmen
     firstTimelinePreviewUrl('ignored', '<p>go <a href="https://example.org/x">here</a></p>'),
     'https://example.org/x'
   );
+  // Mentions and permalinks are matrix.to links Synara opens itself: never previewed.
+  assert.equal(isPreviewCandidateUrl('https://matrix.to/#/@puck:matrix.whyland.com'), false);
+  assert.equal(
+    firstTimelinePreviewUrl(
+      'puck: hi',
+      '<a href="https://matrix.to/#/@puck:matrix.whyland.com">puck</a>: hi'
+    ),
+    undefined
+  );
+  assert.equal(
+    firstTimelinePreviewUrl(
+      'puck: see https://example.org/x',
+      '<a href="https://matrix.to/#/@puck:example.org">puck</a>: see <a href="https://example.org/x">x</a>'
+    ),
+    'https://example.org/x'
+  );
   assert.equal(shouldSkipMessageUnfurl({ messageType: 'image' }), true);
   assert.equal(shouldSkipMessageUnfurl({ hasMedia: true }), true);
   assert.equal(shouldSkipMessageUnfurl({ messageType: 'text' }), false);
@@ -178,7 +194,7 @@ test('composer and timeline wire device previews', () => {
   assert.match(presenter, /NativePlainMessageBody/);
   assert.match(
     presenter,
-    /skip=\{Boolean\(approvalPrompt \|\| agentPayload \|\| inlineGif \|\| xPostUrl\)\}/
+    /skip=\{Boolean\(\s*approvalPrompt \|\| agentQuestion \|\| agentPayload \|\| inlineGif \|\| xPostUrl\s*\)\}/
   );
   assert.doesNotMatch(presenter, /mxc:\/\//);
   assert.match(input, /COMPOSER_UNFURL_DEBOUNCE_MS/);

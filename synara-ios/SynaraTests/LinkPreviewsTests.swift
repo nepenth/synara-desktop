@@ -162,6 +162,16 @@ final class LinkPreviewsTests: XCTestCase {
         XCTAssertNil(LinkPreviewPolicy.previewURL(for: formatted))
     }
 
+    func testMentionsAndPermalinksAreNeverPreviewed() {
+        var mention = row("puck: hi")
+        mention.html = #"<a href="https://matrix.to/#/@puck:matrix.whyland.com">puck</a>: hi"#
+        XCTAssertNil(LinkPreviewPolicy.previewURL(for: mention))
+        // A real link after the mention still gets its preview.
+        mention.html = #"<a href="https://matrix.to/#/@puck:example.org">puck</a>: see <a href="https://example.org/x">x</a>"#
+        XCTAssertEqual(LinkPreviewPolicy.previewURL(for: mention)?.absoluteString, "https://example.org/x")
+        XCTAssertNil(LinkPreviewPolicy.previewURL(for: row("https://matrix.to/#/!room:example.org")))
+    }
+
     func testFormattedMessagesPreviewTheirFirstPlainTextLink() {
         let body = "See https://example.org/first, and https://example.org/second."
         XCTAssertEqual(LinkPreviewPolicy.previewURL(for: row(body))?.absoluteString, "https://example.org/first")

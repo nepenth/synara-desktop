@@ -34,7 +34,9 @@
       },
       "sync_drafts": {
         "title": "Entwürfe geräteübergreifend synchronisieren",
-        "description": "Nicht gesendete Nachrichten folgen dir auf deine anderen Synara-Geräte, Ende-zu-Ende-verschlüsselt. Geräte brauchen deinen Wiederherstellungsschlüssel oder ein anderes verifiziertes Gerät, um sie zu lesen."
+        "description": "Nicht gesendete Nachrichten folgen dir auf deine anderen Synara-Geräte, Ende-zu-Ende-verschlüsselt. Geräte brauchen deinen Wiederherstellungsschlüssel oder ein anderes verifiziertes Gerät, um sie zu lesen.",
+        "needs_recovery": "Noch keine Synchronisierung: Dieses Gerät braucht deinen Wiederherstellungsschlüssel. Gib ihn unter Sicherheit & Wiederherstellung → Wiederherstellung ein.",
+        "requesting": "Noch keine Synchronisierung: Deine anderen verifizierten Geräte wurden nach dem Entwurfsschlüssel gefragt. Wenn keines davon Entwürfe synchronisiert, gib deinen Wiederherstellungsschlüssel unter Sicherheit & Wiederherstellung → Wiederherstellung ein."
       }
     },
     "gif": {
@@ -158,6 +160,24 @@
       "mode_mentions_description": "Notify for mentions, keywords, and other high-signal messages.",
       "mode_mute": "Mute",
       "mode_mute_description": "Suppress push and desktop notifications for this room."
+    },
+    "question": {
+      "aria_label": "Frage des Agenten",
+      "recommended": "Empfohlen",
+      "choice_recommended_aria": "{{label}} (empfohlen)",
+      "send": "Senden",
+      "send_selection": "Ausgewählte Antworten senden",
+      "other_placeholder": "Andere…",
+      "other_aria_label": "Eigene Antwort",
+      "other_send_aria": "Eigene Antwort senden",
+      "skip": "Überspringen",
+      "answered": "Beantwortet: {{answer}}",
+      "answered_plain": "Beantwortet",
+      "skipped": "Übersprungen",
+      "expired": "Keine Antwort (abgelaufen)",
+      "cancelled": "Abgebrochen",
+      "read_only": "Diese Frage richtet sich an jemand anderen.",
+      "failed": "Deine Antwort konnte nicht gesendet werden. Versuche es erneut."
     },
     "hermes": {
       "copy_markdown": "Copy as Markdown",

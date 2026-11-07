@@ -1,4 +1,5 @@
 import { BasePoint, BaseRange, Editor, Element, Point, Range, Text, Transforms } from 'slate';
+import { ReactEditor } from 'slate-react';
 import { BlockType, MarkType } from './types';
 import {
   CommandElement,
@@ -151,6 +152,22 @@ export const replaceWithElement = (editor: Editor, selectRange: BaseRange, eleme
   Transforms.insertNodes(editor, element);
   Transforms.collapse(editor, {
     edge: 'end',
+  });
+};
+
+/**
+ * Focuses the editor once React has drawn the latest edit.
+ *
+ * Closing an autocomplete menu can run inside React's commit: the menu's focus
+ * trap deactivates while it unmounts and calls `requestClose`. A mention pick
+ * has just inserted the pill and a space, and their DOM nodes don't exist yet,
+ * so `ReactEditor.focus` (which maps the selection to the DOM) threw "Cannot
+ * resolve a DOM node from Slate node" and took the screen down. It happens
+ * when the click moved focus off the editor, as WebKitGTK on Linux does.
+ */
+export const focusEditorAfterRender = (editor: Editor): void => {
+  requestAnimationFrame(() => {
+    if (!ReactEditor.isFocused(editor)) ReactEditor.focus(editor);
   });
 };
 

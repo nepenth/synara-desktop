@@ -73,7 +73,9 @@ pub use media::{
     TIMELINE_MEDIA_HANDLE_PREFIX,
 };
 pub use native::{
-    NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult, NativeDecryptionState,
+    NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
+    NativeAgentQuestionAnswerRequest, NativeAgentQuestionAnswerResult,
+    NativeAgentQuestionAnswerRoute, NativeAgentQuestionAnswerStatus, NativeDecryptionState,
     NativeReactionMutation, NativeReactionMutationResult, NativeTimelineCloseRequest,
     NativeTimelineDirection, NativeTimelineEventLocation, NativeTimelineEventReadback,
     NativeTimelineEventRoute, NativeTimelineFollowLiveRequest, NativeTimelineItem,
@@ -107,7 +109,7 @@ pub use view::{
     project_forward_transport, project_local_echo_status, project_message_type_and_media,
     project_poll_answers, project_timeline_diffs, project_timeline_diffs_with_media,
     project_timeline_item, project_timeline_item_with_media, sanitize_incoming_html,
-    ProjectedLocalEcho, TimelineAgentApprovalDecision, TimelineCallRow,
+    ProjectedLocalEcho, TimelineAgentApprovalDecision, TimelineAgentQuestion, TimelineCallRow,
     TimelineEncryptedUnavailableRow, TimelineEventRowBase, TimelineForwardTransport,
     TimelineMediaHandle, TimelineMembershipRow, TimelineMessageRow, TimelineOtherRow,
     TimelinePageState, TimelinePaginationState, TimelinePollAnswer, TimelinePollRow,

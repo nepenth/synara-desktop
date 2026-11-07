@@ -345,6 +345,8 @@ struct TimelineItem: Identifiable, Equatable {
     var encryptionShield: TimelineEncryptionShield? = nil
     /// Core-projected decision this account already made on an approval prompt.
     var agentApprovalDecision: SynaraAgentApprovalCardDecision? = nil
+    /// Core-recognised Hermes clarifying question; rendered as a question card.
+    var agentQuestion: SynaraAgentQuestion? = nil
     let senderID: String
     /// Core-resolved profile display name. Mock/local items leave this nil and
     /// continue through the deterministic sender-ID fallback.

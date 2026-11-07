@@ -657,6 +657,12 @@
           "markdownDescription": "Enables the matrix_agent_notification_preferences_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_agent_question_answer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-agent-question-answer",
+          "markdownDescription": "Enables the matrix_agent_question_answer command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_attachment_stage command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-attachment-stage",
@@ -2269,6 +2275,12 @@
           "type": "string",
           "const": "deny-matrix-agent-notification-preferences-snapshot",
           "markdownDescription": "Denies the matrix_agent_notification_preferences_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_agent_question_answer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-agent-question-answer",
+          "markdownDescription": "Denies the matrix_agent_question_answer command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_attachment_stage command without any pre-configured scope.",

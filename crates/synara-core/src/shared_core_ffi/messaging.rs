@@ -57,6 +57,64 @@ pub struct AgentApprovalDecisionDto {
     pub reaction: Option<TimelineReactionMutationDto>,
 }
 
+/// Answer to a Hermes clarifying question. Core chooses the route.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+pub enum AgentQuestionAnswerDto {
+    /// One choice, by its 1-based index.
+    Choice {
+        index: u32,
+    },
+    /// Several choices of a multi-select question.
+    Choices {
+        indices: Vec<u32>,
+    },
+    /// Free text ("Other…").
+    Other {
+        text: String,
+    },
+    Skip,
+}
+
+impl From<AgentQuestionAnswerDto> for crate::app::agent_questions::AgentQuestionAnswer {
+    fn from(value: AgentQuestionAnswerDto) -> Self {
+        match value {
+            AgentQuestionAnswerDto::Choice { index } => Self::Choice { index },
+            AgentQuestionAnswerDto::Choices { indices } => Self::Choices { indices },
+            AgentQuestionAnswerDto::Other { text } => Self::Other { text },
+            AgentQuestionAnswerDto::Skip => Self::Skip,
+        }
+    }
+}
+
+super::wire_enum::wire_enum! {
+    pub enum AgentQuestionAnswerStatusDto {
+        Sent => "sent",
+        AlreadyAnswered => "already_answered",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::timeline::NativeAgentQuestionAnswerStatus => AgentQuestionAnswerStatusDto {
+    Sent, AlreadyAnswered
+});
+
+super::wire_enum::wire_enum! {
+    pub enum AgentQuestionAnswerRouteDto {
+        Reaction => "reaction",
+        Reply => "reply",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::timeline::NativeAgentQuestionAnswerRoute => AgentQuestionAnswerRouteDto {
+    Reaction, Reply
+});
+
+/// Privacy-safe result of the shared-core question answer route.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AgentQuestionAnswerResultDto {
+    pub room_id: String,
+    pub event_id: String,
+    pub status: AgentQuestionAnswerStatusDto,
+    pub route: Option<AgentQuestionAnswerRouteDto>,
+}
+
 /// Static fail-closed timeline reaction error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum TimelineReactionError {
@@ -406,7 +464,9 @@ pub(super) fn map_timeline_reaction_core_error(
                 || code.starts_with("d0.3-timeline-")
                 || code.starts_with("v-crypto.6-")
                 || code.starts_with("v-send.2-reaction-")
-                || code.starts_with("agent-approval-") =>
+                || code.starts_with("agent-approval-")
+                || code.starts_with("agent-question-")
+                || code.starts_with("d0.4-send-") =>
         {
             timeline_reaction_failed(code, TIMELINE_REACTION_OWNER_DESCRIPTION)
         }
@@ -1385,6 +1445,36 @@ impl SharedCore {
             event_id: result.event_id,
             status: result.status.into(),
             reaction: result.reaction.map(timeline_reaction_mutation_dto),
+        })
+    }
+
+    pub async fn agent_question_answer(
+        &self,
+        room_id: String,
+        event_id: String,
+        answer: AgentQuestionAnswerDto,
+    ) -> Result<AgentQuestionAnswerResultDto, TimelineReactionError> {
+        let answer: crate::app::agent_questions::AgentQuestionAnswer = answer.into();
+        timeline_reaction_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "eventId": event_id,
+            "answer": answer}))?;
+        let result = self
+            .core
+            .agent_question_answer(crate::core_api::MatrixAgentQuestionAnswerRequest {
+                room_id,
+                event_id,
+                answer,
+            })
+            .await
+            .map_err(|error| {
+                map_timeline_reaction_core_error("agent-question-no-session", error)
+            })?;
+        Ok(AgentQuestionAnswerResultDto {
+            room_id: result.room_id,
+            event_id: result.event_id,
+            status: result.status.into(),
+            route: result.route.map(Into::into),
         })
     }
 

@@ -861,6 +861,8 @@ private extension AppEnvironment {
             timeline = MockTimelineService(items: uiTestDecidedAgentApprovalPromptItems())
         } else if processEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_PROMPT"] == "1" {
             timeline = MockTimelineService(events: uiTestAgentApprovalPromptEvents())
+        } else if processEnvironment["SYNARA_UI_TEST_AGENT_QUESTION"] == "1" {
+            timeline = MockTimelineService(items: uiTestAgentQuestionItems())
         } else if processEnvironment["SYNARA_UI_TEST_LINK_PREVIEW"] == "1" {
             timeline = MockTimelineService(events: uiTestLinkPreviewEvents())
         } else if processEnvironment["SYNARA_UI_TEST_TIMESTAMP_GESTURE"] == "1" {
@@ -1264,6 +1266,46 @@ private extension AppEnvironment {
                 isAgentApproval: true
             )
         ]
+    }
+
+    /// Hermes question cards (single and multiple choice), for UI tests and review.
+    static func uiTestAgentQuestionItems() -> [TimelineItem] {
+        let cards: [(String, String, [String], Bool)] = [
+            ("$agent-question-single", "Which colour should the cover use?", ["Red", "Blue", "Green"], false),
+            ("$agent-question-multi", "Which formats should I export?", ["PDF", "EPUB", "Print"], true),
+        ]
+        return cards.enumerated().map { offset, card in
+            var item = TimelineMapper.map(
+                RawTimelineEvent(
+                    eventID: card.0,
+                    senderID: "@agent:matrix.example.com",
+                    timestamp: Date(timeIntervalSince1970: 1_770_000_120 + Double(offset * 60)),
+                    type: "m.room.message",
+                    body: "❓ \(card.1)",
+                    replyToEventID: nil,
+                    isEdited: false,
+                    mediaURL: nil
+                )
+            )
+            item.agentQuestion = SynaraAgentQuestion(
+                source: .structured,
+                clarifyID: "fixture-\(offset)",
+                question: card.1,
+                choices: card.2.enumerated().map { index, label in
+                    SynaraAgentQuestion.Choice(index: UInt32(index + 1), label: label, recommended: index == 0)
+                },
+                multiSelect: card.3,
+                allowOther: true,
+                allowSkip: true,
+                requesterUserID: nil,
+                expiresAt: nil,
+                state: .pending,
+                answer: nil,
+                canAnswer: true,
+                ownAnswer: nil
+            )
+            return item
+        }
     }
 
     /// The same prompt after you approved it once, for visual review.

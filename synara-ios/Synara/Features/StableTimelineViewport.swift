@@ -514,6 +514,9 @@ import SwiftUI
         /// The thread chip's people and recency, from the loaded window.
         var threadParticipants: [TimelineThreadParticipant] = []
         var lastReplyAt: Date? = nil
+        /// This account's latest loaded reply to this row's question card;
+        /// part of the row so the card settles when the reply arrives.
+        var ownQuestionReply: String? = nil
     }
 
     struct StableTimelineViewportRow: Equatable, Identifiable {

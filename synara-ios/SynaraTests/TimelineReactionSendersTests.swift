@@ -206,6 +206,7 @@ final class TimelineReactionSendersTests: XCTestCase {
             isAgentApproval: false,
             agentApprovalDecision: nil,
             agentApprovalDecidedAt: nil,
+            agentQuestion: nil,
             mediaFilename: nil,
             mediaCaption: nil,
             reactions: reactions,

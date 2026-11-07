@@ -2033,6 +2033,7 @@ private struct SecuritySettingsView: View {
     @State private var showsIdentityReset = false
     @State private var syncDrafts = true
     @State private var didLoadSyncDrafts = false
+    @State private var draftKeyState: DraftSyncKeyState?
 
     /// Shown while the account has no recovery, and kept while a setup is in
     /// progress or its key is on screen, even after status refreshes.
@@ -2116,6 +2117,7 @@ private struct SecuritySettingsView: View {
                             await environment.crypto.recover(recoveryKey: key)
                         } onComplete: {
                             recoveryKey = ""
+                            Task { draftKeyState = syncDrafts ? await environment.draftSync.keyState() : nil }
                         }
                     } label: {
                         cryptoActionLabel(String(localized: "Recover Keys"))
@@ -2158,8 +2160,18 @@ private struct SecuritySettingsView: View {
                         Task { await environment.draftSync.setEnabled(value) }
                     }
             } footer: {
-                Text("Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them.")
+                VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                    Text("Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them.")
+                    if syncDrafts, let hint = DraftSyncKeyHint.text(for: draftKeyState) {
+                        Text(hint)
+                            .foregroundStyle(SynaraColor.primaryText)
+                            .accessibilityIdentifier("SyncDraftsKeyHint")
+                    }
+                }
             }
+        }
+        .task(id: syncDrafts) {
+            draftKeyState = syncDrafts ? await environment.draftSync.keyState() : nil
         }
         .onAppear {
             syncDrafts = environment.settings.bool(for: DraftSyncSettings.syncDraftsKey)
@@ -3100,5 +3112,19 @@ struct SettingsView_Previews: PreviewProvider {
             SettingsView()
         }
         .environment(\.appEnvironment, AppEnvironment.mock())
+    }
+}
+
+/// Why drafts aren't syncing on this device; without the key, sync is off silently.
+enum DraftSyncKeyHint {
+    static func text(for state: DraftSyncKeyState?) -> String? {
+        switch state {
+        case .needsRecovery:
+            return String(localized: "Not syncing yet: this device needs your recovery key. Enter it under Recovery above.")
+        case .requesting:
+            return String(localized: "Not syncing yet: asked your other verified devices for the drafts key. If none of them syncs drafts, enter your recovery key under Recovery above.")
+        case .ready, .disabled, .none:
+            return nil
+        }
     }
 }

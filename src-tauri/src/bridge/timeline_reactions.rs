@@ -1,6 +1,10 @@
 //! Desktop bridges for timeline reaction mutations through `Core::command`.
 
-use synara_core::app::timeline::{NativeAgentApprovalDecisionResult, NativeReactionMutationResult};
+use synara_core::app::agent_questions::AgentQuestionAnswer;
+use synara_core::app::timeline::{
+    NativeAgentApprovalDecisionResult, NativeAgentQuestionAnswerResult,
+    NativeReactionMutationResult,
+};
 use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
@@ -109,6 +113,50 @@ fn map_approval_decision_core_error(error: MatrixIpcError) -> MatrixAuthCommandE
     }
 }
 
+pub(crate) async fn agent_question_answer(
+    core: &Core,
+    room_id: String,
+    event_id: String,
+    answer: AgentQuestionAnswer,
+) -> Result<NativeAgentQuestionAnswerResult, MatrixAuthCommandError> {
+    core.agent_question_answer(synara_core::core_api::MatrixAgentQuestionAnswerRequest {
+        room_id,
+        event_id,
+        answer,
+    })
+    .await
+    .map_err(map_question_answer_core_error)
+}
+
+/// A rejected answer keeps Core's closed diagnostic so the card can say why
+/// (settled, expired, not the requester); other failures read as not sent.
+fn map_question_answer_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some("agent-question-no-session") => MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "agent-question-no-session",
+        ),
+        Some(diagnostic @ ("agent-question-settled" | "agent-question-expired")) => {
+            MatrixAuthCommandError::new(
+                "QuestionClosed",
+                "This question is no longer waiting for an answer.",
+                diagnostic,
+            )
+        }
+        Some("agent-question-not-requester") => MatrixAuthCommandError::new(
+            "Forbidden",
+            "This question was asked of someone else.",
+            "agent-question-not-requester",
+        ),
+        _ => MatrixAuthCommandError::new(
+            "Unknown",
+            "The answer could not be sent.",
+            "agent-question-answer-failed",
+        ),
+    }
+}
+
 pub(crate) async fn reaction_redact(
     core: &Core,
     room_id: String,
@@ -154,6 +202,16 @@ mod tests {
 
     fn forbidden(diagnostic: &str) -> MatrixIpcError {
         MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden).with_diagnostic(diagnostic)
+    }
+
+    #[test]
+    fn question_answer_errors_keep_closed_diagnostics() {
+        let mapped = map_question_answer_core_error(forbidden("agent-question-expired"));
+        assert_eq!(mapped.code, "QuestionClosed");
+        assert_eq!(mapped.diagnostic_id, "agent-question-expired");
+        let mapped = map_question_answer_core_error(forbidden("v-send.2-reaction-ensure-failed"));
+        assert_eq!(mapped.code, "Unknown");
+        assert_eq!(mapped.diagnostic_id, "agent-question-answer-failed");
     }
 
     #[test]

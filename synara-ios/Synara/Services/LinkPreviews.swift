@@ -48,7 +48,7 @@ enum LinkPreviewPolicy {
         guard body.contains(".") else {
             return nil
         }
-        return SynaraPlainTextLinks.links(in: body).first?.url
+        return SynaraPlainTextLinks.links(in: body).lazy.map(\.url).first(where: isCandidate)
     }
 
     /// An http(s) link without credentials, as desktop's `isPreviewCandidateUrl`.
@@ -58,7 +58,9 @@ enum LinkPreviewPolicy {
         else {
             return false
         }
+        // matrix.to links are mentions and permalinks Synara opens itself.
         return (scheme == "https" || scheme == "http")
+            && components.host?.lowercased() != "matrix.to"
             && (components.user ?? "").isEmpty
             && (components.password ?? "").isEmpty
             && url.absoluteString.count <= 2048

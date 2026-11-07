@@ -31,6 +31,8 @@ import {
 } from 'folds';
 import { EmojiBoard } from '../../components/emoji-board';
 import { AgentApprovalCard } from '../../components/agent-approval/AgentApprovalCard';
+import { AgentQuestionCard } from '../../components/agent-question/AgentQuestionCard';
+import { ownAgentQuestionReplies } from '../../utils/agentQuestions';
 import { setNativeComposerReplyDraft } from './nativeComposerDraft';
 import { publishNativeThreadRoot } from './nativeThreadViewContext';
 import { createLaterItemFromIds, upsertLaterWithNativeOwner } from './nativeLaterOwner';
@@ -514,6 +516,8 @@ type NativeTimelineRowProps = {
   editing: boolean;
   /** Open the editor for an event, or close it with `undefined`. */
   onEditingChange: (eventId: string | undefined) => void;
+  /** This account's latest loaded reply to this row's question card. */
+  ownQuestionReply?: string;
 };
 
 // Popout menus can unmount while a Core write is still running. Keep the
@@ -2214,6 +2218,7 @@ const NativeTimelineRowImpl = ({
   onOpenMediaViewer,
   editing,
   onEditingChange,
+  ownQuestionReply,
 }: NativeTimelineRowProps) => {
   const [declinePending, setDeclinePending] = useState(false);
   const declinePendingRef = useRef(false);
@@ -2430,8 +2435,10 @@ const NativeTimelineRowImpl = ({
       const approvalPrompt = row.isAgentApproval
         ? formatCoreAgentApprovalPrompt(row.body)
         : undefined;
+      const agentQuestion = approvalPrompt ? undefined : row.agentQuestion;
       const embedsAllowed =
         !approvalPrompt &&
+        !agentQuestion &&
         !agentPayload &&
         !shouldSkipMessageUnfurl({ messageType: row.messageType, hasMedia: Boolean(row.media) });
       const inlineGif =
@@ -2447,6 +2454,7 @@ const NativeTimelineRowImpl = ({
         Boolean(eventId) &&
         !row.media &&
         !approvalPrompt &&
+        !agentQuestion &&
         !agentPayload &&
         isNativeTextEditable(row.messageType);
       const editingInPlace = editing && editableInPlace && eventId !== undefined;
@@ -2539,6 +2547,12 @@ const NativeTimelineRowImpl = ({
                         decision: row.agentApprovalDecision,
                       }}
                     />
+                  ) : agentQuestion ? (
+                    <AgentQuestionCard
+                      question={agentQuestion}
+                      target={eventId ? { roomId, eventId } : undefined}
+                      ownReplyBody={ownQuestionReply}
+                    />
                   ) : agentPayload ? (
                     <ErrorBoundary fallback={<Text size="T300">Agent output unavailable</Text>}>
                       <React.Suspense
@@ -2590,7 +2604,9 @@ const NativeTimelineRowImpl = ({
                     formattedBody={row.formattedBody}
                     messageType={row.messageType}
                     hasMedia={Boolean(row.media)}
-                    skip={Boolean(approvalPrompt || agentPayload || inlineGif || xPostUrl)}
+                    skip={Boolean(
+                      approvalPrompt || agentQuestion || agentPayload || inlineGif || xPostUrl
+                    )}
                   />
                   <NativeTimelineThreadSurface
                     threadRoot={row.threadRoot}
@@ -3189,6 +3205,18 @@ export function NativeTimelinePresenter({
   );
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+  // A question card answered by reply shows that reply; only cards present in
+  // the window are looked up, so ordinary rooms do no work here.
+  const ownQuestionReplies = useMemo(
+    () =>
+      rows.some((row) => row.kind === 'message' && row.agentQuestion)
+        ? ownAgentQuestionReplies(
+            rows.flatMap((row) => (row.kind === 'message' ? [row] : [])),
+            ownUserId
+          )
+        : undefined,
+    [ownUserId, rows]
+  );
   const rowIndexByKey = useMemo(() => {
     const map = new Map<string, number>();
     for (let index = 0; index < rows.length; index += 1) {
@@ -4540,6 +4568,11 @@ export function NativeTimelinePresenter({
                         onOpenMediaViewer={setMediaViewer}
                         editing={editingEventId !== undefined && rowEventId(row) === editingEventId}
                         onEditingChange={setEditingEventId}
+                        ownQuestionReply={
+                          ownQuestionReplies && row.kind === 'message' && row.agentQuestion
+                            ? ownQuestionReplies.get(rowEventId(row) ?? '')
+                            : undefined
+                        }
                       />
                     </div>
                   );

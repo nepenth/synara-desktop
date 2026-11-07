@@ -47,7 +47,19 @@ struct LocalDraftState: Equatable {
 /// The local `DraftStore` stays the composer's source of truth; this mirrors
 /// it to the account's other Synara devices. Failures are silent: drafts
 /// stay on this device.
+/// Whether this device can read and write synced drafts.
+enum DraftSyncKeyState: Equatable {
+    case ready
+    /// Asked the user's other verified devices for the key.
+    case requesting
+    /// Only the recovery key can unlock draft sync here.
+    case needsRecovery
+    case disabled
+}
+
 protocol DraftSyncServicing {
+    /// nil when there is no session or the core can't answer.
+    func keyState() async -> DraftSyncKeyState?
     func setEnabled(_ enabled: Bool) async
     /// Queue a draft (or with `flush`, write now). Returns its stamp.
     func save(roomID: String, slot: String, markdown: String, replyToEventID: String?, flush: Bool) async -> UInt64?
@@ -60,6 +72,7 @@ protocol DraftSyncServicing {
 }
 
 struct NoDraftSync: DraftSyncServicing {
+    func keyState() async -> DraftSyncKeyState? { nil }
     func setEnabled(_ enabled: Bool) async {}
     func save(roomID: String, slot: String, markdown: String, replyToEventID: String?, flush: Bool) async -> UInt64? { nil }
     func clear(roomID: String, slot: String) async -> UInt64? { nil }
@@ -82,6 +95,16 @@ final class SharedCoreDraftSyncService: DraftSyncServicing {
             return true
         }
         return false
+    }
+
+    func keyState() async -> DraftSyncKeyState? {
+        guard signedIn, let status = try? await host.core.draftsStatus() else { return nil }
+        switch status.keyState {
+        case .ready: return .ready
+        case .requesting: return .requesting
+        case .needsRecovery: return .needsRecovery
+        case .disabled: return .disabled
+        }
     }
 
     func setEnabled(_ enabled: Bool) async {

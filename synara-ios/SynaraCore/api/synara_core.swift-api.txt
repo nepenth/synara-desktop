@@ -12,6 +12,12 @@ extension AgentApprovalSendDto: Sendable
 extension AgentApprovalSendError: Sendable
 extension AgentNotificationPreferencesDto: Sendable
 extension AgentNotificationPreferencesError: Sendable
+extension AgentQuestionAnswerDto: Sendable
+extension AgentQuestionAnswerResultDto: Sendable
+extension AgentQuestionAnswerRouteDto: Sendable
+extension AgentQuestionAnswerStatusDto: Sendable
+extension AgentQuestionSourceDto: Sendable
+extension AgentQuestionStateDto: Sendable
 extension BackupActionDto: Sendable
 extension BackupAvailabilityDto: Sendable
 extension BackupDeviceStateDto: Sendable
@@ -260,6 +266,8 @@ extension TimelineReadStateDto: Sendable
 extension TimelineReadStateError: Sendable
 extension TimelineRowKindDto: Sendable
 extension TimelineSnapshotDto: Sendable
+extension TimelineViewAgentQuestionChoiceDto: Sendable
+extension TimelineViewAgentQuestionDto: Sendable
 extension TimelineViewEncryptionShieldDto: Sendable
 extension TimelineViewPollAnswerDto: Sendable
 extension TimelineViewPollDto: Sendable
@@ -311,6 +319,7 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func agentNotificationEventAllowed(roomId: String, eventId: String) async throws -> Bool
   open func agentNotificationPreferencesSet(preferences: AgentNotificationPreferencesDto) async throws -> AgentNotificationPreferencesDto
   open func agentNotificationPreferencesSnapshot() async throws -> AgentNotificationPreferencesDto
+  open func agentQuestionAnswer(roomId: String, eventId: String, answer: AgentQuestionAnswerDto) async throws -> AgentQuestionAnswerResultDto
   open func attachSessionOwners() async throws -> SessionAttachDto
   open func backupRepair(recoverySecret: String) async throws -> BackupStatusDto
   open func backupSetup(passphrase: String) async throws -> BackupStatusDto
@@ -540,6 +549,26 @@ public enum AgentApprovalSendError: Swift.Error, Equatable, Hashable, Foundation
 public enum AgentNotificationPreferencesError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum AgentQuestionAnswerDto: Equatable, Hashable
+  case choice(index: UInt32)
+  case choices(indices: [UInt32])
+  case other(text: String)
+  case skip
+public enum AgentQuestionAnswerRouteDto: Equatable, Hashable
+  case reaction
+  case reply
+public enum AgentQuestionAnswerStatusDto: Equatable, Hashable
+  case sent
+  case alreadyAnswered
+public enum AgentQuestionSourceDto: Equatable, Hashable
+  case structured
+  case fallback
+public enum AgentQuestionStateDto: Equatable, Hashable
+  case pending
+  case answered
+  case skipped
+  case expired
+  case cancelled
 public enum BackupActionDto: Equatable, Hashable
   case setupRequired
   case restoreRequired
@@ -1025,6 +1054,7 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func agentNotificationEventAllowed(roomId: String, eventId: String) async throws -> Bool
   func agentNotificationPreferencesSet(preferences: AgentNotificationPreferencesDto) async throws -> AgentNotificationPreferencesDto
   func agentNotificationPreferencesSnapshot() async throws -> AgentNotificationPreferencesDto
+  func agentQuestionAnswer(roomId: String, eventId: String, answer: AgentQuestionAnswerDto) async throws -> AgentQuestionAnswerResultDto
   func attachSessionOwners() async throws -> SessionAttachDto
   func backupRepair(recoverySecret: String) async throws -> BackupStatusDto
   func backupSetup(passphrase: String) async throws -> BackupStatusDto
@@ -1277,6 +1307,12 @@ public struct AgentNotificationPreferencesDto: Equatable, Hashable
   public var notifyCommentary: Bool
   public var notifyFinalResponses: Bool
   public init(schemaVersion: UInt32, agentUserIds: [String], notifyToolActivity: Bool, notifyCommentary: Bool, notifyFinalResponses: Bool)
+public struct AgentQuestionAnswerResultDto: Equatable, Hashable
+  public var roomId: String
+  public var eventId: String
+  public var status: AgentQuestionAnswerStatusDto
+  public var route: AgentQuestionAnswerRouteDto?
+  public init(roomId: String, eventId: String, status: AgentQuestionAnswerStatusDto, route: AgentQuestionAnswerRouteDto?)
 public struct BackupStatusDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var availability: BackupAvailabilityDto
@@ -2121,6 +2157,27 @@ public struct TimelineSnapshotDto: Equatable, Hashable
   public var canRedactOther: Bool
   public var rows: [TimelineViewRowDto]
   public init(schemaVersion: UInt32, sessionGeneration: UInt64, roomId: String, revision: UInt64, position: TimelineViewPositionDto, paginationBackward: TimelinePageStateDto, paginationForward: TimelinePageStateDto, visibleTailEventId: String?, receiptTailEventId: String?, ownReadEventId: String?, unreadAnchorEventId: String?, isMarkedUnread: Bool, pinnedEventIds: [String], rowCount: UInt32, markRead: Bool, markUnread: Bool, paginateBackward: Bool, paginateForward: Bool, canRedactOwn: Bool, canRedactOther: Bool, rows: [TimelineViewRowDto])
+public struct TimelineViewAgentQuestionChoiceDto: Equatable, Hashable
+  public var index: UInt32
+  public var label: String
+  public var recommended: Bool
+  public init(index: UInt32, label: String, recommended: Bool)
+public struct TimelineViewAgentQuestionDto: Equatable, Hashable
+  public var source: AgentQuestionSourceDto
+  public var clarifyId: String?
+  public var question: String
+  public var choices: [TimelineViewAgentQuestionChoiceDto]
+  public var multiSelect: Bool
+  public var allowOther: Bool
+  public var allowSkip: Bool
+  public var requesterUserId: String?
+  public var expiresAtMs: UInt64?
+  public var state: AgentQuestionStateDto
+  public var answer: String?
+  public var canAnswer: Bool
+  public var ownChoiceIndex: UInt32?
+  public var ownSkipped: Bool
+  public init(source: AgentQuestionSourceDto, clarifyId: String?, question: String, choices: [TimelineViewAgentQuestionChoiceDto], multiSelect: Bool, allowOther: Bool, allowSkip: Bool, requesterUserId: String?, expiresAtMs: UInt64?, state: AgentQuestionStateDto, answer: String?, canAnswer: Bool, ownChoiceIndex: UInt32?, ownSkipped: Bool)
 public struct TimelineViewEncryptionShieldDto: Equatable, Hashable
   public var tone: String
   public var code: String
@@ -2188,6 +2245,7 @@ public struct TimelineViewRowDto: Equatable, Hashable
   public var isAgentApproval: Bool
   public var agentApprovalDecision: String?
   public var agentApprovalDecidedAt: UInt64?
+  public var agentQuestion: TimelineViewAgentQuestionDto?
   public var mediaFilename: String?
   public var mediaCaption: String?
   public var reactions: [TimelineViewReactionDto]
@@ -2201,7 +2259,7 @@ public struct TimelineViewRowDto: Equatable, Hashable
   public var localEchoState: String?
   public var sendFailure: String?
   public var sendFailureRetryable: Bool?
-  public init(kind: TimelineRowKindDto, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, agentApprovalDecision: String?, agentApprovalDecidedAt: UInt64?, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?, encryptionShield: TimelineViewEncryptionShieldDto?, transactionId: String?, localEchoState: String?, sendFailure: String?, sendFailureRetryable: Bool?)
+  public init(kind: TimelineRowKindDto, itemId: String, eventId: String, sender: String, senderName: String, senderAvatarUrl: String?, body: String, originServerTs: UInt64, edited: Bool, replyToEventId: String?, replyPreview: TimelineViewReplyPreviewDto?, threadRootEventId: String?, threadSummary: TimelineViewThreadSummaryDto?, poll: TimelineViewPollDto?, capabilities: TimelineViewRowCapabilitiesDto?, decryptionState: String?, messageType: String?, forwardTransport: String?, formattedBody: String?, agentCardJson: String?, isAgentApproval: Bool, agentApprovalDecision: String?, agentApprovalDecidedAt: UInt64?, agentQuestion: TimelineViewAgentQuestionDto?, mediaFilename: String?, mediaCaption: String?, reactions: [TimelineViewReactionDto], mediaHandleId: String?, mediaMimeType: String?, mediaWidth: UInt32?, mediaHeight: UInt32?, mediaDurationMs: UInt64?, encryptionShield: TimelineViewEncryptionShieldDto?, transactionId: String?, localEchoState: String?, sendFailure: String?, sendFailureRetryable: Bool?)
 public struct TimelineViewThreadSummaryDto: Equatable, Hashable
   public var rootEventId: String
   public var replyCount: UInt32

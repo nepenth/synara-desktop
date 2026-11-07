@@ -45,6 +45,9 @@ export const isPreviewCandidateUrl = (value: string): boolean => {
   try {
     const parsed = new URL(value);
     if (parsed.username || parsed.password) return false;
+    // matrix.to links are mentions and permalinks Synara opens itself; a
+    // web preview of them is noise (and its card opens the browser).
+    if (parsed.hostname.toLowerCase() === 'matrix.to') return false;
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
   } catch {
     return false;

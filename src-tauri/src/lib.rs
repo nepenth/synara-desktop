@@ -828,6 +828,7 @@ pub fn run() {
             matrix::auth::product::matrix_agent_approval_decide,
             matrix::auth::product::matrix_agent_approval_history_snapshot,
             matrix::auth::product::matrix_agent_approvals_list,
+            matrix::auth::product::matrix_agent_question_answer,
             matrix::auth::product::matrix_reaction_redact,
             matrix::auth::product::matrix_timeline_edit_text,
             matrix::auth::product::matrix_timeline_redact,

@@ -271,6 +271,14 @@ impl Core {
         agent_approval_decide(&self.state, request).await
     }
 
+    /// Typed `matrix_agent_question_answer`.
+    pub async fn agent_question_answer(
+        &self,
+        request: MatrixAgentQuestionAnswerRequest,
+    ) -> Result<NativeAgentQuestionAnswerResult, MatrixIpcError> {
+        agent_question_answer(&self.state, request).await
+    }
+
     /// Typed `matrix_reaction_redact`.
     pub async fn reaction_redact(
         &self,

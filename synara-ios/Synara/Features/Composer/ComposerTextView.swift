@@ -204,8 +204,11 @@ struct ComposerTextView: UIViewRepresentable {
         }
         // The coordinator measures after content or width changes and publishes
         // `height`. Measuring again here forces a second synchronous text
-        // layout during the same keystroke.
-        return CGSize(width: width, height: height)
+        // layout during the same keystroke. When SwiftUI offers less (a short
+        // screen), take what is offered: the text view scrolls instead of
+        // drawing past the composer.
+        let offered = proposal.height.map { min($0, height) } ?? height
+        return CGSize(width: width, height: max(offered, 1))
     }
 
     private func applySelection(to textView: UITextView) {
@@ -429,9 +432,9 @@ struct ComposerTextView: UIViewRepresentable {
             }
 
             let measuredHeight = preferredHeight(for: textView, width: width, force: force)
-            let showsPlaceholder = textView.text.isEmpty
-            textView.isScrollEnabled = showsPlaceholder == false
-                && measuredHeight >= ComposerTextMetrics.maxHeight
+            container.measuredHeight = measuredHeight
+            container.showsPlaceholder = textView.text.isEmpty
+            container.updateScrolling()
 
             guard abs(parent.height - measuredHeight) > 0.5 else {
                 return
@@ -888,6 +891,23 @@ final class ComposerTextContainer: UIView {
     let placeholderLabel = UILabel()
     private var lastMeasuredWidth: CGFloat = 0
     var onWidthChange: (() -> Void)?
+    /// The text's height as last measured (capped at `maxHeight`).
+    var measuredHeight: CGFloat = 0
+    var showsPlaceholder = true
+
+    /// Scroll when the text is taller than the frame the composer actually
+    /// got. SwiftUI can give it less than `measuredHeight` when the screen is
+    /// short (keyboard up); a non-scrolling text view then drew past the
+    /// composer's top and bottom edges.
+    func updateScrolling() {
+        let needsScroll = showsPlaceholder == false
+            && (measuredHeight >= ComposerTextMetrics.maxHeight || bounds.height + 0.5 < measuredHeight)
+        guard textView.isScrollEnabled != needsScroll else { return }
+        textView.isScrollEnabled = needsScroll
+        if needsScroll {
+            textView.scrollRangeToVisible(textView.selectedRange)
+        }
+    }
 
     func preferredHeight(forWidth width: CGFloat, showsPlaceholder: Bool) -> CGFloat {
         let font = textView.font ?? ComposerTextMetrics.font
@@ -941,6 +961,7 @@ final class ComposerTextContainer: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        updateScrolling()
         let width = bounds.width
         guard width > 0, abs(width - lastMeasuredWidth) > 0.5 else {
             return

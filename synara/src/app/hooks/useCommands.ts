@@ -194,6 +194,8 @@ export enum Command {
   Invite = 'invite',
   DisInvite = 'disinvite',
   Kick = 'kick',
+  /** Element's name for /kick. */
+  Remove = 'remove',
   Ban = 'ban',
   UnBan = 'unban',
   Ignore = 'ignore',
@@ -227,8 +229,8 @@ export const useCommands = (
   const { navigateRoom } = useRoomNavigate();
   const { t } = useTranslation();
 
-  const commands: CommandRecord = useMemo(
-    () => ({
+  const commands: CommandRecord = useMemo(() => {
+    const record: Omit<CommandRecord, Command.Remove> = {
       [Command.Me]: {
         name: Command.Me,
         description: 'Send action message',
@@ -736,9 +738,17 @@ export const useCommands = (
           }
         },
       },
-    }),
-    [room, navigateRoom, t, executePoll]
-  );
+    };
+    return {
+      ...record,
+      [Command.Remove]: {
+        name: Command.Remove,
+        description:
+          'Remove user from room (same as /kick). Example: /remove userId1 userId2 servername [-r reason]',
+        exe: record[Command.Kick].exe,
+      },
+    };
+  }, [room, navigateRoom, t, executePoll]);
 
   return commands;
 };

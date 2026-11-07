@@ -314,6 +314,9 @@
     "%@, In a call" : {
 
     },
+    "%@, recommended" : {
+
+    },
     "%@: %@" : {
       "localizations" : {
         "en" : {
@@ -796,6 +799,12 @@
     "Another session wants to verify this device." : {
 
     },
+    "Answered" : {
+
+    },
+    "Answered: %@" : {
+
+    },
     "App" : {
 
     },
@@ -979,6 +988,9 @@
     "Cancel reply" : {
 
     },
+    "Cancelled" : {
+
+    },
     "Cannot Forward" : {
 
     },
@@ -1025,6 +1037,9 @@
 
     },
     "Choose a settings page to open beside the list." : {
+
+    },
+    "Choose an answer to the agent's question" : {
 
     },
     "Choose one answer" : {
@@ -2145,6 +2160,9 @@
     "No analytics or crash SDK is enabled. Logs are local and redacted." : {
 
     },
+    "No answer (expired)" : {
+
+    },
     "No due date" : {
 
     },
@@ -2191,6 +2209,12 @@
 
     },
     "Not encrypted." : {
+
+    },
+    "Not syncing yet: asked your other verified devices for the drafts key. If none of them syncs drafts, enter your recovery key under Recovery above." : {
+
+    },
+    "Not syncing yet: this device needs your recovery key. Enter it under Recovery above." : {
 
     },
     "Not signed in" : {
@@ -2302,6 +2326,9 @@
 
     },
     "Opens the thread." : {
+
+    },
+    "Other…" : {
 
     },
     "Overdue" : {
@@ -2479,6 +2506,9 @@
     "Pusher registration failed" : {
 
     },
+    "Question from the agent" : {
+
+    },
     "Queued" : {
 
     },
@@ -2522,6 +2552,9 @@
 
     },
     "Recent · %lld" : {
+
+    },
+    "Recommended" : {
 
     },
     "Recover Keys" : {
@@ -2917,6 +2950,12 @@
     "Send messages" : {
 
     },
+    "Send selected answers" : {
+
+    },
+    "Send your own answer" : {
+
+    },
     "Sending" : {
 
     },
@@ -3034,6 +3073,9 @@
     "Sign in before uploading media." : {
 
     },
+    "Sign in to answer this question." : {
+
+    },
     "Sign in to load approval history." : {
 
     },
@@ -3056,6 +3098,12 @@
 
     },
     "Simulator: APNs unavailable" : {
+
+    },
+    "Skip" : {
+
+    },
+    "Skipped" : {
 
     },
     "Slate" : {
@@ -3368,6 +3416,9 @@
     "This note could not be saved." : {
 
     },
+    "This question is for someone else." : {
+
+    },
     "This rejects their request to join this room." : {
 
     },
@@ -3669,6 +3720,9 @@
     "Your account already has a cross-signing identity. Verify this device to read your encrypted messages and so others can trust it." : {
 
     },
+    "Your answer could not be sent. Try again." : {
+
+    },
     "Your decision was sent." : {
 
     },
@@ -3685,6 +3739,9 @@
 
     },
     "Your level" : {
+
+    },
+    "Your own answer" : {
 
     },
     "Your session expired. Sign in again to reconnect." : {

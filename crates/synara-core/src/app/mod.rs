@@ -8,6 +8,7 @@
 #[cfg(feature = "full-app")]
 pub mod account_data;
 pub mod agent_approvals;
+pub mod agent_questions;
 #[cfg(feature = "full-app")]
 pub mod auth;
 #[cfg(feature = "full-app")]

@@ -5,7 +5,11 @@ import {
   type ApprovalDecision,
 } from '../approvals/approvalDecisionEvents';
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../../utils/desktop';
-import type { NativeReactionMutation } from '../matrix-dto/generated';
+import type {
+  AgentQuestionAnswer,
+  NativeAgentQuestionAnswerResult,
+  NativeReactionMutation,
+} from '../matrix-dto/generated';
 export type { NativeReactionMutation } from '../matrix-dto/generated';
 
 export type NativeReactionReadback = {
@@ -199,6 +203,37 @@ export async function decideAgentApprovalWithNativeOwner(
     ...(decision ? { decision } : {}),
     ...(decision && decidedAt !== undefined ? { decidedAt } : {}),
   });
+  return result.value;
+}
+
+export type NativeAgentQuestionInvoke = (
+  command: string,
+  args?: Record<string, unknown>
+) => Promise<DesktopInvokeResult<NativeAgentQuestionAnswerResult>>;
+
+const defaultAgentQuestionInvoke: NativeAgentQuestionInvoke = (command, args) =>
+  invokeDesktopWithAvailability<NativeAgentQuestionAnswerResult>(command, args);
+
+/**
+ * Shared-core question-card authority. Core resolves the exact card, checks
+ * the requester and pending state, and sends the keycap/skip reaction or the
+ * reply message. The presenter never chooses the route.
+ */
+export async function answerAgentQuestionWithNativeOwner(
+  input: { roomId: string; eventId: string; answer: AgentQuestionAnswer },
+  invoke: NativeAgentQuestionInvoke = defaultAgentQuestionInvoke
+): Promise<NativeAgentQuestionAnswerResult> {
+  const result = await invoke('matrix_agent_question_answer', input);
+  if (!result.available || !result.value) {
+    throw new Error('Native question answers are unavailable.');
+  }
+  if (
+    result.value.roomId !== input.roomId ||
+    result.value.eventId !== input.eventId ||
+    !['sent', 'already_answered'].includes(result.value.status)
+  ) {
+    throw new Error('Native question readback did not match the requested answer.');
+  }
   return result.value;
 }
 

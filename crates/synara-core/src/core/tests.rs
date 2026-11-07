@@ -316,6 +316,7 @@ async fn default_registry_dispatches_matrix_session_snapshot() {
             "matrix_agent_approvals_list",
             "matrix_agent_notification_preferences_set",
             "matrix_agent_notification_preferences_snapshot",
+            "matrix_agent_question_answer",
             "matrix_backup_status",
             "matrix_composer_clear_reply_draft",
             "matrix_composer_get_reply_draft",
@@ -2447,6 +2448,53 @@ async fn matrix_agent_approval_decide_rejects_unknown_payload_fields() {
     assert_eq!(
         error.diagnostic_id.as_deref(),
         Some("agent-approval-invalid-payload")
+    );
+}
+
+#[tokio::test]
+async fn matrix_agent_question_answer_without_owner_fails_closed() {
+    let core = Core::new(Arc::new(TestPlatform));
+    let error = core
+        .command(CommandEnvelope {
+            command: "matrix_agent_question_answer".into(),
+            session_generation: 0,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId":"!room:example.org",
+                "eventId":"$event:example.org",
+                "answer":{"kind":"choice","index":1}
+            }),
+        })
+        .await
+        .expect_err("question answer without an attached owner must fail closed");
+    assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+    assert_eq!(
+        error.diagnostic_id.as_deref(),
+        Some("agent-question-no-session")
+    );
+}
+
+#[tokio::test]
+async fn matrix_agent_question_answer_rejects_caller_selected_routes() {
+    let core = Core::new(Arc::new(TestPlatform));
+    let error = core
+        .command(CommandEnvelope {
+            command: "matrix_agent_question_answer".into(),
+            session_generation: 0,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId":"!room:example.org",
+                "eventId":"$event:example.org",
+                "answer":{"kind":"choice","index":1},
+                "reaction":"1️⃣"
+            }),
+        })
+        .await
+        .expect_err("question answer must reject caller-selected reactions");
+    assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+    assert_eq!(
+        error.diagnostic_id.as_deref(),
+        Some("agent-question-invalid-payload")
     );
 }
 

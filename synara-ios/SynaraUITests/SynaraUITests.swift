@@ -1460,9 +1460,8 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Deploy to Production"].waitForExistence(timeout: 5))
         tap(app.buttons["AgentCardAction-approve-deploy"])
 
-        let alert = app.alerts["Agent Action"]
-        XCTAssertTrue(alert.waitForExistence(timeout: 5))
-        XCTAssertTrue(alert.staticTexts["Agent action approved"].exists)
+        // A sent decision shows on the card, not in an alert.
+        XCTAssertFalse(app.alerts["Agent Action"].waitForExistence(timeout: 2))
     }
 
     func testAgentCardApprovalFailureIsVisibleAndRetryable() {
@@ -1486,9 +1485,37 @@ final class SynaraUITests: XCTestCase {
 
         tap(app.buttons["AgentApprovalPromptReaction-approveOnce-$agent-approval-prompt"])
 
-        let alert = app.alerts["Agent Action"]
-        XCTAssertTrue(alert.waitForExistence(timeout: 5))
-        XCTAssertTrue(alert.staticTexts["Approval decision sent."].waitForExistence(timeout: 5))
+        // A sent decision shows on the card, not in an alert.
+        XCTAssertFalse(app.alerts["Agent Action"].waitForExistence(timeout: 2))
+    }
+
+    func testLongComposerTextStaysInsideTheComposer() {
+        let app = launchAgentQuestionRoomApp()
+        let field = composerField(in: app)
+        tap(field)
+        field.typeText(String(repeating: "A long draft that wraps over many lines in the composer. ", count: 12))
+
+        let surface = identifiedElement(in: app, "ComposerInputSurface")
+        XCTAssertTrue(surface.waitForExistence(timeout: 5))
+        let fieldFrame = field.frame
+        let surfaceFrame = surface.frame
+        print("COMPOSER_FRAMES field=\(fieldFrame) surface=\(surfaceFrame)")
+        // The text field grows to its cap and then scrolls; it never draws
+        // past the rounded input surface (it overflowed both edges before).
+        XCTAssertGreaterThanOrEqual(fieldFrame.minY, surfaceFrame.minY - 0.5)
+        XCTAssertLessThanOrEqual(fieldFrame.maxY, surfaceFrame.maxY + 0.5)
+    }
+
+    func testAgentQuestionChoiceAnswersWithoutAnAlert() {
+        let app = launchAgentQuestionRoomApp()
+
+        XCTAssertTrue(app.staticTexts["Which colour should the cover use?"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["AgentQuestionChoice-1-$agent-question-multi"].exists)
+        tap(app.buttons["AgentQuestionChoice-2-$agent-question-single"])
+
+        XCTAssertTrue(app.otherElements["AgentQuestionSettled-$agent-question-single"].waitForExistence(timeout: 5)
+            || app.staticTexts["AgentQuestionSettled-$agent-question-single"].waitForExistence(timeout: 1))
+        XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 1))
     }
 
     func testAgentApprovalPromptRequiresConfirmationBeforeApproveAlways() {
@@ -1505,9 +1532,8 @@ final class SynaraUITests: XCTestCase {
         )
         tap(confirmation)
 
-        let alert = app.alerts["Agent Action"]
-        XCTAssertTrue(alert.waitForExistence(timeout: 5))
-        XCTAssertTrue(alert.staticTexts["Approval decision sent."].waitForExistence(timeout: 5))
+        // A sent decision shows on the card, not in an alert.
+        XCTAssertFalse(app.alerts["Agent Action"].waitForExistence(timeout: 2))
     }
 
     func testAgentApprovalPromptCancelApproveAlwaysDoesNotSubmit() {
@@ -1541,9 +1567,8 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Approval Required: Dangerous Command"].waitForExistence(timeout: 5))
         tap(app.buttons["AgentApprovalPromptReaction-deny-$agent-approval-prompt"])
 
-        let alert = app.alerts["Agent Action"]
-        XCTAssertTrue(alert.waitForExistence(timeout: 5))
-        XCTAssertTrue(alert.staticTexts["Approval decision sent."].waitForExistence(timeout: 5))
+        // A sent decision shows on the card, not in an alert.
+        XCTAssertFalse(app.alerts["Agent Action"].waitForExistence(timeout: 2))
     }
 
     func testAgentApprovalPromptSurfacesAlreadyDecidedReadback() {
@@ -2084,9 +2109,7 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(waitForTimelineElement(app.buttons["AgentCardAction-live-approve-\(smokeID)"], app: app, timeout: 10))
         tap(app.buttons["AgentCardAction-live-approve-\(smokeID)"], timeout: 1)
 
-        let alert = app.alerts["Agent Action"]
-        XCTAssertTrue(alert.waitForExistence(timeout: 15))
-        XCTAssertTrue(alert.staticTexts["Agent action approved"].exists)
+        XCTAssertFalse(app.alerts["Agent Action"].waitForExistence(timeout: 2))
 
         XCTAssertTrue(
             liveClient.waitForApprovalEvent(
@@ -3026,6 +3049,16 @@ final class SynaraUITests: XCTestCase {
         if let approvalError {
             app.launchEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_ERROR"] = approvalError
         }
+        launch(app)
+        return app
+    }
+
+    private func launchAgentQuestionRoomApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!agent:matrix.org"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Agent"
+        app.launchEnvironment["SYNARA_UI_TEST_AGENT_QUESTION"] = "1"
         launch(app)
         return app
     }
