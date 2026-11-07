@@ -1,0 +1,3 @@
+Synara 2.9.1 shows Hermes Agent's clarifying questions as cards: tap a choice, type your own answer, or skip. Draft sync now starts after you restore encryption backup with your recovery key, and Settings says when it is not syncing yet. A long message stays inside the composer and scrolls. Approving an agent action no longer shows a confirmation alert, and mentions no longer get a link preview.
+
+Please test: answering a Hermes question from the card, a draft started on desktop and continued on iPhone after entering your recovery key, and typing a long message with the keyboard up.
