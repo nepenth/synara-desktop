@@ -1489,6 +1489,18 @@ final class SynaraUITests: XCTestCase {
         XCTAssertFalse(app.alerts["Agent Action"].waitForExistence(timeout: 2))
     }
 
+    func testAgentQuestionChoiceAnswersWithoutAnAlert() {
+        let app = launchAgentQuestionRoomApp()
+
+        XCTAssertTrue(app.staticTexts["Which colour should the cover use?"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["AgentQuestionChoice-1-$agent-question-multi"].exists)
+        tap(app.buttons["AgentQuestionChoice-2-$agent-question-single"])
+
+        XCTAssertTrue(app.otherElements["AgentQuestionSettled-$agent-question-single"].waitForExistence(timeout: 5)
+            || app.staticTexts["AgentQuestionSettled-$agent-question-single"].waitForExistence(timeout: 1))
+        XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 1))
+    }
+
     func testAgentApprovalPromptRequiresConfirmationBeforeApproveAlways() {
         let app = launchAgentApprovalPromptRoomApp()
 
@@ -3020,6 +3032,16 @@ final class SynaraUITests: XCTestCase {
         if let approvalError {
             app.launchEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_ERROR"] = approvalError
         }
+        launch(app)
+        return app
+    }
+
+    private func launchAgentQuestionRoomApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!agent:matrix.org"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Agent"
+        app.launchEnvironment["SYNARA_UI_TEST_AGENT_QUESTION"] = "1"
         launch(app)
         return app
     }

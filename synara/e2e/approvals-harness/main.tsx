@@ -39,9 +39,26 @@ import { AutocompleteMenu } from '../../src/app/components/editor/autocomplete/A
 import { Toolbar } from '../../src/app/components/editor/Toolbar';
 import { RoomComposer } from '../../src/app/features/room/RoomComposer';
 import * as composerCss from '../../src/app/features/room/RoomComposer.css';
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import { AgentQuestionCard } from '../../src/app/components/agent-question/AgentQuestionCard';
+import type { NativeTimelineAgentQuestion } from '../../src/app/utils/agentQuestions';
 
 const query = new URLSearchParams(location.search);
 if (query.has('composer')) document.title = 'Synara · Composer review';
+// Question cards read their copy through react-i18next; load the shipped
+// English catalog before the first render so the fixture shows real strings.
+if (query.has('questions')) {
+  document.title = 'Synara · Question cards';
+  const enLocale = await fetch('/locales/en.json').then((response) => response.json());
+  await i18n.use(initReactI18next).init({
+    lng: 'en',
+    resources: { en: { translation: enLocale } },
+    interpolation: { escapeValue: false },
+  });
+}
+const questionAnswers: Record<string, unknown>[] = [];
+Object.assign(window, { synaraQuestionAnswers: questionAnswers });
 let items: ApprovalInboxItem[] = [];
 let failed = query.has('error');
 let loading = query.has('loading');
@@ -105,6 +122,21 @@ Object.assign(window, {
         lastAction = String(args?.actionId);
         item.status = 'decided';
         return { roomId: item.roomId, eventId: item.eventId, status: 'applied' };
+      }
+      if (command === 'matrix_agent_question_answer') {
+        if (query.has('questionError')) throw new Error('Fixture rejection');
+        questionAnswers.push(args ?? {});
+        const answer = args?.answer as { kind?: string } | undefined;
+        return {
+          roomId: args?.roomId,
+          eventId: args?.eventId,
+          status: 'sent',
+          route:
+            String(args?.eventId).startsWith('$structured') &&
+            (answer?.kind === 'choice' || answer?.kind === 'skip')
+              ? 'reaction'
+              : 'reply',
+        };
       }
       if (command === 'desktop_spellcheck_enable') return true;
       throw new Error(`Unexpected fixture command: ${command}`);
@@ -226,6 +258,114 @@ function ComposerPreview() {
   );
 }
 
+const colourChoices = [
+  { index: 1, label: 'Red', recommended: true },
+  { index: 2, label: 'Blue', recommended: false },
+  { index: 3, label: 'Green', recommended: false },
+];
+const baseQuestion: NativeTimelineAgentQuestion = {
+  source: 'structured',
+  question: 'Which colour should the cover use?',
+  choices: colourChoices,
+  multiSelect: false,
+  allowOther: true,
+  allowSkip: true,
+  state: 'pending',
+  canAnswer: true,
+};
+const questionFixtures: Array<{
+  name: string;
+  eventId: string;
+  question: NativeTimelineAgentQuestion;
+  ownReplyBody?: string;
+}> = [
+  { name: 'Single choice', eventId: '$structured-single', question: baseQuestion },
+  {
+    name: 'Multiple choice',
+    eventId: '$structured-multi',
+    question: {
+      ...baseQuestion,
+      question: 'Which formats should I export?',
+      choices: [
+        { index: 1, label: 'PDF', recommended: true },
+        { index: 2, label: 'EPUB', recommended: false },
+        { index: 3, label: 'Print', recommended: false },
+      ],
+      multiSelect: true,
+      allowOther: false,
+    },
+  },
+  {
+    name: 'Text fallback',
+    eventId: '$fallback-card',
+    question: {
+      ...baseQuestion,
+      source: 'fallback',
+      question: 'Which database should I use?',
+      choices: [
+        { index: 1, label: 'Postgres', recommended: true },
+        { index: 2, label: 'SQLite', recommended: false },
+      ],
+    },
+  },
+  {
+    name: 'Open question',
+    eventId: '$structured-open',
+    question: {
+      ...baseQuestion,
+      question: 'What should the release be called?',
+      choices: [],
+      allowSkip: false,
+    },
+  },
+  {
+    name: 'Someone else',
+    eventId: '$structured-foreign',
+    question: { ...baseQuestion, canAnswer: false, requesterUserId: '@alex:example.test' },
+  },
+  {
+    name: 'Settled',
+    eventId: '$structured-settled',
+    question: { ...baseQuestion, state: 'answered', answer: 'Blue' },
+  },
+  {
+    name: 'Expired',
+    eventId: '$structured-expired',
+    question: { ...baseQuestion, expiresAtMs: Date.now() - 1 },
+  },
+  {
+    name: 'Answered by reply',
+    eventId: '$fallback-replied',
+    question: { ...baseQuestion, source: 'fallback' },
+    ownReplyBody: '1, 3',
+  },
+];
+
+function QuestionsPreview() {
+  return (
+    <main style={{ maxWidth: 860, margin: '32px auto', padding: '0 24px' }}>
+      <Text size="H5">Question cards</Text>
+      {questionFixtures.map((fixture) => (
+        <section
+          key={fixture.eventId}
+          aria-label={fixture.name}
+          data-testid={fixture.eventId}
+          style={{ marginTop: 20 }}
+        >
+          <Text size="L400" priority="300">
+            {fixture.name}
+          </Text>
+          <AgentQuestionCard
+            question={fixture.question}
+            target={{ roomId: '!book:example.test', eventId: fixture.eventId }}
+            ownReplyBody={fixture.ownReplyBody}
+          />
+        </section>
+      ))}
+    </main>
+  );
+}
+
 function Fixture() {
   const { refresh, pendingCount } = useApprovalInbox();
   const navigate = useNavigate();
@@ -236,6 +376,7 @@ function Fixture() {
     refresh();
     update((value) => value + 1);
   };
+  if (query.has('questions')) return <QuestionsPreview />;
   if (query.has('composer'))
     return (
       <main style={{ maxWidth: 1080, margin: '64px auto', padding: '0 24px' }}>

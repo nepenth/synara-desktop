@@ -223,6 +223,94 @@ pub struct TimelineSnapshotDto {
     pub rows: Vec<TimelineViewRowDto>,
 }
 
+super::wire_enum::wire_enum! {
+    pub enum AgentQuestionSourceDto {
+        Structured => "structured",
+        Fallback => "fallback",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::agent_questions::AgentQuestionSource => AgentQuestionSourceDto {
+    Structured, Fallback
+});
+
+super::wire_enum::wire_enum! {
+    pub enum AgentQuestionStateDto {
+        Pending => "pending",
+        Answered => "answered",
+        Skipped => "skipped",
+        Expired => "expired",
+        Cancelled => "cancelled",
+    }
+}
+super::wire_enum::wire_enum_from!(crate::app::agent_questions::AgentQuestionState => AgentQuestionStateDto {
+    Pending, Answered, Skipped, Expired, Cancelled
+});
+
+/// One choice of a clarifying question; `index` is 1-based.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TimelineViewAgentQuestionChoiceDto {
+    pub index: u32,
+    pub label: String,
+    pub recommended: bool,
+}
+
+/// Hermes clarifying question projected by Core (structured content key or
+/// the plain-text fallback). `state` is Hermes-settled state from the latest
+/// edit; presenters fold `expires_at_ms` in themselves.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TimelineViewAgentQuestionDto {
+    pub source: AgentQuestionSourceDto,
+    pub clarify_id: Option<String>,
+    pub question: String,
+    pub choices: Vec<TimelineViewAgentQuestionChoiceDto>,
+    pub multi_select: bool,
+    pub allow_other: bool,
+    pub allow_skip: bool,
+    pub requester_user_id: Option<String>,
+    pub expires_at_ms: Option<u64>,
+    pub state: AgentQuestionStateDto,
+    pub answer: Option<String>,
+    /// False for another requester's card: render read-only.
+    pub can_answer: bool,
+    /// This account's own keycap reaction answer (1-based choice index).
+    pub own_choice_index: Option<u32>,
+    /// This account's own skip reaction.
+    pub own_skipped: bool,
+}
+
+pub(super) fn view_agent_question_dto(
+    question: crate::app::timeline::TimelineAgentQuestion,
+) -> TimelineViewAgentQuestionDto {
+    use crate::app::agent_questions::AgentQuestionOwnAnswer;
+    TimelineViewAgentQuestionDto {
+        source: question.source.into(),
+        clarify_id: question.clarify_id,
+        question: question.question,
+        choices: question
+            .choices
+            .into_iter()
+            .map(|choice| TimelineViewAgentQuestionChoiceDto {
+                index: choice.index,
+                label: choice.label,
+                recommended: choice.recommended,
+            })
+            .collect(),
+        multi_select: question.multi_select,
+        allow_other: question.allow_other,
+        allow_skip: question.allow_skip,
+        requester_user_id: question.requester_user_id,
+        expires_at_ms: question.expires_at_ms,
+        state: question.state.into(),
+        answer: question.answer,
+        can_answer: question.can_answer,
+        own_choice_index: match question.own_answer {
+            Some(AgentQuestionOwnAnswer::Choice { index }) => Some(index),
+            _ => None,
+        },
+        own_skipped: question.own_answer == Some(AgentQuestionOwnAnswer::Skipped),
+    }
+}
+
 /// Privacy-safe timeline view row. Message text only; no media bytes or tokens.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TimelineViewRowDto {
@@ -256,6 +344,9 @@ pub struct TimelineViewRowDto {
     pub agent_approval_decision: Option<String>,
     /// Milliseconds since the epoch of that decision's reaction, when known.
     pub agent_approval_decided_at: Option<u64>,
+    /// Core-recognised Hermes clarifying question. Render a question card
+    /// and answer only through `agent_question_answer`.
+    pub agent_question: Option<TimelineViewAgentQuestionDto>,
     pub media_filename: Option<String>,
     pub media_caption: Option<String>,
     pub reactions: Vec<TimelineViewReactionDto>,
@@ -772,6 +863,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 agent_approval_decided_at: message
                     .agent_approval_decision
                     .and_then(|decided| decided.decided_at),
+                agent_question: message.agent_question.map(view_agent_question_dto),
                 media_filename: message.media_filename,
                 media_caption: message.media_caption,
                 reactions: view_reaction_dtos(message.reactions),
@@ -830,6 +922,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 is_agent_approval: false,
                 agent_approval_decision: None,
                 agent_approval_decided_at: None,
+                agent_question: None,
                 media_filename: None,
                 media_caption: None,
                 reactions: view_reaction_dtos(reactions),
@@ -876,6 +969,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 is_agent_approval: false,
                 agent_approval_decision: None,
                 agent_approval_decided_at: None,
+                agent_question: None,
                 media_filename: None,
                 media_caption: None,
                 reactions: view_reaction_dtos(poll.reactions),
@@ -915,6 +1009,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             is_agent_approval: false,
             agent_approval_decision: None,
             agent_approval_decided_at: None,
+            agent_question: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -953,6 +1048,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             is_agent_approval: false,
             agent_approval_decision: None,
             agent_approval_decided_at: None,
+            agent_question: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -991,6 +1087,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             is_agent_approval: false,
             agent_approval_decision: None,
             agent_approval_decided_at: None,
+            agent_question: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -1029,6 +1126,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             is_agent_approval: false,
             agent_approval_decision: None,
             agent_approval_decided_at: None,
+            agent_question: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -1067,6 +1165,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             is_agent_approval: false,
             agent_approval_decision: None,
             agent_approval_decided_at: None,
+            agent_question: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -1146,6 +1245,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
                 is_agent_approval: false,
                 agent_approval_decision: None,
                 agent_approval_decided_at: None,
+                agent_question: None,
                 media_filename: None,
                 media_caption: None,
                 reactions: Vec::new(),
@@ -1188,6 +1288,7 @@ pub(super) fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto 
             is_agent_approval: false,
             agent_approval_decision: None,
             agent_approval_decided_at: None,
+            agent_question: None,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -1242,6 +1343,7 @@ pub(super) fn virtual_row_dto(kind: TimelineRowKindDto, item_id: String) -> Time
         is_agent_approval: false,
         agent_approval_decision: None,
         agent_approval_decided_at: None,
+        agent_question: None,
         media_filename: None,
         media_caption: None,
         reactions: Vec::new(),

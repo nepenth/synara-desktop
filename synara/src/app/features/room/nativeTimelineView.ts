@@ -7,6 +7,7 @@ import {
   type DesktopInvokeResult,
 } from '../../utils/desktop';
 import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
+import type { NativeTimelineAgentQuestion } from '../../utils/agentQuestions';
 import { startVisibleOnlyPoll } from '../../utils/visibilityPoll';
 import { readReceiptsArePublic } from '../../state/settings';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
@@ -366,6 +367,8 @@ type NativeTimelineMessageRow = NativeTimelineEventRowBase &
     isAgentApproval?: boolean;
     /** This account's own decision on the approval prompt, projected by Core. */
     agentApprovalDecision?: NativeTimelineAgentApprovalDecision;
+    /** Core-recognised Hermes clarifying question; render a question card. */
+    agentQuestion?: NativeTimelineAgentQuestion;
     messageType?: string;
     forwardTransport?: NativeTimelineForwardTransport;
     mediaFilename?: string;

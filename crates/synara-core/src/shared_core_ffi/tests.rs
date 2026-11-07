@@ -758,6 +758,7 @@ fn timeline_view_row_dto_maps_message_without_token_echo() {
             decision: crate::app::account_data::SynaraAgentApprovalHistoryDecision::ApproveOnce,
             decided_at: Some(1_700_000_060_000),
         }),
+        agent_question: None,
         message_type: Some("m.text".to_owned()),
         forward_transport: Some(TimelineForwardTransport::Text),
         media_filename: None,
@@ -884,6 +885,7 @@ fn timeline_view_row_dto_carries_local_echo_transaction_id() {
         agent_card_json: None,
         is_agent_approval: false,
         agent_approval_decision: None,
+        agent_question: None,
         message_type: Some("m.image".to_owned()),
         forward_transport: None,
         media_filename: Some("photo.jpg".to_owned()),
@@ -2601,4 +2603,53 @@ async fn ios_password_login_reports_rejection_rate_limit_and_outage_distinctly()
     }
     drop(shared);
     let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn agent_question_dto_maps_choices_state_and_own_reaction_answer() {
+    use crate::app::agent_questions::{
+        AgentQuestionAnswer, AgentQuestionChoice, AgentQuestionOwnAnswer, AgentQuestionSource,
+        AgentQuestionState,
+    };
+    let dto = super::timeline_view::view_agent_question_dto(
+        crate::app::timeline::TimelineAgentQuestion {
+            source: AgentQuestionSource::Structured,
+            clarify_id: Some("clarify-1".into()),
+            question: "Pick a colour".into(),
+            choices: vec![AgentQuestionChoice {
+                index: 1,
+                label: "Red".into(),
+                recommended: true,
+            }],
+            multi_select: false,
+            allow_other: true,
+            allow_skip: true,
+            requester_user_id: Some("@me:example.org".into()),
+            expires_at_ms: Some(42),
+            state: AgentQuestionState::Pending,
+            answer: None,
+            can_answer: true,
+            own_answer: Some(AgentQuestionOwnAnswer::Choice { index: 1 }),
+        },
+    );
+    assert_eq!(dto.source, AgentQuestionSourceDto::Structured);
+    assert_eq!(dto.state, AgentQuestionStateDto::Pending);
+    assert_eq!(dto.state.as_str(), "pending");
+    assert_eq!(dto.choices[0].label, "Red");
+    assert!(dto.choices[0].recommended);
+    assert_eq!(dto.own_choice_index, Some(1));
+    assert!(!dto.own_skipped);
+    assert_eq!(dto.expires_at_ms, Some(42));
+    assert_eq!(
+        AgentQuestionAnswer::from(AgentQuestionAnswerDto::Choices {
+            indices: vec![1, 3]
+        }),
+        AgentQuestionAnswer::Choices {
+            indices: vec![1, 3]
+        }
+    );
+    assert_eq!(
+        AgentQuestionAnswer::from(AgentQuestionAnswerDto::Skip),
+        AgentQuestionAnswer::Skip
+    );
 }

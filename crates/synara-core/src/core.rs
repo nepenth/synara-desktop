@@ -69,6 +69,7 @@ use crate::app::sync::{
 use crate::app::threads::NativeThreadListSnapshot;
 use crate::app::timeline::{
     NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
+    NativeAgentQuestionAnswerRequest, NativeAgentQuestionAnswerResult,
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
     NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
     NativeTimelineFollowLiveRequest, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,

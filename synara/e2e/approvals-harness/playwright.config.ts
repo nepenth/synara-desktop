@@ -16,6 +16,7 @@ export default defineConfig({
     'approvals-provider-lifecycle.spec.ts',
     'composer-formatting.spec.ts',
     'composer-mention.spec.ts',
+    'question-cards.spec.ts',
   ],
   fullyParallel: true,
   // One dev server serves every page; bound concurrency so a loaded machine

@@ -568,6 +568,7 @@ mod view_pure {
             formatted_body: None,
             is_agent_approval: false,
             agent_approval_decision: None,
+            agent_question: None,
             message_type: Some("text".into()),
             forward_transport: Some(TimelineForwardTransport::Text),
             media_filename: None,

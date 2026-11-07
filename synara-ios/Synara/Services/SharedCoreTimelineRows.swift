@@ -128,6 +128,8 @@ enum SharedCoreTimelineRows {
                 coreDecision: row.agentApprovalDecision,
                 decidedAtMilliseconds: row.agentApprovalDecidedAt
             )
+        } else if let question = row.agentQuestion {
+            item.agentQuestion = SynaraAgentQuestion(dto: question)
         }
         return item
     }

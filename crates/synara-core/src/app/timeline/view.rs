@@ -27,6 +27,10 @@ use serde_json::Value as JsonValue;
 
 use crate::app::account_data::SynaraAgentApprovalHistoryDecision;
 use crate::app::agent_approvals::is_eligible_agent_approval_prompt;
+use crate::app::agent_questions::{
+    can_answer_agent_question, own_reaction_answer, recognize_agent_question, AgentQuestionChoice,
+    AgentQuestionOwnAnswer, AgentQuestionSource, AgentQuestionState,
+};
 use crate::dto::{EventId, LocalEchoState, RoomId, TimelineItemId, UserId};
 
 use super::reactions::project_view_reaction_senders;
@@ -166,6 +170,85 @@ pub fn own_agent_approval_decision<'a>(
             })
         })
         .min_by_key(|decision| decision.decided_at.unwrap_or(u64::MAX))
+}
+
+/// Core-recognised Hermes clarifying question (`org.hermes.clarify`, or the
+/// plain-text `❓` fallback). Presenters render it as a question card and
+/// answer only through the `agent_question_answer` owner route.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineAgentQuestion {
+    pub source: AgentQuestionSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clarify_id: Option<String>,
+    pub question: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<AgentQuestionChoice>,
+    pub multi_select: bool,
+    pub allow_other: bool,
+    pub allow_skip: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requester_user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at_ms: Option<u64>,
+    /// Hermes-settled state from the latest edit; always `pending` for
+    /// fallback cards. Presenters fold `expires_at_ms` in themselves.
+    pub state: AgentQuestionState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer: Option<String>,
+    /// False when the card is someone else's (named requester) or the
+    /// current account is unknown: render it read-only.
+    pub can_answer: bool,
+    /// This account's own keycap or skip reaction on a structured card.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub own_answer: Option<AgentQuestionOwnAnswer>,
+}
+
+/// Project a clarifying question for a text or notice message from another
+/// account. The raw event (latest edit first) is probed for the content key
+/// before any JSON parse; the body fallback is a cheap line scan.
+fn project_agent_question(
+    event: &EventTimelineItem,
+    msgtype: &MessageType,
+    body: &str,
+    sender_id: &str,
+    own_user_id: Option<&RumaUserId>,
+    reactions: &matrix_sdk_ui::timeline::ReactionsByKeyBySender,
+) -> Option<TimelineAgentQuestion> {
+    if !matches!(msgtype, MessageType::Text(_) | MessageType::Notice(_)) {
+        return None;
+    }
+    if own_user_id.is_some_and(|own| own.as_str() == sender_id) {
+        return None;
+    }
+    let question = recognize_agent_question(event.latest_json().map(|raw| raw.json().get()), body)?;
+    let can_answer = own_user_id
+        .is_some_and(|own| can_answer_agent_question(&question, sender_id, own.as_str()));
+    let own_answer = own_user_id.and_then(|own| {
+        own_reaction_answer(
+            &question,
+            reactions.iter().filter_map(|(key, senders)| {
+                senders
+                    .get(own)
+                    .map(|info| (key.as_str(), Some(u64::from(info.timestamp.get()))))
+            }),
+        )
+    });
+    Some(TimelineAgentQuestion {
+        source: question.source,
+        clarify_id: question.clarify_id,
+        question: question.question,
+        choices: question.choices,
+        multi_select: question.multi_select,
+        allow_other: question.allow_other,
+        allow_skip: question.allow_skip,
+        requester_user_id: question.requester_user_id,
+        expires_at_ms: question.expires_at_ms,
+        state: question.state,
+        answer: question.answer,
+        can_answer,
+        own_answer,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -544,6 +627,18 @@ fn project_event_row_for_user(
                                 },
                             ))
                         });
+                let agent_question = if media_filename.is_none() && !is_agent_approval {
+                    project_agent_question(
+                        event,
+                        msgtype,
+                        &body,
+                        &base.sender_id,
+                        own_user_id,
+                        &content.reactions,
+                    )
+                } else {
+                    None
+                };
                 TimelineViewRow::Message(Box::new(TimelineMessageRow {
                     event: base,
                     body,
@@ -551,6 +646,7 @@ fn project_event_row_for_user(
                     agent_card_json: project_agent_card_json(event, message.body()),
                     is_agent_approval,
                     agent_approval_decision,
+                    agent_question,
                     message_type,
                     forward_transport,
                     media_filename,
@@ -1192,6 +1288,10 @@ pub struct TimelineMessageRow {
     /// Present only on an approval prompt this account already decided.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_approval_decision: Option<TimelineAgentApprovalDecision>,
+    /// Core-recognised clarifying question; presenters render a question
+    /// card instead of the body when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_question: Option<TimelineAgentQuestion>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message_type: Option<String>,
     /// Core-owned dispatch route for forwarding this semantic event.
@@ -2093,6 +2193,7 @@ mod tests {
             agent_card_json: None,
             is_agent_approval: false,
             agent_approval_decision: None,
+            agent_question: None,
             message_type: Some("text".into()),
             forward_transport: Some(TimelineForwardTransport::Text),
             media_filename: None,

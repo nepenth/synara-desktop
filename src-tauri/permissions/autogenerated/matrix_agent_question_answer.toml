@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-agent-question-answer"
+description = "Enables the matrix_agent_question_answer command without any pre-configured scope."
+commands.allow = ["matrix_agent_question_answer"]
+
+[[permission]]
+identifier = "deny-matrix-agent-question-answer"
+description = "Denies the matrix_agent_question_answer command without any pre-configured scope."
+commands.deny = ["matrix_agent_question_answer"]

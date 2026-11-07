@@ -105,6 +105,15 @@ pub struct MatrixAgentApprovalDecisionRequest {
     pub action_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_agent_question_answer`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MatrixAgentQuestionAnswerRequest {
+    pub room_id: String,
+    pub event_id: String,
+    pub answer: crate::app::agent_questions::AgentQuestionAnswer,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_reaction_redact`.
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -869,6 +878,41 @@ pub(super) fn matrix_agent_approval_decide(
         let response = agent_approval_decide(&state, payload).await?;
         serde_json::to_value(response)
             .map_err(|_| core_state_error("agent-approval-serialization-failed"))
+    })
+}
+
+/// Typed `matrix_agent_question_answer`.
+pub(super) async fn agent_question_answer(
+    state: &Arc<CoreState>,
+    payload: MatrixAgentQuestionAnswerRequest,
+) -> Result<NativeAgentQuestionAnswerResult, MatrixIpcError> {
+    let owner = state.timeline_owner()?.ok_or_else(|| {
+        MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+            .with_diagnostic("agent-question-no-session")
+    })?;
+    owner
+        .answer_agent_question(NativeAgentQuestionAnswerRequest {
+            room_id: payload.room_id,
+            event_id: payload.event_id,
+            answer: payload.answer,
+        })
+        .await
+        .map_err(|diagnostic| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden).with_diagnostic(diagnostic)
+        })
+}
+
+#[cfg(test)]
+pub(super) fn matrix_agent_question_answer(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixAgentQuestionAnswerRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("agent-question-invalid-payload"))?;
+        let response = agent_question_answer(&state, payload).await?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("agent-question-serialization-failed"))
     })
 }
 
@@ -1732,6 +1776,9 @@ pub(super) fn register_commands(registry: &mut CommandRegistry) {
     registry
         .register("matrix_agent_approvals_list", matrix_agent_approvals_list)
         .expect("built-in matrix_agent_approvals_list must remain in the command census");
+    registry
+        .register("matrix_agent_question_answer", matrix_agent_question_answer)
+        .expect("built-in matrix_agent_question_answer must remain in the command census");
     registry
         .register("matrix_timeline_close", matrix_timeline_close)
         .expect("built-in matrix_timeline_close must remain in the command census");

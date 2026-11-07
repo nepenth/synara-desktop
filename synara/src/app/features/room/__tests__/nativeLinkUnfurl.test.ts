@@ -194,7 +194,7 @@ test('composer and timeline wire device previews', () => {
   assert.match(presenter, /NativePlainMessageBody/);
   assert.match(
     presenter,
-    /skip=\{Boolean\(approvalPrompt \|\| agentPayload \|\| inlineGif \|\| xPostUrl\)\}/
+    /skip=\{Boolean\(\s*approvalPrompt \|\| agentQuestion \|\| agentPayload \|\| inlineGif \|\| xPostUrl\s*\)\}/
   );
   assert.doesNotMatch(presenter, /mxc:\/\//);
   assert.match(input, /COMPOSER_UNFURL_DEBOUNCE_MS/);

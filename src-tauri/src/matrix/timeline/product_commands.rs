@@ -1,6 +1,8 @@
 use super::*;
+use synara_core::app::agent_questions::AgentQuestionAnswer;
 use synara_core::app::timeline::{
-    NativeAgentApprovalDecisionResult, NativeTimelineTimestampToEventReadback,
+    NativeAgentApprovalDecisionResult, NativeAgentQuestionAnswerResult,
+    NativeTimelineTimestampToEventReadback,
 };
 
 type TimelineViewChannelsState<'a> = State<'a, Arc<crate::matrix::timeline::TimelineViewChannels>>;
@@ -282,6 +284,24 @@ pub async fn matrix_agent_approval_decide(
         room_id,
         event_id,
         action_id,
+    )
+    .await
+}
+
+/// Answer a Hermes clarifying question (question card). Core resolves the
+/// exact card and chooses the keycap/skip reaction or reply message route.
+#[tauri::command]
+pub async fn matrix_agent_question_answer(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    event_id: String,
+    answer: AgentQuestionAnswer,
+) -> Result<NativeAgentQuestionAnswerResult, MatrixAuthCommandError> {
+    crate::bridge::timeline_reactions::agent_question_answer(
+        core.inner().as_ref(),
+        room_id,
+        event_id,
+        answer,
     )
     .await
 }

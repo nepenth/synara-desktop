@@ -1183,6 +1183,10 @@ struct RoomTimelineView: View {
                             )
                             let reactorDirectory = TimelineReactorDirectory(items: items)
                             let threadSummaries = TimelineThreadLocalSummary.summaries(for: items)
+                            let questionReplies = SynaraAgentQuestionPresentation.ownReplies(
+                                in: items,
+                                currentUserID: currentUserID
+                            )
 
                             let dayHeaders = TimelineDayHeaderPolicy.headers(for: items)
                             let userID = currentUserID
@@ -1271,7 +1275,11 @@ struct RoomTimelineView: View {
                                     onShowReactions: { key in showReactions(for: item, key: key) },
                                     onOpenReplyTarget: { eventID in focusMessage(eventID: eventID) },
                                     threadParticipants: threadSummaries[item.eventID]?.participants ?? [],
-                                    lastReplyAt: threadSummaries[item.eventID]?.lastReplyAt
+                                    lastReplyAt: threadSummaries[item.eventID]?.lastReplyAt,
+                                    onAgentQuestionAnswer: { answer in
+                                        await answerAgentQuestion(answer, sourceEventID: item.eventID)
+                                    },
+                                    ownQuestionReply: questionReplies[item.eventID]
                                 )
                                 .id(item.eventID)
                                 .onAppear {
@@ -1625,7 +1633,11 @@ struct RoomTimelineView: View {
                 onShowReactions: { key in showReactions(for: eventRow.item, key: key) },
                 onOpenReplyTarget: { eventID in focusMessage(eventID: eventID) },
                 threadParticipants: eventRow.threadParticipants,
-                lastReplyAt: eventRow.lastReplyAt
+                lastReplyAt: eventRow.lastReplyAt,
+                onAgentQuestionAnswer: { answer in
+                    await answerAgentQuestion(answer, sourceEventID: eventRow.item.eventID)
+                },
+                ownQuestionReply: eventRow.ownQuestionReply
             )
             .padding(.horizontal, timelineHorizontalPadding)
             .padding(.bottom, SynaraSpacing.xSmall)
@@ -1643,6 +1655,7 @@ struct RoomTimelineView: View {
         let previews = TimelineReplyPreview.previewsByEventID(in: items, currentUserID: userID)
         let reactorDirectory = TimelineReactorDirectory(items: items)
         let threadSummaries = TimelineThreadLocalSummary.summaries(for: items)
+        let questionReplies = SynaraAgentQuestionPresentation.ownReplies(in: items, currentUserID: userID)
         var rows: [StableTimelineViewportRow] = []
         rows.reserveCapacity(items.count + 4)
 
@@ -1693,7 +1706,8 @@ struct RoomTimelineView: View {
                             timeText: item.timestamp.timelineTime,
                             reactorNames: reactorDirectory.names(for: item),
                             threadParticipants: threadSummaries[item.eventID]?.participants ?? [],
-                            lastReplyAt: threadSummaries[item.eventID]?.lastReplyAt
+                            lastReplyAt: threadSummaries[item.eventID]?.lastReplyAt,
+                            ownQuestionReply: questionReplies[item.eventID]
                         )
                     )
                 )
@@ -4322,6 +4336,31 @@ struct RoomTimelineView: View {
         }
     }
 
+    /// Answers a question card through Core. No success alert: the card
+    /// settles in place. A failure is reported and the card stays answerable.
+    private func answerAgentQuestion(
+        _ answer: SynaraAgentQuestionAnswer,
+        sourceEventID: String
+    ) async -> Bool {
+        do {
+            _ = try await environment.agentQuestions.answer(
+                answer,
+                roomID: roomID,
+                eventID: sourceEventID
+            )
+            await MainActor.run {
+                SynaraHaptics.trigger(.lightImpact)
+            }
+            return true
+        } catch {
+            await MainActor.run {
+                agentActionMessage = (error as? SynaraAgentQuestionError)?.errorDescription
+                    ?? String(localized: "Your answer could not be sent. Try again.")
+            }
+            return false
+        }
+    }
+
     private var loadedTimelineItems: [TimelineItem] {
         guard case let .loaded(items, _) = state else {
             return []
@@ -5067,6 +5106,10 @@ struct ThreadTimelineView: View {
                             currentUserID: currentUserID
                         )
                         let reactorDirectory = TimelineReactorDirectory(items: visibleItems)
+                        let questionReplies = SynaraAgentQuestionPresentation.ownReplies(
+                            in: visibleItems,
+                            currentUserID: currentUserID
+                        )
                         ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
                             if let day = dayHeaders[item.eventID] {
                                 TimelineDayHeader(day: day)
@@ -5079,7 +5122,8 @@ struct ThreadTimelineView: View {
                                     current: item
                                 ),
                                 replyPreviews: replyPreviews,
-                                reactorNames: reactorDirectory.names(for: item)
+                                reactorNames: reactorDirectory.names(for: item),
+                                ownQuestionReply: questionReplies[item.eventID]
                             )
                             .id(item.id)
                         }
@@ -5124,7 +5168,8 @@ struct ThreadTimelineView: View {
         _ item: TimelineItem,
         isGroupedWithPrevious: Bool,
         replyPreviews: [String: TimelineReplyPreview],
-        reactorNames: [String: String]
+        reactorNames: [String: String],
+        ownQuestionReply: String? = nil
     ) -> some View {
         TimelineRow(
             item: item,
@@ -5177,8 +5222,34 @@ struct ThreadTimelineView: View {
             onRetryFailedSend: { retryFailedReply(item) },
             onDiscardFailedSend: { discardFailedReply(item) },
             reactorNames: reactorNames,
-            onShowReactions: { key in reactionsTarget = TimelineReactionsSheetTarget(item: item, initialKey: key) }
+            onShowReactions: { key in reactionsTarget = TimelineReactionsSheetTarget(item: item, initialKey: key) },
+            onAgentQuestionAnswer: { answer in
+                await answerAgentQuestion(answer, sourceEventID: item.eventID)
+            },
+            ownQuestionReply: ownQuestionReply
         )
+    }
+
+    /// Hermes often asks inside a thread; its cards answer here as in the
+    /// room timeline. No success alert; a failure is reported.
+    private func answerAgentQuestion(
+        _ answer: SynaraAgentQuestionAnswer,
+        sourceEventID: String
+    ) async -> Bool {
+        do {
+            _ = try await environment.agentQuestions.answer(
+                answer,
+                roomID: roomID,
+                eventID: sourceEventID
+            )
+            return true
+        } catch {
+            await MainActor.run {
+                timelineActionMessage = (error as? SynaraAgentQuestionError)?.errorDescription
+                    ?? String(localized: "Your answer could not be sent. Try again.")
+            }
+            return false
+        }
     }
 
     /// A thread opened without a routed reply starts at its newest reply,
@@ -7526,6 +7597,11 @@ private struct TimelineRow: View {
     var threadParticipants: [TimelineThreadParticipant] = []
     /// When the newest loaded thread reply arrived.
     var lastReplyAt: Date? = nil
+    /// Answers this row's question card through Core; true when sent. Nil
+    /// renders the card read-only.
+    var onAgentQuestionAnswer: ((SynaraAgentQuestionAnswer) async -> Bool)? = nil
+    /// This account's latest loaded reply to this row's question card.
+    var ownQuestionReply: String? = nil
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appEnvironment) private var environment
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
@@ -7960,6 +8036,22 @@ private struct TimelineRow: View {
                     onReaction: onAgentApprovalReaction
                 )
             }
+        } else if let question = item.agentQuestion {
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .standard,
+                depth: SynaraSurfaceDepthRole.emphasizedMessage,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: true,
+                deliveryStatus: nil
+            ) {
+                AgentQuestionTimelineCard(
+                    question: question,
+                    eventID: item.eventID,
+                    ownReplyBody: ownQuestionReply,
+                    onAnswer: item.serverEventID == nil ? nil : onAgentQuestionAnswer
+                )
+            }
         } else {
             switch item.kind {
             case let .text(body):
@@ -8210,7 +8302,9 @@ private struct TimelineRow: View {
             deliveryStatus: item.presentedDeliveryStatus,
             kind: item.kind,
             replyCount: replyCount,
-            hasApprovalPrompt: approvalPrompt != nil,
+            // A question card's choices, field and Skip must stay reachable,
+            // as an approval card's reactions do.
+            hasApprovalPrompt: approvalPrompt != nil || item.agentQuestion != nil,
             hasInteractivePoll: item.poll != nil
         )
             // An X card's play and "View on X" buttons must stay reachable.
@@ -8340,6 +8434,9 @@ private struct TimelineRow: View {
             return item.agentApprovalDecision == nil
                 ? String(localized: "Review available approval reactions")
                 : String(localized: "You already decided this approval")
+        }
+        if item.agentQuestion != nil {
+            return String(localized: "Choose an answer to the agent's question")
         }
 
         if item.presentedDeliveryStatus == .failed {
