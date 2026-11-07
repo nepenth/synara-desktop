@@ -114,9 +114,8 @@ struct AgentQuestionTimelineCard: View {
         }
     }
 
-    @ViewBuilder
     private func singleChoiceButton(_ choice: SynaraAgentQuestion.Choice) -> some View {
-        let button = Button {
+        Button {
             submit(.choice(choice.index))
         } label: {
             HStack(spacing: SynaraSpacing.small) {
@@ -127,27 +126,24 @@ struct AgentQuestionTimelineCard: View {
                     .font(.subheadline.weight(.semibold))
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
+                // Marked like the multi-select choices: a filled button read
+                // as an answer already picked.
                 if choice.recommended {
-                    Label(String(localized: "Recommended"), systemImage: "star.fill")
-                        .labelStyle(.iconOnly)
+                    Text(String(localized: "Recommended"))
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
                         .accessibilityHidden(true)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: SynaraHitTarget.minimum)
             .contentShape(Rectangle())
-            .foregroundStyle(choice.recommended ? Color.white : SynaraColor.primaryText)
+            .foregroundStyle(SynaraColor.primaryText)
         }
-        .controlSize(.large)
+        .buttonStyle(.bordered)
+        .tint(SynaraColor.secondaryText)
         .disabled(isBusy)
         .accessibilityLabel(choiceAccessibilityLabel(choice))
         .accessibilityIdentifier("AgentQuestionChoice-\(choice.index)-\(eventID)")
-
-        // The recommended choice is the expected path; the rest stay quieter.
-        if choice.recommended {
-            button.buttonStyle(.borderedProminent).tint(SynaraColor.accentFill)
-        } else {
-            button.buttonStyle(.bordered).tint(SynaraColor.secondaryText)
-        }
     }
 
     private func multiSelectToggle(_ choice: SynaraAgentQuestion.Choice) -> some View {
