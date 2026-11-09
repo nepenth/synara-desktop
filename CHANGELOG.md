@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.9.2] - 2026-11-09
+
 - iOS: tapping a mention opens that person's member sheet in Synara (the one the room's member list shows), or a short note when they are not in the room, instead of opening matrix.to in Safari. Room and thread timelines both handle it.
 - Slash commands (desktop and iOS): Core now parses, checks and runs every slash command, so both apps offer the same ones. New: `/topic`, `/roomname`, `/nick`, `/myavatar`, `/op`, `/deop`, `/msg`, `/query`, `/whois` (opens the profile), `/upgraderoom`, `/jumptodate`, `/spoiler`, `/plain`, `/html`, `/lenny` and `/help`, with `/j` and `/goto` for `/join` and `/part` for `/leave`. The suggestion list shows each command's usage and only the commands your power level allows here (no `/ban` for someone who can't ban; `/converttodm` only outside direct messages). `/ban`, `/delete` and `/upgraderoom` ask before they run. `/acl` on a room without a server ACL starts from "allow every server" instead of an empty allow list that would shut everyone out. iOS gets slash commands for the first time: a suggestion list in the composer, a confirmation alert, and the profile sheet, room jump or help sheet a command asks for.
 - Mentions (desktop and iOS): typing "@Puck" without picking from the list now sends a real mention (pill and `m.mentions`) when exactly one member of the room is called that; a name two members share, or nobody's, stays text. Full Matrix IDs and their localparts (`@puck`) work too.

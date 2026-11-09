@@ -1,0 +1,3 @@
+Synara 2.9.2 adds slash commands on iPhone and iPad: type / to see the commands you can use, with hints, and Synara asks before destructive ones like /ban. A typed @Name now becomes a real mention when it matches one person in the room, and tapping a mention opens their member sheet in Synara instead of Safari.
+
+Please test: /topic, /nick, /msg and /help in a room, a /ban you cancel, and typing @Name without picking from the list.
