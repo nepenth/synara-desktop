@@ -24,6 +24,9 @@ mod macos_modern;
 #[path = "desktop_notification_responses.rs"]
 mod responses;
 
+#[path = "desktop_approval_alerts.rs"]
+mod approval_alerts;
+
 use responses::{
     admit, process_nonce, response_for_action, ActiveSession, Admission, NotificationBinding,
     NotificationResponse, PendingResponses,
@@ -673,6 +676,10 @@ fn show_notification_with_route_click_handler<R: Runtime>(
         .collect::<Vec<_>>();
 
     let waiter_app = app.clone();
+    let tracked_event_id = action_context
+        .as_ref()
+        .filter(|context| is_time_sensitive_agent_approval(Some(context)))
+        .and_then(|context| context.event_id.clone());
     let waiter = tauri::async_runtime::spawn(async move {
         let wait = handle.wait_for_action_async(move |response| match response {
             notify_rust::NotificationResponse::Default => {
@@ -710,6 +717,15 @@ fn show_notification_with_route_click_handler<R: Runtime>(
                 &waiter_app,
                 &format!("notification {id} waiter timed out without a close signal"),
             );
+            // A daemon may keep a critical banner past its timeout. While its
+            // approval is still tracked, keep the handle so it can be closed.
+            if tracked_event_id
+                .as_deref()
+                .is_some_and(approval_alerts::tracks_event)
+            {
+                lock_mutex(linux_notification_waiters()).remove(&id);
+                return;
+            }
         }
         unregister_linux_notification(id);
     });
@@ -1304,13 +1320,20 @@ pub async fn desktop_notify<R: Runtime>(
     tauri::async_runtime::spawn(async move {
         let binding = notification_binding(&app, notification.session_generation).await;
         let keys = notification.dismiss_keys.clone().unwrap_or_default();
-        post_for_generation(
+        let accepted = post_for_generation(
             notification.session_generation,
             || async { active_session(&app).await.map(|active| active.generation) },
             || post_sanitized_notification(&app, &notification, &binding),
             || dismiss_notifications_now(&keys),
         )
-        .await
+        .await;
+        // The banner closes itself once Core reports the approval settled
+        // or expired, even while the window is hidden.
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        if matches!(accepted, Ok(true)) {
+            approval_alerts::track_posted(&app, &notification).await;
+        }
+        accepted
     })
     .await
     .map_err(|_| "Native notification acceptance task failed".to_owned())?
@@ -1435,6 +1458,7 @@ pub async fn desktop_take_notification_responses<R: Runtime>(
 /// clean up has already gone.
 pub(crate) async fn clear_signed_out_surfaces<R: Runtime>(app: &AppHandle<R>) {
     pending_responses().reset();
+    approval_alerts::clear();
     dismiss_all_notifications().await;
     if let Err(error) = crate::desktop_tray::set_badge_count(app, None) {
         log_notification_error(app, &format!("failed to clear the badge: {error}"));

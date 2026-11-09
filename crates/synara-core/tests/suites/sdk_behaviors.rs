@@ -7,6 +7,8 @@
 mod agent_approval_inbox;
 #[path = "../agent_question_cards.rs"]
 mod agent_question_cards;
+#[path = "../composer_commands.rs"]
+mod composer_commands;
 #[path = "../encrypted_state_events.rs"]
 mod encrypted_state_events;
 #[path = "../support/ffi_surface.rs"]

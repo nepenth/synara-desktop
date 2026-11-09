@@ -28,4 +28,13 @@ test('picking a mention from the list keeps the composer working', async ({ page
   await expect(editor).toContainText('hi @Fiona');
   await expect(editor).toContainText('hello');
   expect(errors).toEqual([]);
+  // A real mention (it sends as a matrix.to pill), not the text "@Fiona".
+  const doc = await page.evaluate(() =>
+    JSON.stringify(
+      (window as unknown as { synaraComposerEditor: { children: unknown } }).synaraComposerEditor
+        .children
+    )
+  );
+  expect(doc).toContain('"type":"mention"');
+  expect(doc).toContain('"id":"@fiona:example.org"');
 });

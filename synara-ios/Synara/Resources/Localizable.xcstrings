@@ -778,6 +778,9 @@
     "Agents" : {
 
     },
+    "Alias /%@" : {
+
+    },
     "Aliases And Avatar" : {
 
     },
@@ -1129,6 +1132,9 @@
       }
     },
     "Command not recorded" : {
+
+    },
+    "Commands" : {
 
     },
     "Compare emoji or number codes with another verified session. Synara does not mark this device verified until both sides confirm." : {
@@ -2202,6 +2208,9 @@
     "Not Set Up" : {
 
     },
+    "Not a member of this room." : {
+
+    },
     "Not connected" : {
 
     },
@@ -3091,6 +3100,9 @@
     "Sign in to submit this agent action." : {
 
     },
+    "Sign in to use commands." : {
+
+    },
     "Sign-in failed. Try again." : {
 
     },
@@ -3293,6 +3305,9 @@
     "The codes matched on both devices. This device’s verified status is not confirmed yet. Check Security settings if it does not update." : {
 
     },
+    "The command could not be run. Try again." : {
+
+    },
     "The homeserver is having problems. Try again later." : {
 
     },
@@ -3300,6 +3315,9 @@
 
     },
     "The message could not be pinned." : {
+
+    },
+    "The poll could not be sent. Try again." : {
 
     },
     "The recovery key or passphrase was rejected. Check it and try again." : {

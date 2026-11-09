@@ -192,8 +192,43 @@ test('approval alerts are withdrawn on expiry or a decision made elsewhere', () 
 
   const route = section(features(), 'function AgentApprovalNotifications()');
   assert.match(route, /approvalAlerts\.track\(eventId, agentApproval\.expiresAt\)/);
-  assert.match(route, /if \(item\.status !== 'pending'\) approvalAlerts\.settle\(item\.eventId\)/);
+  assert.match(route, /approvalAlerts\.reconcile\(\s*approvalItems,/);
+  assert.match(route, /!approvalsLoading && !approvalsIncomplete && !approvalsError/);
   assert.match(route, /dismissDesktopNotifications\(\[`event:\$\{eventId\}`\]\)/);
+});
+
+test('an approval alert whose prompt leaves the inbox is withdrawn', () => {
+  const withdrawn: string[] = [];
+  const alerts = createApprovalAlertWithdrawal({
+    withdraw: (eventId) => withdrawn.push(eventId),
+    now: () => 1_000,
+    schedule: () => 0 as unknown as ReturnType<typeof setTimeout>,
+    cancel: () => undefined,
+  });
+  alerts.track('$edited', 301_000);
+  alerts.track('$decided', 301_000);
+  alerts.track('$unobserved', 301_000);
+
+  alerts.reconcile(
+    [
+      { eventId: '$edited', status: 'pending' },
+      { eventId: '$decided', status: 'pending' },
+      { eventId: '$unobserved-other', status: 'pending' },
+    ],
+    true
+  );
+  assert.deepEqual(withdrawn, []);
+
+  // Hermes edited '$edited' to its outcome, so Core no longer lists it; a
+  // partial read proves nothing.
+  alerts.reconcile([{ eventId: '$decided', status: 'decided' }], false);
+  assert.deepEqual(withdrawn, ['$decided']);
+  alerts.reconcile([], true);
+  // Never seen pending: it may not be observed yet, so the expiry decides.
+  assert.deepEqual(withdrawn, ['$decided', '$edited']);
+  assert.equal(alerts.has('$unobserved'), true);
+  alerts.reconcile([], true);
+  assert.deepEqual(withdrawn, ['$decided', '$edited']);
 });
 
 test('notification listeners register once and read handlers from refs', () => {

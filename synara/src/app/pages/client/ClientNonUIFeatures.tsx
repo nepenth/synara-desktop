@@ -854,12 +854,20 @@ function AgentApprovalNotifications() {
     []
   );
   useEffect(() => () => approvalAlerts.clear(), [approvalAlerts]);
-  const { items: approvalItems } = useApprovalInbox();
+  // The native side owns this lifetime too (it runs with the window hidden);
+  // this path only closes the banner sooner while the window is active.
+  const {
+    items: approvalItems,
+    loading: approvalsLoading,
+    incomplete: approvalsIncomplete,
+    error: approvalsError,
+  } = useApprovalInbox();
   useEffect(() => {
-    approvalItems.forEach((item) => {
-      if (item.status !== 'pending') approvalAlerts.settle(item.eventId);
-    });
-  }, [approvalAlerts, approvalItems]);
+    approvalAlerts.reconcile(
+      approvalItems,
+      !approvalsLoading && !approvalsIncomplete && !approvalsError
+    );
+  }, [approvalAlerts, approvalItems, approvalsLoading, approvalsIncomplete, approvalsError]);
 
   const playSound = useCallback(() => {
     void playPlatformNotificationSound('message').then((playedNative) => {

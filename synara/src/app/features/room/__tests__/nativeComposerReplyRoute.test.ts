@@ -197,8 +197,8 @@ test('preview, cancellation, and successful sends consume only the Core reply ow
         /clearReplyDraftAfterSend\((?:sendRelation\.draftRevision|draftRevision),/g
       ) ?? []
     ).length,
-    4,
-    'slash poll, the queued text/attachment send, poll dialog, and GIF routes clear their snapshotted Core revision'
+    5,
+    'slash poll, command messages, the queued text/attachment send, poll dialog, and GIF routes clear their snapshotted Core revision'
   );
   assert.ok(
     (roomInput.match(/clearReplyDraft\(replyDraft\.draftRevision\)/g) ?? []).length >= 2,
@@ -206,7 +206,7 @@ test('preview, cancellation, and successful sends consume only the Core reply ow
   );
   assert.match(roomInput, /nativeComposerSendRelation\(\s*replyDraft,\s*threadRootEventId\s*\)/);
   assert.match(roomInput, /sendPollCommandWithNativeDesktopOwner/);
-  assert.match(roomInput, /useCommands\([\s\S]*sendSlashPoll[\s\S]*\)/);
+  assert.match(roomInput, /case .send_poll.:[\s\S]*sendSlashPoll\(/);
   assert.ok(
     (roomInput.match(/clearReplyDraftAfterSend\(/g) ?? []).length >= 4,
     'text, attachment, poll, and GIF success paths must clear the same Core owner'

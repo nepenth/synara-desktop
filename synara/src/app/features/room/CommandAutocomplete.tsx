@@ -1,8 +1,7 @@
-import React, { KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo } from 'react';
+import React, { KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'react';
 import { Editor } from 'slate';
 import { Box, config, MenuItem, Text } from 'folds';
 import type { RoomReading } from '../../utils/room';
-import { Command, useCommands } from '../../hooks/useCommands';
 import {
   AutocompleteMenu,
   AutocompleteQuery,
@@ -12,11 +11,10 @@ import {
   moveCursor,
   replaceWithElement,
 } from '../../components/editor';
-import { UseAsyncSearchOptions, useAsyncSearch } from '../../hooks/useAsyncSearch';
 import { useKeyDown } from '../../hooks/useKeyDown';
 import { onTabPress } from '../../utils/keyboard';
-
-type CommandAutoCompleteHandler = (commandName: string) => void;
+import type { CommandSuggestion } from '../matrix-dto/generated';
+import { composerCommandSuggestions } from './nativeComposerCommands';
 
 type CommandAutocompleteProps = {
   room: RoomReading;
@@ -26,12 +24,10 @@ type CommandAutocompleteProps = {
   selectFirstRef?: AutocompleteSelectFirstRef;
 };
 
-const SEARCH_OPTIONS: UseAsyncSearchOptions = {
-  matchOptions: {
-    contain: true,
-  },
-};
-
+/**
+ * Commands from Core for what follows "/": only the ones this user may use
+ * in this room (Core filters by power level and by room kind), with usage.
+ */
 export function CommandAutocomplete({
   room,
   editor,
@@ -39,23 +35,23 @@ export function CommandAutocomplete({
   requestClose,
   selectFirstRef,
 }: CommandAutocompleteProps) {
-  const commands = useCommands(room as unknown as Parameters<typeof useCommands>[0]);
-  const commandNames = useMemo(() => Object.keys(commands) as Command[], [commands]);
-
-  const [result, search, resetSearch] = useAsyncSearch(
-    commandNames,
-    useCallback((commandName: string) => commandName, []),
-    SEARCH_OPTIONS
-  );
-
-  const autoCompleteNames = result ? result.items : commandNames;
+  const [suggestions, setSuggestions] = useState<CommandSuggestion[]>([]);
 
   useEffect(() => {
-    if (query.text) search(query.text);
-    else resetSearch();
-  }, [query.text, search, resetSearch]);
+    let current = true;
+    composerCommandSuggestions(room.roomId, query.text)
+      .then((next) => {
+        if (current) setSuggestions(next);
+      })
+      .catch(() => {
+        if (current) setSuggestions([]);
+      });
+    return () => {
+      current = false;
+    };
+  }, [room.roomId, query.text]);
 
-  const handleAutocomplete: CommandAutoCompleteHandler = (commandName) => {
+  const handleAutocomplete = (commandName: string) => {
     const cmdEl = createCommandElement(commandName);
     replaceWithElement(editor, query.range, cmdEl);
     moveCursor(editor, true);
@@ -63,8 +59,8 @@ export function CommandAutocomplete({
   };
 
   const selectFirst = (): boolean => {
-    if (autoCompleteNames.length === 0) return false;
-    handleAutocomplete(autoCompleteNames[0]);
+    if (suggestions.length === 0) return false;
+    handleAutocomplete(suggestions[0].name);
     return true;
   };
   useAutocompleteSelectFirst(selectFirstRef, selectFirst);
@@ -75,7 +71,7 @@ export function CommandAutocomplete({
     });
   });
 
-  return autoCompleteNames.length === 0 ? null : (
+  return suggestions.length === 0 ? null : (
     <AutocompleteMenu
       headerContent={
         <Box grow="Yes" direction="Row" gap="200" justifyContent="SpaceBetween">
@@ -84,16 +80,16 @@ export function CommandAutocomplete({
       }
       requestClose={requestClose}
     >
-      {autoCompleteNames.map((commandName) => (
+      {suggestions.map((suggestion) => (
         <MenuItem
-          key={commandName}
+          key={suggestion.name}
           as="button"
           radii="300"
           style={{ height: 'unset' }}
           onKeyDown={(evt: ReactKeyboardEvent<HTMLButtonElement>) =>
-            onTabPress(evt, () => handleAutocomplete(commandName))
+            onTabPress(evt, () => handleAutocomplete(suggestion.name))
           }
-          onClick={() => handleAutocomplete(commandName)}
+          onClick={() => handleAutocomplete(suggestion.name)}
         >
           <Box
             style={{ padding: `${config.space.S300} 0` }}
@@ -103,10 +99,15 @@ export function CommandAutocomplete({
             justifyContent="SpaceBetween"
           >
             <Text style={{ flexGrow: 1 }} size="B400" truncate>
-              {`/${commandName}`}
+              {suggestion.matchedAlias
+                ? `/${suggestion.name} (/${suggestion.matchedAlias})`
+                : `/${suggestion.name}`}
             </Text>
             <Text truncate priority="300" size="T200">
-              {commands[commandName].description}
+              {suggestion.description}
+            </Text>
+            <Text truncate priority="300" size="T200" style={{ fontFamily: 'monospace' }}>
+              {suggestion.usage}
             </Text>
           </Box>
         </MenuItem>

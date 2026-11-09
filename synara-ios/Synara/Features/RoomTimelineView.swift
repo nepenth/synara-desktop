@@ -616,6 +616,7 @@ struct RoomTimelineView: View {
     @State private var cryptoActionMessage: String?
     @State private var isCryptoBannerDismissed = false
     @State private var isRoomDetailsPresented = false
+    @State private var mentionProfile: MentionProfileTarget?
     @State private var shouldReturnToListAfterDetailsDismiss = false
     @State private var isTimelineSearchPresented = false
     @State private var timelineSearchQuery = ""
@@ -779,7 +780,9 @@ struct RoomTimelineView: View {
                 sentDraft: sentDraft,
                 onSendGif: sendGif,
                 mentions: $composerMentions,
-                currentUserID: currentUserID
+                currentUserID: currentUserID,
+                onSendCommandMessage: sendCommandMessage,
+                onSendCommandPoll: sendCommandPoll
             )
             .padding(.bottom, canvasLayout == .stacked && !isComposerFocused ? SynaraSpacing.large : 0)
         }
@@ -797,6 +800,7 @@ struct RoomTimelineView: View {
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
+        .synaraMentionProfiles($mentionProfile, roomID: roomID, ownUserID: currentUserID)
         .sheet(isPresented: $isRoomDetailsPresented) {
             RoomDetailsView(
                 roomID: roomID,
@@ -2906,17 +2910,22 @@ struct RoomTimelineView: View {
         threadRootEventID: String?,
         editEventID: String?,
         retrying failedItem: TimelineItem? = nil,
-        sentText: String
+        sentText: String,
+        command: SynaraCommandMessage? = nil
     ) async {
         let draftBody = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard draftBody.isEmpty == false else {
+        let outgoing = command.map {
+            ComposerOutgoingText.command($0, mentions: composerMentions, currentUserID: currentUserID)
+        } ?? ComposerOutgoingText.message(draftBody, mentions: composerMentions, currentUserID: currentUserID)
+        guard (command == nil ? draftBody : outgoing.body)
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        else {
             sendError = MessageSendError.emptyMessage.localizedDescription
             return
         }
-        let mentioned = ComposerMentions.resolve(draftBody, mentions: composerMentions, currentUserID: currentUserID)
-        let formattedBody = ComposerMatrixFormatting.formattedBody(for: mentioned.markdown)
-        let body = ComposerMatrixFormatting.plainBody(for: draftBody, formattedBody: formattedBody)
-        let mentionUserIDs = mentioned.userIDs.isEmpty ? nil : mentioned.userIDs
+        let formattedBody = outgoing.formattedBody
+        let body = outgoing.body
+        let mentionUserIDs = outgoing.mentionUserIDs
         composerMentions = []
 
         let request = MessageSendRequest(
@@ -2926,7 +2935,8 @@ struct RoomTimelineView: View {
             replyToEventID: replyToEventID,
             editEventID: editEventID,
             threadRootEventID: threadRootEventID,
-            mentionUserIDs: mentionUserIDs
+            mentionUserIDs: mentionUserIDs,
+            msgType: outgoing.msgType
         )
         let isEditing = request.editEventID != nil
 
@@ -2963,7 +2973,8 @@ struct RoomTimelineView: View {
             senderAvatarURL: ownAvatarURL,
             timestamp: failedItem?.timestamp ?? Date(),
             clearingDraft: true,
-            mentionUserIDs: mentionUserIDs
+            mentionUserIDs: mentionUserIDs,
+            msgType: outgoing.msgType
         )
         registerSendAnimation(for: queued.id, isRetry: failedItem != nil)
         applyOutgoingQueueToTimeline()
@@ -4023,6 +4034,94 @@ struct RoomTimelineView: View {
         sendMessage(body: rawBody)
     }
 
+    /// A command's message (/me, /shrug, /spoiler...) goes through the same
+    /// outbox as typed text, with the composer's reply relation.
+    private func sendCommandMessage(_ message: SynaraCommandMessage, sentText: String) {
+        guard isSendingMessage == false else {
+            return
+        }
+        sendError = nil
+        isSendingMessage = true
+        let replyToEventID = replyTarget?.eventID
+        let threadRootEventID = replyTarget?.threadRootEventID
+        Task {
+            await performCommandSend(
+                message,
+                replyToEventID: replyToEventID,
+                threadRootEventID: threadRootEventID,
+                sentText: sentText
+            )
+            await MainActor.run {
+                isSendingMessage = false
+            }
+        }
+    }
+
+    @MainActor
+    private func performCommandSend(
+        _ message: SynaraCommandMessage,
+        replyToEventID: String?,
+        threadRootEventID: String?,
+        sentText: String
+    ) async {
+        await performSend(
+            body: message.text,
+            replyToEventID: replyToEventID,
+            threadRootEventID: threadRootEventID,
+            editEventID: nil,
+            sentText: sentText,
+            command: message
+        )
+    }
+
+    /// /poll, with the composer's reply relation. The poll shows once the
+    /// timeline brings it.
+    private func sendCommandPoll(_ poll: SynaraCommandPoll, sentText: String) {
+        guard isSendingMessage == false else {
+            return
+        }
+        sendError = nil
+        isSendingMessage = true
+        let replyToEventID = replyTarget?.eventID
+        let threadRootEventID = replyTarget?.threadRootEventID
+        Task {
+            await performCommandPoll(
+                poll,
+                replyToEventID: replyToEventID,
+                threadRootEventID: threadRootEventID,
+                sentText: sentText
+            )
+        }
+    }
+
+    @MainActor
+    private func performCommandPoll(
+        _ poll: SynaraCommandPoll,
+        replyToEventID: String?,
+        threadRootEventID: String?,
+        sentText: String
+    ) async {
+        do {
+            try await environment.composerCommands.sendPoll(
+                poll,
+                roomID: roomID,
+                threadRootEventID: threadRootEventID,
+                replyToEventID: replyToEventID
+            )
+            finishComposerSend(sentText: sentText, persisting: true)
+            completeComposerRelation()
+            if StableScrollAnchoringFeatureFlag.isEnabled {
+                followLatestAfterSend()
+            } else {
+                sendLatestRequest &+= 1
+            }
+        } catch {
+            sendError = error.localizedDescription
+            SynaraHaptics.trigger(.warning)
+        }
+        isSendingMessage = false
+    }
+
     /// A picked GIF goes out as a plain message whose body is the provider's
     /// media URL, as desktop sends it: Klipy and GIPHY forbid re-hosting, so
     /// it is never uploaded. It takes the reply relation and leaves the typed
@@ -4898,6 +4997,7 @@ struct ThreadTimelineView: View {
     @State private var replyTarget: ComposerRelationTarget?
     @State private var editSession: ComposerEditSession?
     @State private var viewerResource: MediaResource?
+    @State private var mentionProfile: MentionProfileTarget?
     /// Bumped to scroll to the newest reply (after a send).
     @State private var scrollToNewestRequest: UInt64 = 0
     @State private var hasPlacedInitialThread = false
@@ -4942,7 +5042,9 @@ struct ThreadTimelineView: View {
                 sentDraft: sentDraft,
                 onSendGif: sendThreadGif,
                 mentions: $composerMentions,
-                currentUserID: currentUserID
+                currentUserID: currentUserID,
+                onSendCommandMessage: sendThreadCommandMessage,
+                onSendCommandPoll: sendThreadCommandPoll
             )
             .padding(.bottom, canvasLayout == .stacked ? SynaraSpacing.large : 0)
         }
@@ -4975,6 +5077,7 @@ struct ThreadTimelineView: View {
         .onReceive(environment.outgoingSends.queue.$items) { _ in
             refreshPendingReplies()
         }
+        .synaraMentionProfiles($mentionProfile, roomID: roomID, ownUserID: currentUserID)
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
@@ -5637,16 +5740,24 @@ struct ThreadTimelineView: View {
     /// and shows once: the queued row gives way to the SDK echo with the
     /// same transaction id.
     @MainActor
-    private func sendThreadText(_ intent: ComposerSendIntent, sentText: String) async {
+    private func sendThreadText(
+        _ intent: ComposerSendIntent,
+        sentText: String,
+        command: SynaraCommandMessage? = nil
+    ) async {
         let draftBody = intent.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard draftBody.isEmpty == false else {
+        let outgoing = command.map {
+            ComposerOutgoingText.command($0, mentions: composerMentions, currentUserID: currentUserID)
+        } ?? ComposerOutgoingText.message(draftBody, mentions: composerMentions, currentUserID: currentUserID)
+        guard (command == nil ? draftBody : outgoing.body)
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        else {
             sendError = MessageSendError.emptyMessage.localizedDescription
             return
         }
-        let mentioned = ComposerMentions.resolve(draftBody, mentions: composerMentions, currentUserID: currentUserID)
-        let formattedBody = ComposerMatrixFormatting.formattedBody(for: mentioned.markdown)
-        let body = ComposerMatrixFormatting.plainBody(for: draftBody, formattedBody: formattedBody)
-        let mentionUserIDs = mentioned.userIDs.isEmpty ? nil : mentioned.userIDs
+        let formattedBody = outgoing.formattedBody
+        let body = outgoing.body
+        let mentionUserIDs = outgoing.mentionUserIDs
         composerMentions = []
 
         if let editEventID = intent.editEventID {
@@ -5663,7 +5774,8 @@ struct ThreadTimelineView: View {
                         replyToEventID: nil,
                         editEventID: editEventID,
                         threadRootEventID: rootEventID,
-                        mentionUserIDs: mentionUserIDs
+                        mentionUserIDs: mentionUserIDs,
+                        msgType: outgoing.msgType
                     )
                 )
                 finishComposerSend(sentText: sentText)
@@ -5687,7 +5799,8 @@ struct ThreadTimelineView: View {
             threadRootEventID: rootEventID,
             senderID: currentUserID,
             timestamp: intent.retrying?.timestamp ?? Date(),
-            mentionUserIDs: mentionUserIDs
+            mentionUserIDs: mentionUserIDs,
+            msgType: outgoing.msgType
         )
         finishComposerSend(sentText: sentText)
         completeComposerRelation()
@@ -5695,6 +5808,61 @@ struct ThreadTimelineView: View {
         refreshPendingReplies()
         scrollToNewestRequest &+= 1
         await transmitThreadReply(id: queued.id)
+    }
+
+    /// As in the room composer: a command's message is a thread reply
+    /// through the same outbox, with the composer's reply relation.
+    private func sendThreadCommandMessage(_ message: SynaraCommandMessage, sentText: String) {
+        guard isSendingMessage == false else {
+            return
+        }
+        sendError = nil
+        let intent = ComposerSendIntent(
+            body: message.text,
+            replyToEventID: replyTarget?.eventID,
+            threadRootEventID: rootEventID,
+            editEventID: nil,
+            retrying: nil
+        )
+        Task {
+            await sendThreadText(intent, sentText: sentText, command: message)
+        }
+    }
+
+    /// /poll as a thread reply.
+    private func sendThreadCommandPoll(_ poll: SynaraCommandPoll, sentText: String) {
+        guard isSendingMessage == false else {
+            return
+        }
+        sendError = nil
+        isSendingMessage = true
+        let replyToEventID = replyTarget?.eventID
+        Task {
+            await performThreadCommandPoll(poll, replyToEventID: replyToEventID, sentText: sentText)
+        }
+    }
+
+    @MainActor
+    private func performThreadCommandPoll(
+        _ poll: SynaraCommandPoll,
+        replyToEventID: String?,
+        sentText: String
+    ) async {
+        do {
+            try await environment.composerCommands.sendPoll(
+                poll,
+                roomID: roomID,
+                threadRootEventID: rootEventID,
+                replyToEventID: replyToEventID
+            )
+            finishComposerSend(sentText: sentText)
+            completeComposerRelation()
+            scrollToNewestRequest &+= 1
+        } catch {
+            sendError = error.localizedDescription
+            SynaraHaptics.trigger(.warning)
+        }
+        isSendingMessage = false
     }
 
     /// As in the room composer: the GIF's provider URL as a plain thread
@@ -6388,6 +6556,7 @@ private struct MatrixInlineGroupView: View {
     let font: Font
     let presentationContext: MatrixRichTextPresentationContext
     @State private var revealedSpoilers: Set<Int> = []
+    @Environment(\.synaraOpenUserProfile) private var openUserProfile
 
     var body: some View {
         Text(
@@ -6405,9 +6574,16 @@ private struct MatrixInlineGroupView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .environment(\.openURL, OpenURLAction { url in
-                guard let index = matrixInlineSpoilerIndex(url) else { return .systemAction }
-                revealedSpoilers.insert(index)
-                return .handled
+                if let index = matrixInlineSpoilerIndex(url) {
+                    revealedSpoilers.insert(index)
+                    return .handled
+                }
+                // A mention opens the member's profile here, not matrix.to.
+                if let userID = TimelineMentionPolicy.userID(inPermalink: url), let openUserProfile {
+                    openUserProfile(userID)
+                    return .handled
+                }
+                return .systemAction
             })
     }
 }
@@ -10060,11 +10236,28 @@ private struct ComposerView: View {
     /// People picked from the @ suggestions; the send turns them into pills.
     @Binding var mentions: [ComposerMention]
     var currentUserID = ""
+    /// Sends a command's message (/me, /shrug, /spoiler...) with the
+    /// composer's relation; the second value is the command as typed, which
+    /// leaves the composer once the send is accepted. Without it, text
+    /// starting with "/" is sent as typed.
+    var onSendCommandMessage: ((SynaraCommandMessage, String) -> Void)?
+    /// Sends a /poll with the composer's relation, as above.
+    var onSendCommandPoll: ((SynaraCommandPoll, String) -> Void)?
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.synaraOpenUserProfile) private var openUserProfile
     /// The room's members, loaded the first time "@" is typed.
     @State private var mentionMembers: [RoomMemberSummary]?
+    /// Core's commands for the "/prefix" being typed.
+    @State private var commandSuggestions: [SynaraCommandSuggestion] = []
+    @State private var isRunningCommand = false
+    /// Core's copy for a command it refused or could not finish.
+    @State private var commandError: String?
+    /// Core's short confirmation of a command that ran (/topic, /invite...).
+    @State private var commandNotice: String?
+    @State private var commandConfirmation: ComposerCommandConfirmation?
+    @State private var commandHelp: ComposerCommandHelp?
     @State private var typingNotifier: ComposerTypingNotifier?
     @State private var isAttachmentSheetPresented = false
     @State private var gifPickerRequest: GifPickerRequest?
@@ -10128,12 +10321,44 @@ private struct ComposerView: View {
                     .accessibilityIdentifier("ComposerGifCommandError")
             }
 
+            if let commandError {
+                Text(verbatim: commandError)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.criticalText)
+                    .accessibilityIdentifier("ComposerCommandError")
+            }
+
+            if let commandNotice {
+                Label {
+                    Text(verbatim: commandNotice)
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(SynaraColor.accent)
+                }
+                .labelStyle(.titleAndIcon)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .transition(.opacity)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("ComposerCommandNotice")
+                .task(id: commandNotice) {
+                    try? await Task.sleep(nanoseconds: 4_000_000_000)
+                    guard Task.isCancelled == false else { return }
+                    self.commandNotice = nil
+                }
+            }
+
             if attachmentDrafts.isEmpty == false {
                 composerAttachmentDrafts
             }
 
             if mentionSuggestions.isEmpty == false {
                 ComposerMentionSuggestions(members: mentionSuggestions, onPick: pickMention)
+                    .transition(.opacity)
+            }
+
+            if visibleCommandSuggestions.isEmpty == false {
+                ComposerCommandSuggestions(suggestions: visibleCommandSuggestions, onPick: pickCommand)
                     .transition(.opacity)
             }
 
@@ -10170,9 +10395,24 @@ private struct ComposerView: View {
         .animation(.easeInOut(duration: 0.18), value: isFormattingBarVisible)
         .animation(.easeInOut(duration: 0.18), value: shouldShowPromptMetrics)
         .animation(.easeOut(duration: 0.12), value: mentionSuggestions.map(\.userID))
-        .task(id: mentionQuery == nil ? "" : roomID) {
-            guard mentionQuery != nil, mentionMembers == nil else { return }
+        .animation(.easeOut(duration: 0.12), value: visibleCommandSuggestions.map(\.name))
+        // Members load for the @ suggestions, and whenever the text holds an
+        // "@" (pasted, or typed without a pick) so the send can resolve it.
+        .task(id: needsMentionMembers ? roomID : "") {
+            guard needsMentionMembers, mentionMembers == nil else { return }
             mentionMembers = await environment.roomManagement.roomDetails(roomID: roomID)?.members ?? []
+        }
+        .task(id: commandSuggestionTaskID) {
+            guard let query = commandQuery else {
+                commandSuggestions = []
+                return
+            }
+            // Coalesce fast typing; a newer prefix cancels this request.
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard Task.isCancelled == false else { return }
+            let suggestions = await environment.composerCommands.suggestions(roomID: roomID, prefix: query)
+            guard Task.isCancelled == false, commandQuery == query else { return }
+            commandSuggestions = suggestions
         }
         .onChange(of: isComposerFocused) { focused in
             isFocusedExternally = focused
@@ -10181,6 +10421,7 @@ private struct ComposerView: View {
         .onChange(of: currentText) { _ in
             updateOutgoingTyping()
             gifCommandError = nil
+            commandError = nil
         }
         .onChange(of: text) { value in
             reconcileExternalText(value)
@@ -10261,6 +10502,35 @@ private struct ComposerView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+        .sheet(item: $commandHelp) { help in
+            ComposerCommandHelpSheet(commands: help.commands)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .alert(
+            commandConfirmation?.title ?? "",
+            isPresented: Binding(
+                get: { commandConfirmation != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        commandConfirmation = nil
+                    }
+                }
+            ),
+            presenting: commandConfirmation
+        ) { confirmation in
+            Button(role: .destructive) {
+                runCommand(confirmation.text, confirmed: true)
+            } label: {
+                Text(verbatim: confirmation.confirmLabel)
+            }
+            // No accessibility identifier: on an alert button it nests a
+            // second copy of the button in the accessibility tree.
+            // Cancel leaves the command in the composer, as typed.
+            Button("Cancel", role: .cancel) {}
+        } message: { confirmation in
+            Text(verbatim: confirmation.message)
+        }
         .onChange(of: selectedPhotos) { items in
             if items.isEmpty == false {
                 isAttachmentSheetPresented = false
@@ -10298,7 +10568,12 @@ private struct ComposerView: View {
     }
 
     private var sendButtonTint: Color {
-        canSubmit && isSending == false ? SynaraColor.accent : SynaraColor.secondarySurface
+        canSubmit && isBusy == false ? SynaraColor.accent : SynaraColor.secondarySurface
+    }
+
+    /// A send or a command in flight.
+    private var isBusy: Bool {
+        isSending || isRunningCommand
     }
 
     @ViewBuilder
@@ -10373,7 +10648,7 @@ private struct ComposerView: View {
                         Circle()
                             .fill(sendButtonTint)
                             .frame(width: 34, height: 34)
-                        if isSending {
+                        if isBusy {
                             ProgressView()
                                 .controlSize(.small)
                                 .tint(Color.white)
@@ -10387,7 +10662,7 @@ private struct ComposerView: View {
                 }
                 .buttonStyle(SynaraTactileButtonStyle())
                 .contentShape(Rectangle())
-                .disabled(isSending)
+                .disabled(isBusy)
                 .accessibilityLabel(editTarget == nil ? "Send" : "Save edit")
                 .accessibilityHint(composerSendAccessibilityHint)
                 .accessibilityIdentifier("ComposerSendButton")
@@ -10623,6 +10898,120 @@ private struct ComposerView: View {
         )
     }
 
+    /// Commands are offered for new messages only, not while editing.
+    private var commandsAreAvailable: Bool {
+        editTarget == nil && onSendCommandMessage != nil
+    }
+
+    private var commandQuery: String? {
+        guard commandsAreAvailable else { return nil }
+        return ComposerCommandInput.suggestionQuery(
+            in: currentText,
+            cursor: composerSelection.location,
+            selectionLength: composerSelection.length
+        )
+    }
+
+    /// Changes with the typed prefix, so a newer one cancels the request.
+    private var commandSuggestionTaskID: String {
+        commandQuery.map { "/" + $0 } ?? ""
+    }
+
+    private var visibleCommandSuggestions: [SynaraCommandSuggestion] {
+        commandQuery == nil ? [] : commandSuggestions
+    }
+
+    private var needsMentionMembers: Bool {
+        mentionQuery != nil || currentText.contains("@")
+    }
+
+    private func pickCommand(_ suggestion: SynaraCommandSuggestion) {
+        let result = ComposerCommandInput.insert(suggestion, in: currentText)
+        setLiveText(result.text)
+        composerSelection = ComposerTextSelection(location: result.cursor, length: 0)
+        formattingRevision += 1
+        isComposerFocused = true
+        commandSuggestions = []
+    }
+
+    /// "@Name" typed without picking a suggestion joins the picked mentions
+    /// when Core finds exactly one member by that name, so the send links it.
+    private func mergeTypedMentions(in body: String) {
+        guard body.contains("@"), let members = mentionMembers, members.isEmpty == false else {
+            return
+        }
+        let typed = environment.composerCommands.resolveMentions(
+            text: body,
+            members: members,
+            ownUserID: currentUserID
+        )
+        guard typed.isEmpty == false else { return }
+        let merged = ComposerTypedMentions.merge(typed, into: mentions)
+        if merged != mentions {
+            mentions = merged
+        }
+    }
+
+    /// Asks Core to run the composer text as a command. The text stays in
+    /// the composer until Core has answered, and stays on an error.
+    private func runCommand(_ messageBody: String, confirmed: Bool) {
+        guard isRunningCommand == false else { return }
+        let commandText = messageBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        let commands = environment.composerCommands
+        let roomID = roomID
+        let gifUnavailableMessage = canOfferGifPicker ? nil : gifSearch.commandUnavailableMessage
+        commandError = nil
+        commandNotice = nil
+        isRunningCommand = true
+        Task { @MainActor in
+            let action: ComposerCommandAction
+            do {
+                let outcome = try await commands.run(roomID: roomID, text: commandText, confirmed: confirmed)
+                action = ComposerCommandFlow.action(
+                    for: outcome,
+                    text: messageBody,
+                    gifUnavailableMessage: gifUnavailableMessage
+                )
+            } catch {
+                let message = error.localizedDescription
+                action = .error(message.isEmpty ? SynaraCommandError.failed.message : message)
+            }
+            isRunningCommand = false
+            applyCommandAction(action, sentText: messageBody)
+        }
+    }
+
+    private func applyCommandAction(_ action: ComposerCommandAction, sentText: String) {
+        if action.clearsComposerNow {
+            finishSentDraft(ComposerSentDraft(id: 0, sentText: sentText))
+        }
+        switch action {
+        case let .notice(message):
+            commandNotice = message
+        case let .confirm(confirmation):
+            commandConfirmation = confirmation
+        case let .sendMessage(message):
+            onSendCommandMessage?(message, sentText)
+        case let .sendPoll(poll):
+            if let onSendCommandPoll {
+                onSendCommandPoll(poll, sentText)
+            } else {
+                commandError = SynaraCommandError.pollFailed.message
+            }
+        case let .openGifPicker(query):
+            gifPickerRequest = GifPickerRequest(initialQuery: query)
+        case let .error(message):
+            commandError = message
+            SynaraHaptics.trigger(.warning)
+        case let .navigate(roomID, eventID):
+            environment.router.route(to: .room(id: roomID, eventID: eventID))
+        case let .openProfile(userID):
+            openUserProfile?(userID)
+        case let .help(commands):
+            commandHelp = ComposerCommandHelp(commands: commands)
+        }
+    }
+
     private func pickMention(_ member: RoomMemberSummary) {
         guard let mentionQuery else { return }
         let mention = ComposerMention(userID: member.userID, displayName: member.title)
@@ -10655,7 +11044,19 @@ private struct ComposerView: View {
         if handleGifCommand(messageBody) {
             return
         }
+        guard isRunningCommand == false else { return }
         text = messageBody
+        mergeTypedMentions(in: messageBody)
+        commandSuggestions = []
+        // Slash commands go to Core first; with attachments the text stays
+        // their caption on the plain send.
+        if commandsAreAvailable,
+           attachmentDrafts.isEmpty,
+           ComposerCommandInput.isCommand(messageBody)
+        {
+            runCommand(messageBody, confirmed: false)
+            return
+        }
         onSend(messageBody)
     }
 

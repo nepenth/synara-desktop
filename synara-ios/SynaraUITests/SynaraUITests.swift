@@ -1506,6 +1506,84 @@ final class SynaraUITests: XCTestCase {
         XCTAssertLessThanOrEqual(fieldFrame.maxY, surfaceFrame.maxY + 0.5)
     }
 
+    func testTappingAMentionOpensTheProfileInTheApp() {
+        let app = launchAgentQuestionRoomApp()
+
+        let timeline = app.descendants(matching: .any)["TimelineList"]
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        let message = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", "the cover is ready")).firstMatch
+        for _ in 0 ..< 4 where message.exists == false {
+            timeline.swipeDown()
+        }
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        let mention = app.links["https://matrix.to/#/@ada:matrix.example.com"]
+        XCTAssertTrue(mention.waitForExistence(timeout: 5))
+        mention.tap()
+
+        // Ada is not in the fixture room: Synara shows its profile note
+        // instead of handing matrix.to to Safari.
+        XCTAssertTrue(app.staticTexts["Not a member of this room."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["@ada:matrix.example.com"].exists)
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    func testSlashCommandSuggestionRunsThroughCore() {
+        let app = launchRoomApp(environment: ["SYNARA_UI_TEST_COMPOSER_COMMANDS": "1"])
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("/to")
+
+        let suggestion = app.buttons["CommandSuggestion-topic"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["CommandSuggestion-ban"].exists, "only commands matching the prefix")
+        tap(suggestion)
+
+        // The pick leaves "/topic " (a space ends the suggestions).
+        composer.typeText("Launch day")
+        XCTAssertFalse(suggestion.exists)
+        tap(app.buttons["ComposerSendButton"])
+
+        // Core's confirmation shows above the composer; nothing is sent as text.
+        let notice = identifiedElement(in: app, "ComposerCommandNotice")
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertTrue(notice.label.contains("Topic changed."), notice.label)
+        XCTAssertFalse(app.staticTexts["/topic Launch day"].exists)
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    func testDestructiveSlashCommandAsksBeforeItRuns() {
+        let app = launchRoomApp(environment: ["SYNARA_UI_TEST_COMPOSER_COMMANDS": "1"])
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("/ban spammer")
+        tap(app.buttons["ComposerSendButton"])
+
+        let alert = app.alerts["Ban spammer?"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.buttons["Ban"].tap()
+
+        let notice = identifiedElement(in: app, "ComposerCommandNotice")
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertTrue(notice.label.contains("Banned spammer."), notice.label)
+    }
+
+    func testUnknownSlashCommandShowsCoresErrorAndKeepsTheText() {
+        let app = launchRoomApp(environment: ["SYNARA_UI_TEST_COMPOSER_COMMANDS": "1"])
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("/nope")
+        tap(app.buttons["ComposerSendButton"])
+
+        let error = identifiedElement(in: app, "ComposerCommandError")
+        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        XCTAssertTrue(error.label.contains("Synara does not know the command /nope."), error.label)
+        XCTAssertTrue(app.buttons["ComposerSendButton"].exists, "the command stays in the composer")
+    }
+
     func testAgentQuestionChoiceAnswersWithoutAnAlert() {
         let app = launchAgentQuestionRoomApp()
 

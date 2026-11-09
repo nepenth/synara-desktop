@@ -15,6 +15,8 @@ pub mod auth;
 pub mod backup;
 pub mod client_builder;
 #[cfg(feature = "full-app")]
+pub mod composer;
+#[cfg(feature = "full-app")]
 pub mod cross_signing;
 #[cfg(feature = "full-app")]
 pub mod crypto_store;

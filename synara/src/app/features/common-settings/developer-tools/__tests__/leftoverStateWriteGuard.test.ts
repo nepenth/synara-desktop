@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -10,23 +10,23 @@ test('leftover encryptable state writes fail-closed to the native owner', () => 
   const aliases = read('hooks/useRoomAliases.ts');
   const editor = read('features/common-settings/developer-tools/StateEventEditor.tsx');
   const send = read('features/common-settings/developer-tools/SendRoomEvent.tsx');
-  const commands = read('hooks/useCommands.ts');
 
   for (const [label, source] of [
     ['useRoomAliases', aliases],
     ['StateEventEditor', editor],
     ['SendRoomEvent', send],
-    ['useCommands', commands],
   ] as const) {
     assert.match(source, /sendLeftoverStateEvent/, `${label} must native-or-block leftover writes`);
   }
 
   assert.match(aliases, /StateEvent\.RoomCanonicalAlias/);
-  assert.match(commands, /StateEvent\.RoomServerAcl/);
-  assert.match(commands, /sendLeftoverStateEvent\(/);
-  assert.match(commands, /StateEvent\.RoomMember/);
-  const memberNick = commands.split('[Command.MyRoomNick]')[1]?.split('[Command.MyRoomAvatar]')[0];
-  assert.ok(memberNick);
-  assert.match(memberNick, /sendNativeStateEvent\(/);
-  assert.doesNotMatch(memberNick, /sendLeftoverStateEvent/);
+});
+
+test('slash commands write room state through Core, not the renderer', () => {
+  // /acl, /myroomnick and /myroomavatar run in Core's composer core
+  // (crates/synara-core/src/app/composer), which writes through its room owner.
+  assert.equal(existsSync(join(process.cwd(), 'src/app/hooks/useCommands.ts')), false);
+  const roomInput = read('features/room/RoomInput.tsx');
+  assert.match(roomInput, /runComposerCommand\(/);
+  assert.doesNotMatch(roomInput, /StateEvent\.RoomServerAcl|StateEvent\.RoomMember/);
 });

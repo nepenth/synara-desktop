@@ -5,8 +5,17 @@
 # zstd 0.13.3 and zstd-safe 7.3.0 reach the desktop only through Matrix SDK
 # search 0.19.1 -> Tantivy 0.26.2, which requires zstd ^0.13. Tantivy calls
 # only zstd::bulk and compress_bound, never the affected functions.
+#
+# Second exception, for the 2.9.2 release (2026-11-09): RUSTSEC-2026-0459,
+# bundled SQLite before 3.54.0 can return stale page-cache memory when it
+# opens a database with a crafted sibling -wal file. Matrix SDK 0.19.1's
+# matrix-sdk-sqlite requires rusqlite ^0.40.2 (libsqlite3-sys 0.38.2); the
+# fix needs rusqlite 0.41. Upstream bumped it on main on 2026-11-06
+# (18757f7e0) but has not released it. Remove this ignore with the Matrix
+# SDK update that ships it; see docs/rust-dependency-security.md.
 [advisories]
 ignore = [
+    "RUSTSEC-2026-0459", # libsqlite3-sys 0.38.2 bundled SQLite 3.53.2 (-wal page size)
     "RUSTSEC-2026-0391", # zstd stream::raw::{Encoder,Decoder}::with_context
     "RUSTSEC-2026-0398", # zstd-safe Seekable::decompress (seekable feature is off)
     "RUSTSEC-2026-0403", # zstd-safe DCtx::decompress_stream

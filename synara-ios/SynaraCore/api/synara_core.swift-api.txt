@@ -25,8 +25,20 @@ extension BackupRecoveryStateDto: Sendable
 extension BackupStatusDto: Sendable
 extension BadgeSummary: Sendable
 extension BadgeSummaryInput: Sendable
+extension CommandArgKind: Sendable
+extension CommandCategory: Sendable
 extension CommandGateDto: Sendable
+extension CommandOutcome: Sendable
+extension CommandPermission: Sendable
+extension CommandRoomScope: Sendable
+extension CommandSuggestion: Sendable
+extension ComposerCommand: Sendable
+extension ComposerCommandRunError: Sendable
 extension ComposerDraftStatusDto: Sendable
+extension ComposerErrorKind: Sendable
+extension ComposerMessage: Sendable
+extension ComposerMsgType: Sendable
+extension ComposerPoll: Sendable
 extension ComposerReplyDraftDto: Sendable
 extension ComposerReplyDraftError: Sendable
 extension ComposerReplyDraftPreviewDto: Sendable
@@ -97,6 +109,7 @@ extension MediaUploadDto: Sendable
 extension MediaUploadError: Sendable
 extension MemberActionContext: Sendable
 extension MemberActionPlan: Sendable
+extension MentionCandidate: Sendable
 extension MessageSearchDto: Sendable
 extension MessageSearchError: Sendable
 extension MessageSearchGroupDto: Sendable
@@ -281,6 +294,7 @@ extension TimelineViewUpdateDto: Sendable
 extension TimelineViewUpdateError: Sendable
 extension TimelineVoteDeclineDto: Sendable
 extension TimelineVoteDeclineError: Sendable
+extension TypedMention: Sendable
 extension TypingCommandError: Sendable
 extension TypingRoomDto: Sendable
 extension TypingSnapshotDto: Sendable
@@ -326,7 +340,10 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func backupStatus() async throws -> BackupStatusDto
   open func bindHttpPusherOwner(userId: String, deviceId: String, homeserverUrl: String) throws -> HttpPusherOwner
   open func composerClearReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
+  open func composerCommandSuggestions(roomId: String, prefix: String) async throws -> [CommandSuggestion]
+  open func composerExecute(roomId: String, text: String, confirmed: Bool) async throws -> CommandOutcome
   open func composerGetReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
+  open func composerResolveMentions(text: String, members: [MentionCandidate], ownUserId: String) -> [TypedMention]
   open func composerSetReplyDraft(roomId: String, eventId: String, startThread: Bool) async throws -> ComposerReplyDraftDto
   open func crossSigningSetup() async throws -> CrossSigningSetupDto
   open func crossSigningSetupPassword(password: String) async throws -> CrossSigningSetupDto
@@ -589,13 +606,116 @@ public enum BackupRecoveryStateDto: Equatable, Hashable
   case notSetUp
   case incomplete
   case ready
+public enum CommandArgKind: Equatable, Hashable
+  case text
+  case user
+  case users
+  case servers
+  case rooms
+  case reason
+  case powerLevel
+  case date
+  case mxcUri
+  case roomVersion
+  case since
+  case aclFlags
+  case poll
+  case command
+public enum CommandCategory: Equatable, Hashable
+  case messages
+  case navigation
+  case people
+  case moderation
+  case roomSettings
+  case profile
+  case other
 public enum CommandGateDto: Equatable, Hashable
   case `open`
   case closed
+public enum CommandOutcome: Equatable, Hashable
+  case done(message: String)
+  case needsConfirmation(title: String, message: String, confirmLabel: String)
+  case sendMessage(message: ComposerMessage)
+  case sendPoll(poll: ComposerPoll)
+  case openGifPicker(query: String)
+  case navigate(roomId: String, eventId: String?)
+  case openProfile(userId: String)
+  case help(commands: [CommandSuggestion])
+public enum CommandPermission: Equatable, Hashable
+  case none
+  case sendMessage
+  case invite
+  case kick
+  case ban
+  case redactOthers
+  case changePowerLevels
+  case changeName
+  case changeTopic
+  case serverAcl
+  case upgradeRoom
+public enum CommandRoomScope: Equatable, Hashable
+  case any
+  case rooms
+  case directMessages
+public enum ComposerCommand: Equatable, Hashable
+  case me
+  case notice
+  case shrug
+  case tableFlip
+  case unflip
+  case lenny
+  case spoiler
+  case plain
+  case html
+  case poll
+  case gif
+  case startDm
+  case msg
+  case query
+  case join
+  case leave
+  case jumpToDate
+  case whois
+  case invite
+  case disinvite
+  case kick
+  case ban
+  case unban
+  case delete
+  case op
+  case deop
+  case ignore
+  case unignore
+  case topic
+  case roomName
+  case acl
+  case upgradeRoom
+  case convertToDm
+  case convertToRoom
+  case nick
+  case myRoomNick
+  case myAvatar
+  case myRoomAvatar
+  case help
+public enum ComposerCommandRunError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
+  case Failed(kind: CoreErrorKind, reason: ComposerErrorKind, code: String, description: String)
+  public var errorDescription: String?
 public enum ComposerDraftStatusDto: Equatable, Hashable
   case set
   case cleared
   case empty
+public enum ComposerErrorKind: Equatable, Hashable
+  case usage
+  case unknownCommand
+  case permission
+  case notFound
+  case partial
+  case failed
+  case notSignedIn
+public enum ComposerMsgType: Equatable, Hashable
+  case text
+  case emote
+  case notice
 public enum ComposerReplyDraftError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -1061,7 +1181,10 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func backupStatus() async throws -> BackupStatusDto
   func bindHttpPusherOwner(userId: String, deviceId: String, homeserverUrl: String) throws -> HttpPusherOwner
   func composerClearReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
+  func composerCommandSuggestions(roomId: String, prefix: String) async throws -> [CommandSuggestion]
+  func composerExecute(roomId: String, text: String, confirmed: Bool) async throws -> CommandOutcome
   func composerGetReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
+  func composerResolveMentions(text: String, members: [MentionCandidate], ownUserId: String) -> [TypedMention]
   func composerSetReplyDraft(roomId: String, eventId: String, startThread: Bool) async throws -> ComposerReplyDraftDto
   func crossSigningSetup() async throws -> CrossSigningSetupDto
   func crossSigningSetupPassword(password: String) async throws -> CrossSigningSetupDto
@@ -1336,6 +1459,30 @@ public struct BadgeSummaryInput: Equatable, Hashable
   public var inviteCount: UInt64
   public var agentApprovalCount: UInt64
   public init(unread: [RoomBadgeSource], laterActiveCount: UInt64, inviteCount: UInt64, agentApprovalCount: UInt64)
+public struct CommandSuggestion: Equatable, Hashable
+  public var command: ComposerCommand
+  public var name: String
+  public var aliases: [String]
+  public var matchedAlias: String?
+  public var usage: String
+  public var description: String
+  public var category: CommandCategory
+  public var args: [CommandArgKind]
+  public var destructive: Bool
+  public init(command: ComposerCommand, name: String, aliases: [String], matchedAlias: String?, usage: String, description: String, category: CommandCategory, args: [CommandArgKind], destructive: Bool)
+public struct ComposerMessage: Equatable, Hashable
+  public var msgtype: ComposerMsgType
+  public var text: String
+  public var prefix: String?
+  public var body: String
+  public var formattedBody: String?
+  public var allowFormatting: Bool
+  public init(msgtype: ComposerMsgType, text: String, prefix: String?, body: String, formattedBody: String?, allowFormatting: Bool)
+public struct ComposerPoll: Equatable, Hashable
+  public var question: String
+  public var answers: [String]
+  public var maxSelections: UInt32
+  public init(question: String, answers: [String], maxSelections: UInt32)
 public struct ComposerReplyDraftDto: Equatable, Hashable
   public var schemaVersion: UInt32
   public var roomId: String
@@ -1548,6 +1695,10 @@ public struct MemberActionPlan: Equatable, Hashable
   public var canEditPowerLevel: Bool
   public var assignablePowerLevels: [Int64]
   public init(canMessage: Bool, canIgnore: Bool, canInvite: Bool, canCancelInvite: Bool, canAcceptKnock: Bool, canDenyKnock: Bool, canRemove: Bool, canBan: Bool, canUnban: Bool, canEditPowerLevel: Bool, assignablePowerLevels: [Int64])
+public struct MentionCandidate: Equatable, Hashable
+  public var userId: String
+  public var displayName: String?
+  public init(userId: String, displayName: String?)
 public struct MessageSearchDto: Equatable, Hashable
   public var nextToken: String?
   public var highlights: [String]
@@ -2280,6 +2431,12 @@ public struct TimelineVoteDeclineDto: Equatable, Hashable
   public var eventId: String
   public var status: TimelineActionStatusDto
   public init(schemaVersion: UInt32, action: TimelineActionKindDto, roomId: String, eventId: String, status: TimelineActionStatusDto)
+public struct TypedMention: Equatable, Hashable
+  public var start: UInt32
+  public var end: UInt32
+  public var userId: String
+  public var text: String
+  public init(start: UInt32, end: UInt32, userId: String, text: String)
 public struct TypingRoomDto: Equatable, Hashable
   public var roomId: String
   public var userIds: [String]

@@ -620,3 +620,48 @@ mod attachment_staging_tests {
         assert!(!send.contains("Vec<u8>"));
     }
 }
+
+/// Slash commands the user may use in this room whose name or alias starts
+/// with `prefix`, from the shared composer core.
+#[tauri::command]
+pub async fn matrix_composer_command_suggestions(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    prefix: String,
+) -> Result<Vec<synara_core::app::composer::CommandSuggestion>, MatrixAuthCommandError> {
+    crate::bridge::composer::command_suggestions(core.inner().as_ref(), room_id, prefix).await
+}
+
+/// Run what the composer holds (`/kick @a:b`, `/me waves`, …). Message
+/// commands come back for the composer to send with its reply and thread.
+#[tauri::command]
+pub async fn matrix_composer_run_command(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    text: String,
+    confirmed: Option<bool>,
+) -> Result<synara_core::app::composer::ComposerRunResponse, MatrixAuthCommandError> {
+    crate::bridge::composer::run_command(
+        core.inner().as_ref(),
+        room_id,
+        text,
+        confirmed.unwrap_or(false),
+    )
+    .await
+}
+
+/// Mentions typed out as "@Name" that name exactly one of `members`.
+#[tauri::command]
+pub async fn matrix_composer_resolve_mentions(
+    core: State<'_, Arc<synara_core::Core>>,
+    text: String,
+    members: Vec<synara_core::app::composer::MentionCandidate>,
+    own_user_id: String,
+) -> Result<Vec<synara_core::app::composer::TypedMention>, MatrixAuthCommandError> {
+    Ok(crate::bridge::composer::resolve_mentions(
+        core.inner().as_ref(),
+        text,
+        members,
+        own_user_id,
+    ))
+}

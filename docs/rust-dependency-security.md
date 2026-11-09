@@ -3,7 +3,8 @@
 Reviewed against the consolidated production workspace lockfile on 2026-09-30.
 The dependency owner is the Synara maintainer responsible for Cargo and SDK
 updates. `cargo audit` runs without an advisory ignore list, apart from the
-one-time [zstd exception](#one-time-zstd-exception-for-240) in
+one-time [zstd exception](#one-time-zstd-exception-for-240) and the
+[SQLite exception for 2.9.2](#sqlite-exception-for-292) in
 `.cargo/audit.toml`; informational warnings remain visible in CI. Reassess the
 source evidence below whenever Matrix SDK, Tantivy, Tauri, GTK/WebKit, or their
 lockfile entries change.
@@ -40,6 +41,27 @@ Exit condition: remove all three ignores, and `.cargo/audit.toml` with them,
 when Matrix SDK search admits a Tantivy that uses zstd >=0.14.3. Reassess
 immediately if another crate starts depending on zstd or Tantivy's zstd calls
 change. The exception does not carry over to any new advisory.
+
+## SQLite exception for 2.9.2
+
+RUSTSEC-2026-0459 (CVE-2026-119375, published 2026-10-30): SQLite before
+3.54.0 can return uninitialized page-cache memory when it opens a database
+file together with a sibling `-wal` file whose page size differs. The desktop
+and iOS builds bundle SQLite 3.53.2 through libsqlite3-sys 0.38.2, which
+reaches Synara through rusqlite 0.40.2, required (`^0.40.2`) by
+matrix-sdk-sqlite 0.19.1, the latest Matrix SDK release. The fix is
+libsqlite3-sys >=0.39.0 via rusqlite 0.41.
+
+Exposure is narrow: the attacker must place a crafted database and `-wal`
+pair where Synara opens them. Synara opens only the stores it creates in its
+own app data directory (and the iOS app group container), which other users'
+processes cannot write. Upstream moved matrix-sdk-sqlite to rusqlite 0.41.1
+on main on 2026-11-06 (matrix-org/matrix-rust-sdk `18757f7e0`); it is not in
+a crates.io release yet.
+
+Exit condition: remove the ignore with the Matrix SDK release that requires
+rusqlite >=0.41, and pin rusqlite to that line in the workspace. The exception
+does not carry over to any new advisory.
 
 The [dependency PR disposition record](dependency-update-dispositions.md)
 captures the four dependency update PRs at the recorded open-PR snapshot,

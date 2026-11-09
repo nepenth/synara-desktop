@@ -1041,6 +1041,65 @@ impl NativeRoomJoinRuleOwner {
         ))
     }
 
+    /// What slash commands need to know about a room: the user's
+    /// permissions (from the SDK's power levels, with room-version rules)
+    /// and whether it is a direct message.
+    pub async fn composer_context(
+        &self,
+        room_id: &str,
+    ) -> Result<crate::app::composer::CommandContext, &'static str> {
+        let room = self.members_room(room_id)?;
+        let capabilities = match (room.power_levels().await, self.client.user_id()) {
+            (Ok(levels), Some(user_id)) => Some(crate::app::members::room_permission_capabilities(
+                &levels, user_id,
+            )),
+            _ => None,
+        };
+        Ok(crate::app::composer::CommandContext {
+            capabilities,
+            is_direct: room.is_direct().await.unwrap_or(false),
+        })
+    }
+
+    pub fn own_user_id(&self) -> Option<String> {
+        self.client.user_id().map(ToString::to_string)
+    }
+
+    /// The joined direct message with exactly `user_id`, if there is one.
+    pub fn dm_room_for(&self, user_id: &str) -> Result<Option<String>, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let user_id = parse_room_moderation_user_id(user_id)?;
+        Ok(self
+            .client
+            .get_dm_room(&user_id)
+            .filter(|room| room.state() == RoomState::Joined)
+            .map(|room| room.room_id().to_string()))
+    }
+
+    /// The content of one state event from the local store, or `None` when
+    /// the room has none.
+    pub async fn state_content(
+        &self,
+        room_id: &str,
+        event_type: &str,
+        state_key: &str,
+    ) -> Result<Option<serde_json::Value>, &'static str> {
+        let room = self.members_room(room_id)?;
+        let event = room
+            .get_state_event(StateEventType::from(event_type), state_key)
+            .await
+            .map_err(|_| "v-rooms-members-read-state-failed")?;
+        event
+            .map(|event| {
+                serde_json::to_value(event)
+                    .map(|event| event["content"].clone())
+                    .map_err(|_| "v-rooms-members-read-state-malformed")
+            })
+            .transpose()
+    }
+
     pub async fn get_media_preview(
         &self,
         room_id: &str,

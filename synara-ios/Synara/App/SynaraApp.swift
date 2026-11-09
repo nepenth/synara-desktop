@@ -1027,7 +1027,10 @@ private extension AppEnvironment {
                 ? MockLinkPreviewService(previews: uiTestLinkPreviews())
                 : MockLinkPreviewService(),
             crypto: crypto,
-            settings: uiTestSettings(processEnvironment)
+            settings: uiTestSettings(processEnvironment),
+            composerCommands: processEnvironment["SYNARA_UI_TEST_COMPOSER_COMMANDS"] == "1"
+                ? MockComposerCommandService.uiTestFixture()
+                : MockComposerCommandService()
         )
     }
 
@@ -1274,7 +1277,20 @@ private extension AppEnvironment {
             ("$agent-question-single", "Which colour should the cover use?", ["Red", "Blue", "Green"], false),
             ("$agent-question-multi", "Which formats should I export?", ["PDF", "EPUB", "Print"], true),
         ]
-        return cards.enumerated().map { offset, card in
+        let mention = TimelineMapper.map(
+            RawTimelineEvent(
+                eventID: "$mention-message",
+                senderID: "@agent:matrix.example.com",
+                timestamp: Date(timeIntervalSince1970: 1_770_000_000),
+                type: "m.room.message",
+                body: "Ada: the cover is ready",
+                formattedBody: #"<a href="https://matrix.to/#/@ada:matrix.example.com">Ada</a>: the cover is ready"#,
+                replyToEventID: nil,
+                isEdited: false,
+                mediaURL: nil
+            )
+        )
+        return [mention] + cards.enumerated().map { offset, card in
             var item = TimelineMapper.map(
                 RawTimelineEvent(
                     eventID: card.0,

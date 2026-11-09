@@ -15,6 +15,8 @@ struct MessageSendRequest: Equatable {
     let transactionID: String?
     /// People the message mentions (`m.mentions`), so they are notified.
     let mentionUserIDs: [String]?
+    /// `m.emote` or `m.notice` from a composer command; nil sends `m.text`.
+    let msgType: String?
 
     init(
         roomID: String,
@@ -24,7 +26,8 @@ struct MessageSendRequest: Equatable {
         editEventID: String?,
         threadRootEventID: String? = nil,
         transactionID: String? = nil,
-        mentionUserIDs: [String]? = nil
+        mentionUserIDs: [String]? = nil,
+        msgType: String? = nil
     ) {
         self.roomID = roomID
         self.body = body
@@ -34,6 +37,7 @@ struct MessageSendRequest: Equatable {
         self.threadRootEventID = threadRootEventID
         self.transactionID = transactionID
         self.mentionUserIDs = mentionUserIDs
+        self.msgType = msgType
     }
 }
 
@@ -114,6 +118,7 @@ final class ComposerLocalStore: @unchecked Sendable {
         let timestamp: Date
         var failed: Bool
         var mentionUserIDs: [String]? = nil
+        var msgType: String? = nil
     }
 
     struct Snapshot: Codable, Equatable {

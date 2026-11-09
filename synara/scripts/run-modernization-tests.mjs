@@ -127,6 +127,8 @@ const tests = [
   'src/app/features/room/__tests__/nativeSendStickerOwner.test.ts',
   'src/app/features/room/__tests__/nativeSendGifOwner.test.ts',
   'src/app/features/room/__tests__/typedGifCommand.test.ts',
+  'src/app/features/room/__tests__/typedMentions.test.ts',
+  'src/app/features/room/__tests__/nativeComposerCommands.test.ts',
   'src/app/features/room/__tests__/reactionSenders.test.ts',
   'src/app/features/room/__tests__/nativeMDirectOwner.test.ts',
   'src/app/features/room/__tests__/nativePollOwner.test.ts',
