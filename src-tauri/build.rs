@@ -119,6 +119,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_room_set_favorite",
     "matrix_room_set_read_state",
     "matrix_room_list_snapshot",
+    "matrix_room_list_snapshot_since",
     "matrix_room_identity_warnings",
     "matrix_room_identity_warning_resolve",
     "matrix_verification_list",

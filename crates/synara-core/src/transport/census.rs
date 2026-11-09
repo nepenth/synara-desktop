@@ -130,6 +130,7 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_room_kick",
     "matrix_room_leave",
     "matrix_room_list_snapshot",
+    "matrix_room_list_snapshot_since",
     "matrix_room_local_aliases",
     "matrix_room_members_snapshot",
     "matrix_room_notes_complete_todo",

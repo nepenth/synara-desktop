@@ -766,6 +766,16 @@ impl Core {
         room_list_snapshot(&self.state).await
     }
 
+    /// Typed `matrix_room_list_snapshot_since`: `Unchanged` (no rows built)
+    /// while the room list is still at `known_revision`, else a snapshot
+    /// with its revision.
+    pub async fn room_list_snapshot_since(
+        &self,
+        known_revision: Option<u64>,
+    ) -> Result<RoomListSnapshotReply, MatrixIpcError> {
+        room_list_snapshot_since(&self.state, known_revision).await
+    }
+
     /// Typed `matrix_invites_snapshot`.
     pub async fn invites_snapshot(&self) -> Result<NativeInviteSnapshot, MatrixIpcError> {
         invites_snapshot(&self.state).await

@@ -92,13 +92,15 @@ window.__SYNARA_DESKTOP__ = {
         device_id: 'TEST',
         homeserver_url: 'https://example.test',
       } as T;
-    if (command === 'matrix_room_list_snapshot')
-      return {
+    if (command === 'matrix_room_list_snapshot' || command === 'matrix_room_list_snapshot_since') {
+      const snapshot = {
         sessionGeneration: 1,
         orderedRoomIds: nativeRooms.map((item) => item.roomId),
         rooms: nativeRooms,
         presentation: presentationFor(nativeRooms),
-      } as T;
+      };
+      return (command === 'matrix_room_list_snapshot' ? snapshot : { revision: 0, snapshot }) as T;
+    }
     throw new Error(`Unexpected routing fixture command ${command}`);
   },
 };

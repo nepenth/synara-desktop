@@ -3,6 +3,7 @@ import { selectAtom } from 'jotai/utils';
 import { useEffect } from 'react';
 import type { Unread } from '../../../types/matrix/room';
 import { parseRoomSummary, type RoomSummary } from '../../features/matrix-dto/room';
+import { isObject } from '../../features/matrix-dto/parseUtil';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { RoomsAction } from './utils';
 import { startRoomListUpdateDrivenPoll } from '../../utils/nativeRoomListUpdates';
@@ -115,6 +116,12 @@ export const sameNativeRoomListSnapshot = (
 /** Written only by `useBindAllRoomsAtom`; exported for tests. */
 export const nativeRoomListSnapshotAtom = atom<NativeRoomListSnapshot>(emptyRoomListSnapshot);
 let latestNativeRoomListSnapshot = emptyRoomListSnapshot;
+/**
+ * Core's room-list revision for `latestNativeRoomListSnapshot`, sent back as
+ * `knownRevision` so an unchanged list costs no rebuild. Not the revision of
+ * the last wake: that one can be newer than the snapshot held here.
+ */
+let latestNativeRoomListRevision: number | undefined;
 /**
  * False until the first room-list readback (or a signed-out session) since
  * the app started, so an empty list before then reads as loading, not as
@@ -232,6 +239,53 @@ const parseNativeRoomListSnapshot = (value: unknown): NativeRoomListSnapshot | n
   };
 };
 
+export type NativeRoomListSnapshotReply =
+  | { kind: 'unchanged'; sessionGeneration: number; revision: number }
+  | { kind: 'snapshot'; revision: number; snapshot: NativeRoomListSnapshot };
+
+const isCounter = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+const hasExactKeys = (record: Record<string, unknown>, keys: readonly string[]): boolean => {
+  const own = Object.keys(record);
+  return own.length === keys.length && keys.every((key) => own.includes(key));
+};
+
+/**
+ * Fail-closed parser for `matrix_room_list_snapshot_since`: exactly
+ * `{ sessionGeneration, revision }` or exactly `{ revision, snapshot }`.
+ */
+export const parseNativeRoomListSnapshotReply = (
+  value: unknown
+): NativeRoomListSnapshotReply | null => {
+  if (!isObject(value) || !isCounter(value.revision)) return null;
+  if (hasExactKeys(value, ['sessionGeneration', 'revision'])) {
+    if (!isCounter(value.sessionGeneration)) return null;
+    return {
+      kind: 'unchanged',
+      sessionGeneration: value.sessionGeneration,
+      revision: value.revision,
+    };
+  }
+  if (!hasExactKeys(value, ['revision', 'snapshot'])) return null;
+  const snapshot = parseNativeRoomListSnapshot(value.snapshot);
+  if (!snapshot) return null;
+  return { kind: 'snapshot', revision: value.revision, snapshot };
+};
+
+/**
+ * The revision to send as `knownRevision`: only for a snapshot of the
+ * signed-in session, so another session's revision never reads as current.
+ */
+export const knownRoomListRevision = (
+  held: NativeRoomListSnapshot,
+  heldRevision: number | undefined,
+  sessionGeneration: number
+): number | undefined =>
+  heldRevision !== undefined && held.sessionGeneration === sessionGeneration
+    ? heldRevision
+    : undefined;
+
 const parseNativeSessionSnapshot = (value: unknown): NativeSessionSnapshot | null => {
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
@@ -279,6 +333,7 @@ export const useBindAllRoomsAtom = (
           onSessionSnapshot?.(session);
           if (session.status !== 'logged_in') {
             latestNativeRoomListSnapshot = emptyRoomListSnapshot;
+            latestNativeRoomListRevision = undefined;
             setSnapshot(emptyRoomListSnapshot);
             setRooms({ type: 'INITIALIZE', rooms: [] });
             loadedSessionGeneration = undefined;
@@ -287,12 +342,37 @@ export const useBindAllRoomsAtom = (
           }
           // A new sign-in has not listed its rooms yet.
           if (loadedSessionGeneration !== session.sessionGeneration) setLoaded(false);
-          const result = await invokeDesktopWithAvailability<unknown>('matrix_room_list_snapshot');
+          const knownRevision = knownRoomListRevision(
+            latestNativeRoomListSnapshot,
+            latestNativeRoomListRevision,
+            session.sessionGeneration
+          );
+          const result = await invokeDesktopWithAvailability<unknown>(
+            'matrix_room_list_snapshot_since',
+            { knownRevision }
+          );
           if (disposed || !result.available || !result.value) return;
-          const snapshot = parseNativeRoomListSnapshot(result.value);
-          if (!snapshot || snapshot.sessionGeneration !== session.sessionGeneration) return;
+          const reply = parseNativeRoomListSnapshotReply(result.value);
+          if (!reply) return;
+          if (reply.kind === 'unchanged') {
+            // Core built nothing: the held snapshot is still current.
+            if (
+              reply.sessionGeneration !== session.sessionGeneration ||
+              reply.revision !== knownRevision
+            ) {
+              // Not an answer for the snapshot held here; read in full next time.
+              latestNativeRoomListRevision = undefined;
+              return;
+            }
+            loadedSessionGeneration = session.sessionGeneration;
+            setLoaded(true);
+            return;
+          }
+          const { snapshot } = reply;
+          if (snapshot.sessionGeneration !== session.sessionGeneration) return;
           loadedSessionGeneration = snapshot.sessionGeneration;
           setLoaded(true);
+          latestNativeRoomListRevision = reply.revision;
           if (sameNativeRoomListSnapshot(latestNativeRoomListSnapshot, snapshot)) return;
           latestNativeRoomListSnapshot = snapshot;
           // Hydrate the synchronous facade before either atom setter can schedule
@@ -309,6 +389,7 @@ export const useBindAllRoomsAtom = (
 
     if (!isSynaraDesktop()) {
       latestNativeRoomListSnapshot = emptyRoomListSnapshot;
+      latestNativeRoomListRevision = undefined;
       setSnapshot(emptyRoomListSnapshot);
       setRooms({ type: 'INITIALIZE', rooms: [] });
       setLoaded(true);

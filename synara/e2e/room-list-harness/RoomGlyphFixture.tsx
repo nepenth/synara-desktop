@@ -62,13 +62,14 @@ const session = {
 };
 const invoke = async (command: string) => {
   if (command === 'matrix_session_snapshot') return session;
-  if (command === 'matrix_room_list_snapshot') {
-    return {
+  if (command === 'matrix_room_list_snapshot' || command === 'matrix_room_list_snapshot_since') {
+    const snapshot = {
       sessionGeneration: 1,
       orderedRoomIds: rooms.map((r) => r.roomId),
       rooms,
       presentation: presentationFor(rooms),
     };
+    return command === 'matrix_room_list_snapshot' ? snapshot : { revision: 0, snapshot };
   }
   throw new Error(`Unexpected fixture command ${command}`);
 };

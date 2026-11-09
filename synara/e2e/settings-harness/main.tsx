@@ -196,6 +196,15 @@ const fixtures: Record<string, Fixture> = {
     rooms: listedRooms,
     presentation: presentationFor(listedRooms),
   },
+  matrix_room_list_snapshot_since: {
+    revision: 0,
+    snapshot: {
+      sessionGeneration: 1,
+      orderedRoomIds: listedRooms.map((listed) => listed.roomId),
+      rooms: listedRooms,
+      presentation: presentationFor(listedRooms),
+    },
+  },
   desktop_append_log: true,
   desktop_set_badge_count: true,
   desktop_set_shortcuts: true,

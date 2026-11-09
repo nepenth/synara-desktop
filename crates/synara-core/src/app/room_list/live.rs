@@ -4,7 +4,6 @@
 //! only ordered room IDs and product-owned, privacy-safe summaries.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -16,7 +15,7 @@ use matrix_sdk::notification_settings::{
 };
 use matrix_sdk::ruma::events::room::member::MembershipState;
 use matrix_sdk::ruma::events::{
-    AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, MessageLikeEventContent,
+    AnyGlobalAccountDataEvent, AnyRoomAccountDataEvent, AnySyncStateEvent, MessageLikeEventContent,
 };
 use matrix_sdk::ruma::serde::Raw;
 use matrix_sdk::ruma::{OwnedRoomId, OwnedUserId, RoomId, UserId};
@@ -40,6 +39,7 @@ use crate::app::room_list::server_highlights::{
     fetch_server_highlights, own_read_up_to_ts, run_highlight_refresh, unread_highlight_count,
     ServerHighlights,
 };
+use crate::app::room_list::snapshot_cache::{CachedRoom, RoomListSnapshotCache};
 use crate::app::spaces::NativeSpaceParentEntry;
 use crate::app::sync::{
     spawn_supervised, RestartPolicy, SupervisedTask, SyncServiceOwner, TaskHealth,
@@ -65,7 +65,7 @@ pub const ROOM_LIST_UPDATE_DEBOUNCE: Duration = Duration::from_millis(150);
 /// Safety net for a change no SDK stream reports. Room-info writes (unread
 /// counts, receipts, latest events, names, tags), invites, push rules and
 /// account data already wake the owner.
-pub const ROOM_LIST_SAFETY_PULSE: Duration = Duration::from_secs(60);
+pub const ROOM_LIST_SAFETY_PULSE: Duration = Duration::from_secs(30);
 
 /// Rooms at the top of the SDK room list (latest event, then recency) that
 /// get a full sliding-sync room subscription (timeline limit 20 plus extra
@@ -94,7 +94,26 @@ pub struct NativeRoomListOwner {
     _highlights_task: SupervisedTask,
     client: Client,
     handlers: Vec<EventHandlerHandle>,
-    revision: Arc<AtomicU64>,
+    /// The sync owner's snapshot cache; this owner marks what changed and
+    /// counts the revision there.
+    cache: Arc<RoomListSnapshotCache>,
+}
+
+/// What a wake-up from outside the entries stream invalidates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RoomListWake {
+    /// Global account data (`m.direct`, agent settings) or new server
+    /// highlights: any row can change.
+    All,
+    /// Account data of one room (tags, unread marker, fully-read marker).
+    Room(OwnedRoomId),
+    /// An `m.space.child` or `m.space.parent` state event: the space graph.
+    SpaceGraph,
+}
+
+/// Whether a state event of `event_type` can change the space graph.
+fn changes_space_graph(event_type: &str) -> bool {
+    matches!(event_type, "m.space.child" | "m.space.parent")
 }
 
 impl NativeRoomListOwner {
@@ -103,20 +122,37 @@ impl NativeRoomListOwner {
         let client = service.client().clone();
         let sync_owner = Arc::clone(owner);
         let session_generation = owner.session_generation();
-        let revision = Arc::new(AtomicU64::new(0));
-        let (wake, wakes) = mpsc::unbounded_channel::<()>();
+        let cache = Arc::clone(owner.room_list_cache());
+        let (wake, wakes) = mpsc::unbounded_channel::<RoomListWake>();
         let handlers = vec![
             client.add_event_handler({
                 let wake = wake.clone();
                 move |_: Raw<AnyGlobalAccountDataEvent>| {
-                    let _ = wake.send(());
+                    let _ = wake.send(RoomListWake::All);
                     async {}
                 }
             }),
             client.add_event_handler({
                 let wake = wake.clone();
-                move |_: Raw<AnyRoomAccountDataEvent>| {
-                    let _ = wake.send(());
+                move |_: Raw<AnyRoomAccountDataEvent>, room: Room| {
+                    let _ = wake.send(RoomListWake::Room(room.room_id().to_owned()));
+                    async {}
+                }
+            }),
+            // The graph reads these from room state, which the SDK stores
+            // before it runs sync handlers. A child event also arrives as a
+            // change to its space; a parent event only changes a plain room.
+            client.add_event_handler({
+                let wake = wake.clone();
+                move |event: Raw<AnySyncStateEvent>| {
+                    if event
+                        .get_field::<String>("type")
+                        .ok()
+                        .flatten()
+                        .is_some_and(|event_type| changes_space_graph(&event_type))
+                    {
+                        let _ = wake.send(RoomListWake::SpaceGraph);
+                    }
                     async {}
                 }
             }),
@@ -125,7 +161,7 @@ impl NativeRoomListOwner {
         // Shared across restarts: the handlers above keep the senders.
         let wakes = Arc::new(tokio::sync::Mutex::new(wakes));
         let mut first_room_updates = Some(client.subscribe_to_all_room_updates());
-        let task_revision = Arc::clone(&revision);
+        let task_cache = Arc::clone(&cache);
         let task_client = client.clone();
         let task = spawn_supervised(RestartPolicy::default(), move || {
             let service = Arc::clone(&service);
@@ -135,7 +171,7 @@ impl NativeRoomListOwner {
             let room_updates = first_room_updates
                 .take()
                 .unwrap_or_else(|| task_client.subscribe_to_all_room_updates());
-            let task_revision = Arc::clone(&task_revision);
+            let task_cache = Arc::clone(&task_cache);
             let emit = Arc::clone(&emit);
             async move {
                 let mut wakes = wakes.lock_owned().await;
@@ -146,12 +182,17 @@ impl NativeRoomListOwner {
                 if !controller.set_filter(Box::new(filters::new_filter_joined())) {
                     return;
                 }
+                // Changes before this point were not seen, so everything
+                // starts dirty; snapshots trust the cache only while some
+                // owner task holds a guard.
+                let _tracking = task_cache.track();
                 let settings = task_client.notification_settings().await;
                 let loaded = list
                     .loading_state()
                     .map(|state| matches!(state, RoomListLoadingState::Loaded { .. }));
                 run_room_list_updates(
                     entries,
+                    &task_cache,
                     RoomListWakeSources {
                         wakes: &mut wakes,
                         push_rules: settings.subscribe_to_changes(),
@@ -162,8 +203,8 @@ impl NativeRoomListOwner {
                         let sync_owner = Arc::clone(&sync_owner);
                         async move { sync_owner.subscribe_to_room_list(&room_ids).await }
                     },
-                    move || {
-                        let revision = task_revision.fetch_add(1, Ordering::AcqRel) + 1;
+                    || {
+                        let revision = task_cache.next_revision();
                         emit(NativeRoomListUpdateSignal {
                             session_generation,
                             revision,
@@ -180,13 +221,14 @@ impl NativeRoomListOwner {
             _highlights_task: highlights_task,
             client,
             handlers,
-            revision,
+            cache,
         }
     }
 
-    /// Coalesced changes emitted so far. Zero until the first change.
+    /// Coalesced changes emitted for this sync owner so far. Zero until the
+    /// first change.
     pub fn revision(&self) -> u64 {
-        self.revision.load(Ordering::Acquire)
+        self.cache.revision()
     }
 
     /// Exits of the owner task so far; each was followed by a restart.
@@ -209,7 +251,7 @@ impl Drop for NativeRoomListOwner {
 fn spawn_highlight_refresh(
     owner: &Arc<SyncServiceOwner>,
     client: &Client,
-    wake: mpsc::UnboundedSender<()>,
+    wake: mpsc::UnboundedSender<RoomListWake>,
 ) -> SupervisedTask {
     let sync_owner = Arc::clone(owner);
     let client = client.clone();
@@ -259,14 +301,14 @@ fn spawn_highlight_refresh(
             },
             store,
             move || {
-                let _ = wake.send(());
+                let _ = wake.send(RoomListWake::All);
             },
         )
     })
 }
 
 struct RoomListWakeSources<'a, L> {
-    wakes: &'a mut mpsc::UnboundedReceiver<()>,
+    wakes: &'a mut mpsc::UnboundedReceiver<RoomListWake>,
     push_rules: broadcast::Receiver<()>,
     room_updates: broadcast::Receiver<RoomUpdates>,
     /// `true` once the SDK room list has loaded (a first response arrived).
@@ -291,13 +333,60 @@ fn room_updates_change_non_joined(update: &RoomUpdates) -> bool {
     !update.invited.is_empty() || !update.left.is_empty() || !update.knocked.is_empty()
 }
 
+/// Mark in `cache` what one entries diff changes, before it is applied to
+/// `rooms`. A moved room arrives as `Remove` plus `Insert`, so it is
+/// projected again; the snapshot notices a changed room set on its own.
+fn invalidate_for_diff(
+    cache: &RoomListSnapshotCache,
+    diff: &VectorDiff<RoomListItem>,
+    rooms: &Vector<RoomListItem>,
+) {
+    match diff {
+        VectorDiff::Set { index, value } => {
+            if let Some(old) = rooms.get(*index) {
+                if old.room_id() != value.room_id() {
+                    cache.forget_rooms([old.room_id()]);
+                }
+            }
+            cache.invalidate_rooms([value.room_id()]);
+        }
+        VectorDiff::Insert { value, .. }
+        | VectorDiff::PushBack { value }
+        | VectorDiff::PushFront { value } => cache.invalidate_rooms([value.room_id()]),
+        VectorDiff::Append { values } => {
+            cache.invalidate_rooms(values.iter().map(|room| room.room_id()));
+        }
+        VectorDiff::Remove { index } => {
+            cache.forget_rooms(rooms.get(*index).map(|room| room.room_id()));
+        }
+        VectorDiff::PopBack => cache.forget_rooms(rooms.back().map(|room| room.room_id())),
+        VectorDiff::PopFront => cache.forget_rooms(rooms.front().map(|room| room.room_id())),
+        VectorDiff::Truncate { length } => {
+            cache.forget_rooms(rooms.iter().skip(*length).map(|room| room.room_id()));
+        }
+        VectorDiff::Reset { .. } | VectorDiff::Clear => cache.invalidate_all(),
+    }
+}
+
+/// Mark in `cache` what a wake-up from outside the entries stream changes.
+fn invalidate_for_wake(cache: &RoomListSnapshotCache, wake: &RoomListWake) {
+    match wake {
+        RoomListWake::All => cache.invalidate_all(),
+        RoomListWake::Room(room_id) => cache.invalidate_rooms([&**room_id]),
+        RoomListWake::SpaceGraph => cache.invalidate_space_graph(),
+    }
+}
+
 /// Apply entry diffs and emit one debounced wake-up per burst of changes.
-/// At each wake-up after the list has loaded, point the room subscriptions at
-/// the most recent rooms if that set changed. Waiting for the load and the
-/// debounce keeps list growth from cancelling the sync request at every step.
-/// Returns when the entries stream ends.
+/// Every change is marked in `cache` before the wake-up that reports it, so
+/// a snapshot that reads the revision first never reuses a row older than
+/// that revision. At each wake-up after the list has loaded, point the room
+/// subscriptions at the most recent rooms if that set changed. Waiting for
+/// the load and the debounce keeps list growth from cancelling the sync
+/// request at every step. Returns when the entries stream ends.
 async fn run_room_list_updates<S, L, Subscribe, SubscribeFuture, Emit>(
     entries: S,
+    cache: &RoomListSnapshotCache,
     sources: RoomListWakeSources<'_, L>,
     subscribe: Subscribe,
     emit: Emit,
@@ -338,6 +427,7 @@ async fn run_room_list_updates<S, L, Subscribe, SubscribeFuture, Emit>(
                     continue;
                 }
                 for diff in diffs {
+                    invalidate_for_diff(cache, &diff, &rooms);
                     diff.apply(&mut rooms);
                 }
                 debounce.mark();
@@ -352,17 +442,30 @@ async fn run_room_list_updates<S, L, Subscribe, SubscribeFuture, Emit>(
                 None => loaded_open = false,
             },
             wake = wakes.recv(), if wakes_open => match wake {
-                Some(()) => debounce.mark(),
+                Some(wake) => {
+                    invalidate_for_wake(cache, &wake);
+                    debounce.mark();
+                }
                 None => wakes_open = false,
             },
+            // Notification modes of every row.
             changed = push_rules.recv(), if push_rules_open => match changed {
-                Ok(()) | Err(broadcast::error::RecvError::Lagged(_)) => debounce.mark(),
+                Ok(()) | Err(broadcast::error::RecvError::Lagged(_)) => {
+                    cache.invalidate_all();
+                    debounce.mark();
+                }
                 Err(broadcast::error::RecvError::Closed) => push_rules_open = false,
             },
             update = room_updates.recv(), if room_updates_open => match update {
-                Ok(update) if room_updates_change_non_joined(&update) => debounce.mark(),
+                Ok(update) if room_updates_change_non_joined(&update) => {
+                    cache.invalidate_all();
+                    debounce.mark();
+                }
                 Ok(_) => {}
-                Err(broadcast::error::RecvError::Lagged(_)) => debounce.mark(),
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    cache.invalidate_all();
+                    debounce.mark();
+                }
                 Err(broadcast::error::RecvError::Closed) => room_updates_open = false,
             },
             () = debounce.elapsed(), if debounce.is_pending() => {
@@ -377,7 +480,11 @@ async fn run_room_list_updates<S, L, Subscribe, SubscribeFuture, Emit>(
                 }
                 emit();
             }
-            _ = pulse.tick() => debounce.mark(),
+            // Heals any change no stream reported, in rows and graph alike.
+            _ = pulse.tick() => {
+                cache.invalidate_all();
+                debounce.mark();
+            }
         }
     }
 }
@@ -539,8 +646,68 @@ fn project_loading(
     }
 }
 
+/// A room-list read for a presenter that may already hold a snapshot.
+///
+/// `Unchanged` says the list has not changed since `revision`; it is only
+/// given while an owner task tracks changes. `Snapshot` carries the revision
+/// read before the build, so a change during the build gets a later wake-up.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum RoomListSnapshotReply {
+    #[serde(rename_all = "camelCase")]
+    Unchanged {
+        session_generation: u64,
+        revision: u64,
+    },
+    #[serde(rename_all = "camelCase")]
+    Snapshot {
+        revision: u64,
+        snapshot: Box<NativeRoomListSnapshot>,
+    },
+}
+
+/// Room-list snapshot that reuses the rows and space graph nothing changed
+/// since the previous snapshot (see `snapshot_cache`).
 pub async fn snapshot_from_sync_owner(
     owner: &SyncServiceOwner,
+) -> Result<NativeRoomListSnapshot, &'static str> {
+    build_snapshot(owner, SnapshotCacheUse::Reuse).await
+}
+
+/// `Unchanged` when `known_revision` is still the owner's revision and an
+/// owner task is tracking changes, else a snapshot with its revision.
+pub async fn snapshot_since_from_sync_owner(
+    owner: &SyncServiceOwner,
+    known_revision: Option<u64>,
+) -> Result<RoomListSnapshotReply, &'static str> {
+    let cache = owner.room_list_cache();
+    // Read first: a change marked after this read bumps the revision past it.
+    let revision = cache.revision();
+    if known_revision == Some(revision) && cache.is_tracked() {
+        return Ok(RoomListSnapshotReply::Unchanged {
+            session_generation: owner.session_generation(),
+            revision,
+        });
+    }
+    let snapshot = snapshot_from_sync_owner(owner).await?;
+    Ok(RoomListSnapshotReply::Snapshot {
+        revision,
+        snapshot: Box::new(snapshot),
+    })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SnapshotCacheUse {
+    Reuse,
+    /// Project everything and leave the cache untouched (tests compare it
+    /// with a cached build).
+    #[cfg_attr(not(test), allow(dead_code))]
+    Bypass,
+}
+
+async fn build_snapshot(
+    owner: &SyncServiceOwner,
+    cache_use: SnapshotCacheUse,
 ) -> Result<NativeRoomListSnapshot, &'static str> {
     let service = owner.room_list_service();
     let list = service
@@ -573,23 +740,63 @@ pub async fn snapshot_from_sync_owner(
     // `NotificationSettings` (a store read plus an event handler) per room.
     let settings = service.client().notification_settings().await;
     let agents = configured_agents(service.client()).await;
+    let cache = owner.room_list_cache();
+    let room_ids: HashSet<OwnedRoomId> = values
+        .iter()
+        .map(|item| item.room_id().to_owned())
+        .collect();
+    // Order and identity come from the list above; only rows and the space
+    // graph nothing changed since the previous snapshot are reused.
+    let (_build, mut plan) = match cache_use {
+        SnapshotCacheUse::Reuse => {
+            let build = cache.build_gate().await;
+            let plan = cache.begin(&room_ids, &agents);
+            (Some(build), plan)
+        }
+        SnapshotCacheUse::Bypass => (None, Default::default()),
+    };
     let mut ordered_room_ids = Vec::with_capacity(values.len());
     let mut rooms = Vec::with_capacity(values.len());
     let mut agent_room_ids = Vec::new();
+    let mut fresh = Vec::new();
     for item in values {
-        if room_is_agent_room(&item, &agents).await {
+        let room = match plan.take_room(item.room_id()) {
+            Some(cached) => cached,
+            None => {
+                let projected = CachedRoom {
+                    is_agent_room: room_is_agent_room(&item, &agents).await,
+                    summary: project_room(&item, &settings, owner.server_highlights()).await,
+                };
+                if cache_use == SnapshotCacheUse::Reuse {
+                    fresh.push((item.room_id().to_owned(), projected.clone()));
+                }
+                projected
+            }
+        };
+        if room.is_agent_room {
             agent_room_ids.push(item.room_id().to_string());
         }
         ordered_room_ids.push(item.room_id().to_string());
-        rooms.push(project_room(&item, &settings, owner.server_highlights()).await);
+        rooms.push(room.summary);
     }
 
-    // Space rollup needs the parent graph. A failed read leaves rollup empty
-    // rather than failing the whole snapshot.
-    let space_parents = crate::app::spaces::snapshot_space_parents(service.client(), 0)
-        .await
-        .map(|snapshot| snapshot.entries)
-        .unwrap_or_default();
+    // Space rollup needs the parent graph. A space whose row changed can
+    // have new children or power levels, so the graph is read again. A
+    // failed read leaves rollup empty rather than failing the whole snapshot.
+    let reused_parents = plan
+        .take_space_parents()
+        .filter(|_| !fresh.iter().any(|(_, room)| room.summary.is_space));
+    let space_parents = match reused_parents {
+        Some(entries) => Some(entries),
+        None => crate::app::spaces::snapshot_space_parents(service.client(), 0)
+            .await
+            .map(|snapshot| snapshot.entries)
+            .ok(),
+    };
+    if cache_use == SnapshotCacheUse::Reuse {
+        cache.finish(room_ids, fresh, &agents, space_parents.clone());
+    }
+    let space_parents = space_parents.unwrap_or_default();
     let parents = space_parents
         .iter()
         .map(|entry| (entry.room_id.clone(), entry.parent_ids.clone()))
@@ -1198,11 +1405,16 @@ mod tests {
         assert!(source.contains("is_direct && room_avatar.is_none()"));
         // A snapshot never changes the subscriptions; the owner does.
         let snapshot = source
-            .split("pub async fn snapshot_from_sync_owner")
+            .split("pub async fn snapshot_from_sync_owner(")
             .nth(1)
             .and_then(|rest| rest.split("\nasync fn project_room").next())
             .unwrap();
         assert!(!snapshot.contains("subscribe_to_room_list"));
+        // Builds are serialized and take their reuse plan from the cache;
+        // order and identity still come from the SDK list every time.
+        assert!(snapshot.contains("cache.build_gate()"));
+        assert!(snapshot.contains("cache.begin(&room_ids, &agents)"));
+        assert!(snapshot.contains("entries_with_dynamic_adapters"));
     }
 
     #[test]
@@ -1450,9 +1662,38 @@ mod live_owner_tests {
             settled,
             "a late read needs no new signal"
         );
+        // A reader that holds the current revision gets no rebuild; any other
+        // revision gets a snapshot stamped with the current one.
+        let current = live.revision();
+        assert_eq!(
+            snapshot_since_from_sync_owner(&owner, Some(current))
+                .await
+                .expect("probe"),
+            RoomListSnapshotReply::Unchanged {
+                session_generation: 4,
+                revision: current,
+            }
+        );
+        for known in [None, Some(current + 1)] {
+            let reply = snapshot_since_from_sync_owner(&owner, known)
+                .await
+                .expect("read");
+            assert!(
+                matches!(reply, RoomListSnapshotReply::Snapshot { revision, .. } if revision == current)
+            );
+        }
 
         mount_room_list_response(&server, "2", "Room A renamed").await;
         assert!(wait_for(settled + 1).await, "a room change wakes the owner");
+        // The change was marked before its wake-up: a cached build matches
+        // a full rebuild.
+        let cached = build_snapshot(&owner, SnapshotCacheUse::Reuse)
+            .await
+            .expect("cached snapshot");
+        let full = build_snapshot(&owner, SnapshotCacheUse::Bypass)
+            .await
+            .expect("full snapshot");
+        assert_eq!(cached, full);
         let signals = signals.lock().unwrap().clone();
         assert!(signals.iter().all(|signal| signal.session_generation == 4));
         assert!(
@@ -1462,7 +1703,23 @@ mod live_owner_tests {
             "revisions are consecutive"
         );
         assert_eq!(live.revision(), signals.last().unwrap().revision);
+        let last = live.revision();
         drop(live);
+        // Without an owner task nothing marks changes, so a probe at the last
+        // revision is answered with a snapshot.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while owner.room_list_cache().is_tracked() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("the stopped owner task stops tracking");
+        assert!(matches!(
+            snapshot_since_from_sync_owner(&owner, Some(last))
+                .await
+                .expect("read"),
+            RoomListSnapshotReply::Snapshot { .. }
+        ));
         owner.stop().await.expect("sync stops");
     }
 }
@@ -1737,6 +1994,16 @@ mod room_list_cost_tests {
             NativeRoomListLoading::Loaded { .. }
         ));
         assert_eq!(after.rooms.len(), JOINED);
+        // Nothing changed since: the rows `after` left in the cache match a
+        // full rebuild.
+        let cached = build_snapshot(&owner, SnapshotCacheUse::Reuse)
+            .await
+            .expect("cached snapshot");
+        let full = build_snapshot(&owner, SnapshotCacheUse::Bypass)
+            .await
+            .expect("full snapshot");
+        assert_eq!(cached, after);
+        assert_eq!(cached, full);
         assert_eq!(live.health().restarts(), 0);
         drop(live);
         owner.stop().await.expect("sync stops");

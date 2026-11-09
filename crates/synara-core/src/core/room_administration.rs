@@ -218,6 +218,20 @@ pub(super) async fn room_list_snapshot(
     Ok(snapshot)
 }
 
+/// Typed `matrix_room_list_snapshot_since`.
+pub(super) async fn room_list_snapshot_since(
+    state: &Arc<CoreState>,
+    known_revision: Option<u64>,
+) -> Result<RoomListSnapshotReply, MatrixIpcError> {
+    let owner = state.sync_owner()?.ok_or_else(|| {
+        MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+            .with_diagnostic("p2-room-list-snapshot-no-session")
+    })?;
+    snapshot_since_from_sync_owner(&owner, known_revision)
+        .await
+        .map_err(room_list_snapshot_owner_error)
+}
+
 #[cfg(test)]
 pub(super) fn matrix_room_list_snapshot(
     state: Arc<CoreState>,

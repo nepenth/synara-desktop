@@ -33,6 +33,7 @@ mod live;
 mod presentation;
 mod projection;
 mod server_highlights;
+mod snapshot_cache;
 mod sort;
 mod summary;
 
@@ -61,8 +62,9 @@ pub use last_message::{
     ENCRYPTED_MESSAGE_PREVIEW,
 };
 pub use live::{
-    snapshot_from_sync_owner, NativeRoomListLoading, NativeRoomListOwner, NativeRoomListSnapshot,
-    NativeRoomListUpdateSignal, RoomListUpdateEmit, ROOM_LIST_RECENT_SUBSCRIPTIONS,
+    snapshot_from_sync_owner, snapshot_since_from_sync_owner, NativeRoomListLoading,
+    NativeRoomListOwner, NativeRoomListSnapshot, NativeRoomListUpdateSignal, RoomListSnapshotReply,
+    RoomListUpdateEmit, ROOM_LIST_RECENT_SUBSCRIPTIONS,
 };
 pub use presentation::{
     is_favorite_room, normalized_room_name, order_room_ids, room_attention, room_list_presentation,
@@ -74,5 +76,6 @@ pub use server_highlights::{
     fetch_server_highlights, unread_highlight_count, HighlightRecord, ServerHighlights,
     HIGHLIGHT_MAX_PAGES, HIGHLIGHT_PAGE_LIMIT, HIGHLIGHT_REFRESH_MIN_INTERVAL,
 };
+pub(crate) use snapshot_cache::RoomListSnapshotCache;
 pub use sort::{sort_rooms, sort_rooms_in_place, RoomListSort};
 pub use summary::RoomSummaryBuilder;

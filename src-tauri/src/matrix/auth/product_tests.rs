@@ -1569,6 +1569,14 @@ fn room_list_snapshot_routes_through_core_without_desktop_sync_owner() {
     assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
     assert!(!command.contains("snapshot_from_sync_owner"));
     assert!(!command.contains("active.sync"));
+    let since = product
+        .split("pub async fn matrix_room_list_snapshot_since")
+        .nth(1)
+        .and_then(|rest| rest.split("#[tauri::command]").next())
+        .expect("room-list snapshot-since command body");
+    assert!(since.contains("crate::bridge::room_list::room_list_snapshot_since"));
+    assert!(since.contains("core: State<'_, Arc<synara_core::Core>>"));
+    assert!(!since.contains("active.sync"));
 }
 
 #[test]
