@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Desktop (Linux, macOS): an agent-approval notification now closes itself once the approval is decided on any device (for example on your iPhone), settled by Hermes editing the card, removed, or expired, even with the window closed to the tray. Before, it stayed on screen (on Linux, until dismissed by hand) because the approval inbox drops a card Hermes edited to its outcome instead of reporting it decided, and only the window's own timers could close it. The desktop app now checks each approval alert it showed with Core every 10 seconds until it is settled.
+
 ## [2.9.1] - 2026-11-06
 
 - Security: vodozemac 0.11.2 (Matrix end-to-end encryption) fixes degraded zeroization of secrets in memory (RUSTSEC-2026-0445, RUSTSEC-2026-0451, published 2026-11-06).

@@ -263,12 +263,17 @@ export const createApprovalAlertWithdrawal = ({
   cancel?: (handle: TimerHandle) => void;
 }) => {
   const timers = new Map<string, TimerHandle>();
+  const seenPending = new Set<string>();
   const forget = (eventId: string): boolean => {
+    seenPending.delete(eventId);
     const handle = timers.get(eventId);
     if (handle === undefined) return false;
     cancel(handle);
     timers.delete(eventId);
     return true;
+  };
+  const settle = (eventId: string) => {
+    if (forget(eventId)) withdraw(eventId);
   };
   return {
     /** Arms the expiry for a delivered alert. */
@@ -279,6 +284,7 @@ export const createApprovalAlertWithdrawal = ({
         eventId,
         schedule(() => {
           timers.delete(eventId);
+          seenPending.delete(eventId);
           withdraw(eventId);
         }, delay)
       );
@@ -288,13 +294,26 @@ export const createApprovalAlertWithdrawal = ({
       }
     },
     /** The prompt is no longer pending (decided or expired per Core). */
-    settle(eventId: string) {
-      if (forget(eventId)) withdraw(eventId);
+    settle,
+    /**
+     * Applies an inbox read. Core drops a prompt Hermes edited to its outcome
+     * or that was redacted rather than reporting it decided, so an alert seen
+     * pending that is missing from a complete read is settled too. A missing
+     * alert never seen pending may simply not be observed yet.
+     */
+    reconcile(items: { eventId: string; status: string }[], complete: boolean) {
+      const statuses = new Map(items.map((item) => [item.eventId, item.status]));
+      [...timers.keys()].forEach((eventId) => {
+        const status = statuses.get(eventId);
+        if (status === 'pending') seenPending.add(eventId);
+        else if (status !== undefined || (complete && seenPending.has(eventId))) settle(eventId);
+      });
     },
     has: (eventId: string) => timers.has(eventId),
     clear() {
       timers.forEach((handle) => cancel(handle));
       timers.clear();
+      seenPending.clear();
     },
   };
 };
