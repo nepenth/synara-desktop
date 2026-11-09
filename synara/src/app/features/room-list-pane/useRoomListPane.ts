@@ -30,8 +30,20 @@ export const useToggleRoomList = () => {
       }
       setCollapsed(false);
       if (!options.revealFocus || !pane || isEditable(document.activeElement)) return;
-      // After React drops `inert`.
-      requestAnimationFrame(() => roomListFocusTarget(pane)?.focus());
+      // Focus once React has dropped `inert` (an inert element ignores
+      // focus) and the open room's row is back: at zero width the list's
+      // virtualizer renders no rows, so for a few frames only the search
+      // field exists. Fall back to it when no room row appears.
+      const focusWhenShown = (framesLeft: number) =>
+        requestAnimationFrame(() => {
+          const current = pane.querySelector<HTMLElement>('[aria-current="page"]');
+          if (pane.hasAttribute('inert') || (!current && framesLeft > 0)) {
+            if (framesLeft > 0) focusWhenShown(framesLeft - 1);
+            return;
+          }
+          (current ?? roomListFocusTarget(pane))?.focus();
+        });
+      focusWhenShown(20);
     },
     [collapsed, setCollapsed]
   );

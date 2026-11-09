@@ -8,7 +8,6 @@ import {
 } from '../../../components/sidebar';
 import { UnreadBadge } from '../../../components/unread-badge';
 import { useSelectedSpace } from '../../../hooks/router/useSelectedSpace';
-import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
 import { useRoomUnread } from '../../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { isMacOS } from '../../../utils/user-agent';
@@ -39,20 +38,20 @@ const RoomListIconSrc: IconSrc = (filled) => (
 );
 
 /**
- * Shows or hides the room list pane (⌘⇧D / Ctrl+Shift+D). While the list is
- * hidden it carries the unread that list would show: the Home list's, or on
- * a space route the space's, by the rail's rule.
+ * Shows or hides the room list pane (⌘⇧D / Ctrl+Shift+D). On a space route,
+ * while the list is hidden, it carries the space's unread by the rail's rule.
+ * On Home it has no badge: Home's rail badge already shows that list's
+ * unread, and one count is enough.
  */
 export function RoomListTab() {
   const [collapsed] = useRoomListCollapsed();
   const toggleRoomList = useToggleRoomList();
   const selectedSpaceId = useSelectedSpace();
-  const home = useNativeNavigationScope('merged');
   const space = useRoomUnread(selectedSpaceId ?? '', roomToUnreadAtom);
 
   const badge = selectedSpaceId
     ? roomListToggleBadge(collapsed, !!space, space?.highlight ?? 0)
-    : roomListToggleBadge(collapsed, !!home.unread, home.attention);
+    : roomListToggleBadge(collapsed, false, 0);
   const shortcut = roomListShortcut(isMacOS());
 
   return (

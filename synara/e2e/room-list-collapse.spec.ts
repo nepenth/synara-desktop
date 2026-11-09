@@ -154,25 +154,15 @@ test('the hidden state persists across a reload, without animating in', async ({
   expect(await paneWidth(page)).toBeGreaterThan(0);
 });
 
-test('only the hidden list badges the toggle: a dot for unread, red for DMs', async ({ page }) => {
+test('on Home the toggle adds no second unread count', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Receive Home' }).click();
-  // Visible list: it shows its own unread.
-  await expect(toggleBadge(page)).toHaveCount(0);
-  await toggle(page).click();
-  await expect(toggleBadge(page)).toHaveAttribute('data-badge-role', 'neutral');
-  await expect(toggle(page)).toHaveAccessibleName('Show room list, unread messages');
-  await page.getByRole('button', { name: 'Receive DM' }).click();
-  await expect(toggleBadge(page)).toHaveAttribute('data-badge-role', 'mention');
-  await expect(toggleBadge(page)).toHaveText('2');
-  await expect(toggle(page)).toHaveAccessibleName('Show room list, 2 mentions and direct messages');
-  // The same count as Home's rail badge.
-  await expect(page.getByTestId('home-rail').locator('[data-badge-role]')).toHaveText('2');
-  await page.getByRole('button', { name: 'Mark all read' }).click();
-  await expect(toggleBadge(page)).toHaveCount(0);
   await page.getByRole('button', { name: 'Receive DM' }).click();
   await toggle(page).click();
+  await expect(toggle(page)).toHaveAttribute('aria-expanded', 'false');
+  // Home's rail badge already counts the hidden list; the toggle stays quiet.
+  await expect(page.getByTestId('home-rail').locator('[data-badge-role]')).toHaveCount(1);
   await expect(toggleBadge(page)).toHaveCount(0);
+  await expect(toggle(page)).toHaveAccessibleName('Show room list');
 });
 
 test('the pane slides over 200ms, and instantly with reduced motion', async ({ page }) => {
