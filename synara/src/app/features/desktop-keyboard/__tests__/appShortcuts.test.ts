@@ -55,6 +55,38 @@ test('Ctrl+Q quits only on Linux, and composition never triggers a shortcut', ()
   );
 });
 
+test('Cmd/Ctrl+Shift+D toggles the room list, and nothing else takes it', () => {
+  assert.equal(
+    appShortcutAction(key('d', { metaKey: true, shiftKey: true }), mac),
+    'toggle-room-list'
+  );
+  // Chromium reports the shifted letter.
+  assert.equal(
+    appShortcutAction(key('D', { metaKey: true, shiftKey: true }), mac),
+    'toggle-room-list'
+  );
+  assert.equal(
+    appShortcutAction(key('D', { ctrlKey: true, shiftKey: true }), linux),
+    'toggle-room-list'
+  );
+  assert.equal(
+    appShortcutAction(key('D', { ctrlKey: true, shiftKey: true }), windows),
+    'toggle-room-list'
+  );
+  // Without Shift, with Alt, or with Ctrl on macOS (Slate's delete-forward is Ctrl+D).
+  assert.equal(appShortcutAction(key('d', { metaKey: true }), mac), undefined);
+  assert.equal(appShortcutAction(key('d', { ctrlKey: true }), linux), undefined);
+  assert.equal(
+    appShortcutAction(key('D', { metaKey: true, shiftKey: true, altKey: true }), mac),
+    undefined
+  );
+  assert.equal(appShortcutAction(key('D', { ctrlKey: true, shiftKey: true }), mac), undefined);
+  assert.equal(
+    appShortcutAction({ ...key('D', { metaKey: true, shiftKey: true }), isComposing: true }, mac),
+    undefined
+  );
+});
+
 test('page zoom steps stay within the Appearance range', () => {
   assert.equal(nextPageZoom(100, 'zoom-in'), 110);
   assert.equal(nextPageZoom(100, 'zoom-out'), 90);
@@ -86,7 +118,8 @@ test('the shortcuts are mounted for the signed-in app and the macOS menu sends t
   assert.ok(features.includes('<DesktopAppShortcuts />'));
   const menu = readFileSync('../src-tauri/src/menu.rs', 'utf8');
   assert.ok(menu.includes('"synara://app-shortcut"'));
-  for (const action of ['zoom-in', 'zoom-out', 'zoom-reset', 'settings']) {
+  assert.ok(menu.includes('"CmdOrCtrl+Shift+D"'));
+  for (const action of ['zoom-in', 'zoom-out', 'zoom-reset', 'settings', 'toggle-room-list']) {
     assert.ok(menu.includes(`"${action}"`), action);
   }
   const titleBar = readFileSync('src/app/features/desktop-titlebar/DesktopTitleBar.tsx', 'utf8');

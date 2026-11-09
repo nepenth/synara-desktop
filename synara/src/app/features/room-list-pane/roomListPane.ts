@@ -1,0 +1,53 @@
+/**
+ * The desktop room list pane can be hidden (rail toggle, ⌘⇧D / Ctrl+Shift+D,
+ * macOS View menu) to give the room the window's width. The pane stays
+ * mounted, so its scroll position, sections and search survive.
+ */
+
+/** The pane `PageRoot` collapses; the rail toggle's `aria-controls`. */
+export const ROOM_LIST_PANE_ID = 'synara-room-list-pane';
+export const ROOM_LIST_TOGGLE_ID = 'synara-room-list-toggle';
+
+/** Matches `appShortcutAction`'s `toggle-room-list` and the macOS menu accelerator. */
+export const roomListShortcut = (macOS: boolean) =>
+  macOS
+    ? { label: '⌘⇧D', ariaKeyShortcuts: 'Meta+Shift+D' }
+    : { label: 'Ctrl+Shift+D', ariaKeyShortcuts: 'Control+Shift+D' };
+
+export const roomListToggleTitle = (collapsed: boolean): string =>
+  collapsed ? 'Show room list' : 'Hide room list';
+
+export type RoomListToggleBadge =
+  { kind: 'none' } | { kind: 'dot' } | { kind: 'count'; count: number };
+
+/**
+ * The rail's Slack rule (a red count for mentions and DMs, a dot for plain
+ * unread), only while the list is hidden: a visible list shows its own unread.
+ */
+export const roomListToggleBadge = (
+  collapsed: boolean,
+  unread: boolean,
+  attention: number
+): RoomListToggleBadge => {
+  if (!collapsed || !unread) return { kind: 'none' };
+  return attention > 0 ? { kind: 'count', count: attention } : { kind: 'dot' };
+};
+
+/** The toggle's accessible name: its action, then what the hidden list holds. */
+export const roomListToggleLabel = (collapsed: boolean, badge: RoomListToggleBadge): string => {
+  const title = roomListToggleTitle(collapsed);
+  if (badge.kind === 'count') {
+    const noun = badge.count === 1 ? 'mention or direct message' : 'mentions and direct messages';
+    return `${title}, ${badge.count} ${noun}`;
+  }
+  if (badge.kind === 'dot') return `${title}, unread messages`;
+  return title;
+};
+
+/**
+ * Where focus goes when the shortcut reveals the list: the open room's row
+ * (the row Alt+↑/↓ steps from), else the pane's search field.
+ */
+export const roomListFocusTarget = (pane: ParentNode): HTMLElement | null =>
+  pane.querySelector<HTMLElement>('[aria-current="page"]') ??
+  pane.querySelector<HTMLElement>('[data-testid="nav-search-field"]');

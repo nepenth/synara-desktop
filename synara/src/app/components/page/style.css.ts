@@ -30,6 +30,63 @@ export const PageNav = recipe({
 });
 export type PageNavVariants = RecipeVariants<typeof PageNav>;
 
+/** Collapse timing: the pane's width and the slide share it. */
+const NAV_COLLAPSE = '200ms cubic-bezier(0.2, 0, 0, 1)';
+
+/**
+ * The client navigation pane can collapse into the rail. Its width animates
+ * to 0 while the content, pinned to the pane's right edge, slides left under
+ * the rail. Once collapsed the pane (and its divider) stops painting.
+ */
+export const PageNavCollapsible = style({
+  transition: `width ${NAV_COLLAPSE}, visibility 0s`,
+  selectors: {
+    '&[data-collapsed]': {
+      minWidth: 0,
+      visibility: 'hidden',
+      transition: `width ${NAV_COLLAPSE}, visibility 0s linear 200ms`,
+    },
+    // A drag follows the pointer, not an animation.
+    '&[data-resizing]': {
+      transition: 'none',
+    },
+  },
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      transition: 'none',
+      selectors: {
+        '&[data-collapsed]': {
+          transition: 'none',
+        },
+      },
+    },
+  },
+});
+
+/** Clips the sliding content; `clip` also keeps focus() from scrolling it sideways. */
+export const PageNavClip = style({
+  position: 'absolute',
+  inset: 0,
+  display: 'flex',
+  justifyContent: 'flex-end',
+  overflow: 'clip',
+});
+
+/** Keeps the expanded width while the pane narrows, so rows never re-wrap. */
+export const PageNavSlide = style({
+  display: 'flex',
+  flexDirection: 'column',
+  flexShrink: 0,
+});
+
+export const PageRootLine = style({
+  selectors: {
+    '&[data-collapsed]': {
+      display: 'none',
+    },
+  },
+});
+
 export const PageNavDivider = style([
   DefaultReset,
   {

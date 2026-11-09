@@ -86,7 +86,8 @@
       "desktopDiagnosticsSession": false,
       "desktopDiagnosticsRoomState": false,
       "desktopDiagnosticsOverlay": false,
-      "agentWidgetEntries": []
+      "agentWidgetEntries": [],
+      "roomListCollapsed": false
     }
   },
   "invalid": {

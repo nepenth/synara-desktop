@@ -5,6 +5,7 @@ import { settingsAtom } from '../../state/settings';
 import { isSynaraDesktop, listen } from '../../utils/desktop';
 import { isLinuxOS, isMacOS } from '../../utils/user-agent';
 import { getSettingsPath } from '../../pages/pathUtils';
+import { useToggleRoomList } from '../room-list-pane/useRoomListPane';
 import {
   APP_SHORTCUT_ACTIONS,
   APP_SHORTCUT_MENU_EVENT,
@@ -15,13 +16,15 @@ import {
 } from './appShortcuts';
 
 /**
- * Zoom (Cmd/Ctrl + = − 0), Settings (Cmd/Ctrl + ,) and previous/next room
- * (Alt + ↑/↓) for the signed-in desktop app. Quit lives on the Linux title
- * strip, which is mounted on every screen.
+ * Zoom (Cmd/Ctrl + = − 0), Settings (Cmd/Ctrl + ,), previous/next room
+ * (Alt + ↑/↓) and show/hide the room list (Cmd/Ctrl + Shift + D) for the
+ * signed-in desktop app. Quit lives on the Linux title strip, which is mounted
+ * on every screen.
  */
 export function DesktopAppShortcuts() {
   const [pageZoom, setPageZoom] = useSetting(settingsAtom, 'pageZoom');
   const navigate = useNavigate();
+  const toggleRoomList = useToggleRoomList();
 
   const run = useCallback(
     (action: AppShortcutAction): boolean => {
@@ -45,11 +48,14 @@ export function DesktopAppShortcuts() {
           target.scrollIntoView({ block: 'nearest' });
           return true;
         }
+        case 'toggle-room-list':
+          toggleRoomList({ revealFocus: true });
+          return true;
         default:
           return false;
       }
     },
-    [navigate, pageZoom, setPageZoom]
+    [navigate, pageZoom, setPageZoom, toggleRoomList]
   );
 
   useEffect(() => {

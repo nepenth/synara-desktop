@@ -39,6 +39,19 @@ test('encrypted state events setting defaults on and is shared', () => {
   assert.equal(store.getSharedSettings().encryptedStateEvents, false);
 });
 
+test('the room list collapse is a per-device platform setting, shown by default', () => {
+  const storage = createMemoryStorage();
+  const store = createLocalStorageSettingsStore(storage);
+  assert.equal(defaultSettings.roomListCollapsed, false);
+  assert.equal('roomListCollapsed' in store.getSharedSettings(), false);
+  store.setSettings({ ...defaultSettings, roomListCollapsed: true });
+  assert.equal(storage.getObject('platformSettings')?.roomListCollapsed, true);
+  assert.equal(createLocalStorageSettingsStore(storage).getSettings().roomListCollapsed, true);
+  // Anything but `true` reads as shown.
+  const odd = createMemoryStorage({ platformSettings: '{"roomListCollapsed":"yes"}' });
+  assert.equal(createLocalStorageSettingsStore(odd).getSettings().roomListCollapsed, false);
+});
+
 test('modernization opt-in settings default off', () => {
   const store = createLocalStorageSettingsStore(createMemoryStorage());
 
@@ -199,6 +212,7 @@ test('settings store reads legacy desktop shortcuts from the shared settings blo
     desktopDiagnosticsRoomState: false,
     desktopDiagnosticsOverlay: false,
     agentWidgetEntries: [],
+    roomListCollapsed: false,
   });
   assert.equal(store.getSettings().desktopShortcutNotifications, 'CmdOrCtrl+3');
 });
@@ -235,6 +249,7 @@ test('settings store writes shared and desktop platform settings separately', ()
     desktopDiagnosticsRoomState: true,
     desktopDiagnosticsOverlay: true,
     agentWidgetEntries: [],
+    roomListCollapsed: false,
   });
 });
 

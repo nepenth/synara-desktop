@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Desktop: the room list can be hidden to give the room the window's width. The new button at the top of the rail, Cmd+Shift+D (Ctrl+Shift+D on Linux and Windows, also from the composer) or View → Show/Hide Room List on macOS slides the pane into the rail and back. The list keeps its scroll position, search and collapsed sections, and the choice is remembered on this device. While the list is hidden, the button shows its unread like the rail does: a red count for mentions and DMs, a dot for other unread. With reduced motion the pane hides without sliding. Settings → General → Keyboard shortcuts lists the shortcut.
+
 ## [2.9.1] - 2026-11-06
 
 - Security: vodozemac 0.11.2 (Matrix end-to-end encryption) fixes degraded zeroization of secrets in memory (RUSTSEC-2026-0445, RUSTSEC-2026-0451, published 2026-11-06).

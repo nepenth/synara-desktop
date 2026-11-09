@@ -4,6 +4,8 @@ import React, {
   MutableRefObject,
   PointerEventHandler,
   ReactNode,
+  createContext,
+  useContext,
   useRef,
   useState,
 } from 'react';
@@ -12,20 +14,36 @@ import classNames from 'classnames';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import * as css from './style.css';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
+import { useRoomListCollapsed } from '../../features/room-list-pane/useRoomListPane';
+import { ROOM_LIST_PANE_ID } from '../../features/room-list-pane/roomListPane';
+
+/** Set by a `PageRoot` whose pane can collapse: whether it is collapsed now. */
+const PageNavCollapsedContext = createContext<boolean | undefined>(undefined);
 
 type PageRootProps = {
   nav: ReactNode;
   children: ReactNode;
+  /** The client's room list pane, which the rail toggle and ⌘⇧D hide on desktop. */
+  collapsibleNav?: boolean;
 };
 
-export function PageRoot({ nav, children }: PageRootProps) {
+export function PageRoot({ nav, children, collapsibleNav }: PageRootProps) {
   const screenSize = useScreenSizeContext();
+  const [roomListCollapsed] = useRoomListCollapsed();
+  const desktop = screenSize !== ScreenSize.Mobile;
+  const collapsed = collapsibleNav && desktop ? roomListCollapsed : undefined;
 
   return (
     <Box grow="Yes" className={ContainerColor({ variant: 'Background' })}>
-      {nav}
-      {screenSize !== ScreenSize.Mobile && (
-        <Line variant="Background" size="300" direction="Vertical" />
+      <PageNavCollapsedContext.Provider value={collapsed}>{nav}</PageNavCollapsedContext.Provider>
+      {desktop && (
+        <Line
+          className={css.PageRootLine}
+          data-collapsed={collapsed || undefined}
+          variant="Background"
+          size="300"
+          direction="Vertical"
+        />
       )}
       {children}
     </Box>
@@ -69,6 +87,9 @@ export function PageNav({ size, label, children }: ClientDrawerLayoutProps & css
   const [navWidth, setNavWidth] = useState(() => readPageNavWidth(defaultWidth));
   const navWidthRef = useRef(navWidth);
   const dragStartRef = useRef<{ pointerX: number; width: number } | undefined>(undefined);
+  const [resizing, setResizing] = useState(false);
+  const collapsed = useContext(PageNavCollapsedContext);
+  const collapsible = !isMobile && collapsed !== undefined;
 
   const updateNavWidth = (width: number) => {
     const nextWidth = clampPageNavWidth(width);
@@ -80,6 +101,7 @@ export function PageNav({ size, label, children }: ClientDrawerLayoutProps & css
   const handleResizeStart: PointerEventHandler<HTMLButtonElement> = (event) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStartRef.current = { pointerX: event.clientX, width: navWidthRef.current };
+    setResizing(true);
   };
 
   const handleResizeMove: PointerEventHandler<HTMLButtonElement> = (event) => {
@@ -94,6 +116,7 @@ export function PageNav({ size, label, children }: ClientDrawerLayoutProps & css
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     dragStartRef.current = undefined;
+    setResizing(false);
     writePageNavWidth(navWidthRef.current);
   };
 
@@ -104,6 +127,47 @@ export function PageNav({ size, label, children }: ClientDrawerLayoutProps & css
     const nextWidth = updateNavWidth(navWidthRef.current + direction * 12);
     writePageNavWidth(nextWidth);
   };
+
+  const divider = !isMobile && (
+    <button
+      type="button"
+      className={css.PageNavDivider}
+      aria-label={`Resize navigation pane. ${Math.round(
+        navWidth
+      )} pixels. Use Left and Right Arrow keys.`}
+      onPointerDown={handleResizeStart}
+      onPointerMove={handleResizeMove}
+      onPointerUp={handleResizeEnd}
+      onPointerCancel={handleResizeEnd}
+      onKeyDown={handleResizeKeyDown}
+    />
+  );
+
+  if (collapsible) {
+    // Stays mounted while hidden, so scroll position, search and sections survive.
+    return (
+      <Box
+        as={label ? 'nav' : 'div'}
+        id={ROOM_LIST_PANE_ID}
+        aria-label={label}
+        className={classNames(css.PageNav({ size, resizable: true }), css.PageNavCollapsible)}
+        shrink="No"
+        style={{ width: collapsed ? 0 : navWidth }}
+        data-compact={navWidth < 232 ? 'true' : undefined}
+        data-collapsed={collapsed || undefined}
+        data-resizing={resizing || undefined}
+        inert={collapsed}
+        aria-hidden={collapsed || undefined}
+      >
+        <div className={css.PageNavClip}>
+          <div className={css.PageNavSlide} style={{ width: navWidth }}>
+            {children}
+          </div>
+        </div>
+        {divider}
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -118,20 +182,7 @@ export function PageNav({ size, label, children }: ClientDrawerLayoutProps & css
       <Box grow="Yes" direction="Column">
         {children}
       </Box>
-      {!isMobile && (
-        <button
-          type="button"
-          className={css.PageNavDivider}
-          aria-label={`Resize navigation pane. ${Math.round(
-            navWidth
-          )} pixels. Use Left and Right Arrow keys.`}
-          onPointerDown={handleResizeStart}
-          onPointerMove={handleResizeMove}
-          onPointerUp={handleResizeEnd}
-          onPointerCancel={handleResizeEnd}
-          onKeyDown={handleResizeKeyDown}
-        />
-      )}
+      {divider}
     </Box>
   );
 }

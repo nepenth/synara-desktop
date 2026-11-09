@@ -11,6 +11,7 @@ export default defineConfig({
     'room-list-rows.spec.ts',
     'room-list-name.spec.ts',
     'gif-picker.spec.ts',
+    'room-list-collapse.spec.ts',
   ],
   fullyParallel: false,
   retries: 0,
@@ -31,7 +32,7 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     {
       name: 'webkit',
-      testMatch: 'navigation-unread.spec.ts',
+      testMatch: ['navigation-unread.spec.ts', 'room-list-collapse.spec.ts'],
       use: { ...devices['Desktop Safari'] },
     },
   ],
