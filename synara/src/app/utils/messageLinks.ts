@@ -30,8 +30,10 @@ export type MessageLink = {
  */
 const isIntendedLink = (text: string, start: number, value: string, type: string): boolean => {
   if (type !== 'url') return true;
+  // Written with a scheme (`...https://example.org`), it is meant as a link.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return true;
   const before = start > 0 ? text[start - 1] : '';
-  // Part of a longer word, path or file name, not an address of its own.
+  // A bare name glued to a longer word, path or file name is not an address.
   if (before && JOINED_BEFORE.test(before)) return false;
   if (SCHEME_OR_WWW.test(value)) return true;
   const host = value.split(/[/?#:]/, 1)[0] ?? '';

@@ -24,6 +24,10 @@ test('real addresses still link, with or without a scheme', () => {
   ]);
   assert.deepEqual(hrefs('a site with an md domain: https://example.md'), ['https://example.md']);
   assert.deepEqual(hrefs('(see example.org)'), ['http://example.org']);
+  // An address written with its scheme links even when glued to text.
+  assert.deepEqual(hrefs('terrible news guys...https://www.example.com/a so sad'), [
+    'https://www.example.com/a',
+  ]);
   assert.deepEqual(hrefs('mail ada@example.org please'), ['mailto:ada@example.org']);
 });
 

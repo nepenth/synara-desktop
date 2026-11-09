@@ -420,6 +420,10 @@ enum SynaraPlainTextLinks {
     /// longer word, path or file name (`/Users/me/README_SUBMISSION.md` once
     /// linked `SUBMISSION.md`), and not a bare file name with a file-like ending.
     static func isIntendedLink(_ written: String, in text: NSString, at location: Int) -> Bool {
+        // Written with a scheme (`...https://example.org`), it is meant as a link.
+        if written.lowercased().range(of: "^[a-z][a-z0-9+.-]*:", options: .regularExpression) != nil {
+            return true
+        }
         if location > 0 {
             let before = text.substring(with: NSRange(location: location - 1, length: 1))
             if before.unicodeScalars.contains(where: { scalar in
