@@ -1,0 +1,3 @@
+Synara 2.9.3 keeps file paths and file names in messages as plain text instead of turning them into web links, and Hermes question cards no longer repeat their number and skip reactions under the card.
+
+Please test: a message that mentions a file such as README.md or a path, and answering a Hermes question card.

@@ -142,6 +142,16 @@ final class TimelinePolishTests: XCTestCase {
         XCTAssertEqual(linkedRuns, ["https://matrix.org/docs/", "example.com", "ada@example.org"])
     }
 
+    func testFilePathsAndFileNamesAreNotLinks() {
+        // `README_SUBMISSION.md` once linked to submission.md: `.md` is a real
+        // top-level domain and the underscore ends a domain name.
+        let body = "Open /Users/Shared/ASB_SUBMISSION_20261109/README_SUBMISSION.md, then README.md and setup.py."
+        XCTAssertTrue(SynaraPlainTextLinks.links(in: body).isEmpty)
+        // A real address with that ending still links when written as one.
+        let site = "See https://example.md or www.example.md"
+        XCTAssertEqual(SynaraPlainTextLinks.links(in: site).count, 2)
+    }
+
     func testPlainBodiesWithoutLinksStayUnlinked() {
         let attributed = SynaraPlainTextLinks.attributedText("No links here, just words.")
         XCTAssertTrue(attributed.runs.allSatisfy { $0.link == nil })

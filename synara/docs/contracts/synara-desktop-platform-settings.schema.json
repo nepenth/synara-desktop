@@ -14,7 +14,8 @@
     "desktopDiagnosticsSession",
     "desktopDiagnosticsRoomState",
     "desktopDiagnosticsOverlay",
-    "agentWidgetEntries"
+    "agentWidgetEntries",
+    "roomListCollapsed"
   ],
   "properties": {
     "desktopShortcutShow": {
@@ -34,6 +35,7 @@
     "desktopDiagnosticsSession": { "type": "boolean" },
     "desktopDiagnosticsRoomState": { "type": "boolean" },
     "desktopDiagnosticsOverlay": { "type": "boolean" },
+    "roomListCollapsed": { "type": "boolean" },
     "agentWidgetEntries": {
       "type": "array",
       "maxItems": 32,

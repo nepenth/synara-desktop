@@ -1,12 +1,19 @@
 /**
  * Window-level keyboard shortcuts of the desktop app: page zoom, Settings,
- * previous/next room and (Linux) Quit. macOS also lists the zoom and Settings
- * items in its app menu; the webview sees the key first, so a handled key
- * never reaches the menu as well.
+ * previous/next room, show/hide the room list and (Linux) Quit. macOS also
+ * lists the zoom, Settings and room list items in its menus; the webview sees
+ * the key first, so a handled key never reaches the menu as well.
  */
 
 export type AppShortcutAction =
-  'zoom-in' | 'zoom-out' | 'zoom-reset' | 'settings' | 'previous-room' | 'next-room' | 'quit';
+  | 'zoom-in'
+  | 'zoom-out'
+  | 'zoom-reset'
+  | 'settings'
+  | 'previous-room'
+  | 'next-room'
+  | 'toggle-room-list'
+  | 'quit';
 
 export const APP_SHORTCUT_ACTIONS: readonly AppShortcutAction[] = [
   'zoom-in',
@@ -15,6 +22,7 @@ export const APP_SHORTCUT_ACTIONS: readonly AppShortcutAction[] = [
   'settings',
   'previous-room',
   'next-room',
+  'toggle-room-list',
   'quit',
 ];
 
@@ -57,6 +65,8 @@ export const appShortcutAction = (
   if (primary && !otherPrimary && !evt.altKey) {
     // `+` is Shift+= on most layouts; accept both.
     if (evt.key === '=' || evt.key === '+') return 'zoom-in';
+    // Slack's "toggle sidebar". Cmd+Shift reports `d` in WebKit and `D` in Chromium.
+    if (evt.shiftKey && evt.key.toLowerCase() === 'd') return 'toggle-room-list';
     if (evt.shiftKey) return undefined;
     if (evt.key === '-') return 'zoom-out';
     if (evt.key === '0') return 'zoom-reset';

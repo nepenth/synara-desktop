@@ -2,14 +2,16 @@
 // synthetic. Since wave 3 the rail has no Direct messages tab: DMs are a
 // section of the one Home list (NAV-12) and count in the Home badge. `homePane`
 // adds the production Home pane, mounted across `/home/` and `/direct/` routes
-// as in the app router.
+// as in the app router. `collapsible` lays out the desktop client: the rail with
+// the room list toggle, the collapsible Home pane in `PageRoot`, a room page with
+// a composer, and the window shortcuts.
 import React, { useCallback, useState } from 'react';
 import { presentationFor } from './presentation';
 import { Provider } from 'jotai';
 import { enableMapSet } from 'immer';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { configClass, varsClass } from 'folds';
-import { darkTheme } from '../../src/colors.css';
+import { darkTheme, synaraLightTheme as lightTheme } from '../../src/colors.css';
 import { ScreenSize, ScreenSizeProvider } from '../../src/app/hooks/useScreenSize';
 import { NavToActivePathProvider } from '../../src/app/state/hooks/navToActivePath';
 import { makeNavToActivePathAtom } from '../../src/app/state/navToActivePath';
@@ -27,6 +29,10 @@ import { Home } from '../../src/app/pages/client/home/Home';
 import { ClosedNavCategoriesProvider } from '../../src/app/state/hooks/closedNavCategories';
 import { makeClosedNavCategoriesAtom } from '../../src/app/state/closedNavCategories';
 import { RoomsNotificationPreferencesProvider } from '../../src/app/hooks/useRoomsNotificationPreferences';
+import { Page, PageRoot } from '../../src/app/components/page';
+import { Sidebar, SidebarStack } from '../../src/app/components/sidebar';
+import { RoomListTab } from '../../src/app/pages/client/sidebar/RoomListTab';
+import { DesktopAppShortcuts } from '../../src/app/features/desktop-keyboard/DesktopAppShortcuts';
 
 const room = (roomId: string, isDirect: boolean): RoomSummary => ({
   roomId,
@@ -49,7 +55,8 @@ const dm = '!dm:example.test';
 const otherDM = '!other-dm:example.test';
 const home = '!home:example.test';
 const params = new URLSearchParams(location.search);
-const homePane = params.has('homePane');
+const collapsible = params.has('collapsible');
+const homePane = params.has('homePane') || collapsible;
 // Enough Home rooms that the Direct messages section starts below the fold.
 const filler = homePane
   ? Array.from({ length: 30 }, (_, index) => room(`!filler-${index}:example.test`, false))
@@ -75,13 +82,14 @@ const invoke = async (command: string, args?: Record<string, unknown>) => {
     return { receiptSent: true, acknowledgedEventId: '$latest', unreadFlagCleared: false };
   }
   if (command === 'matrix_session_snapshot') return session;
-  if (command === 'matrix_room_list_snapshot') {
-    return {
+  if (command === 'matrix_room_list_snapshot' || command === 'matrix_room_list_snapshot_since') {
+    const snapshot = {
       sessionGeneration: 1,
       orderedRoomIds: rooms.map((r) => r.roomId),
       rooms,
       presentation: presentationFor(rooms),
     };
+    return command === 'matrix_room_list_snapshot' ? snapshot : { revision: 0, snapshot };
   }
   if (command === 'matrix_mdirect_snapshot') {
     return {
@@ -174,6 +182,75 @@ function DestinationMembership() {
   );
 }
 
+/** The room page beside the pane: a composer and the fixture's unread controls. */
+function RoomPage() {
+  return (
+    <Page style={{ padding: 16, gap: 8 }}>
+      <textarea aria-label="Composer" />
+      <div contentEditable suppressContentEditableWarning aria-label="Rich composer" role="textbox">
+        Draft
+      </div>
+      <button type="button" onClick={() => update(home, { unreadCount: 4 })}>
+        Receive Home
+      </button>
+      <button type="button" onClick={() => update(dm, { unreadCount: 2 })}>
+        Receive DM
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          update(home, { unreadCount: 0, highlightCount: 0, markedUnread: false });
+          update(dm, { unreadCount: 0, highlightCount: 0, markedUnread: false });
+        }}
+      >
+        Mark all read
+      </button>
+    </Page>
+  );
+}
+
+function CollapsibleClient() {
+  const light = params.get('theme') === 'light';
+  const pane = (
+    <ClosedNavCategoriesProvider value={closedCategories}>
+      <RoomsNotificationPreferencesProvider value={notificationPreferences}>
+        <Home />
+      </RoomsNotificationPreferencesProvider>
+    </ClosedNavCategoriesProvider>
+  );
+  return (
+    <main
+      // index.css scopes the reading-role variables under `.dark-theme`, as the app's body has.
+      className={`${configClass} ${varsClass} ${light ? lightTheme : `${darkTheme} dark-theme`}`}
+      style={{ display: 'flex', height: '100vh' }}
+    >
+      <Sidebar as="nav" aria-label="Spaces">
+        <SidebarStack>
+          <RoomListTab />
+        </SidebarStack>
+        <SidebarStack>
+          <div data-testid="home-rail">
+            <HomeTab />
+          </div>
+        </SidebarStack>
+      </Sidebar>
+      <Routes>
+        <Route
+          element={
+            <PageRoot collapsibleNav nav={pane}>
+              <Outlet />
+            </PageRoot>
+          }
+        >
+          <Route path="/home/" element={<RoomPage />} />
+          <Route path="/home/:roomIdOrAlias/*" element={<RoomPage />} />
+        </Route>
+      </Routes>
+      <DesktopAppShortcuts />
+    </main>
+  );
+}
+
 function BoundRail() {
   useBindAllRoomsAtom(
     useCallback((snapshot) => fixtureSession.applyRoomListSnapshot(snapshot), []),
@@ -182,6 +259,7 @@ function BoundRail() {
   useBindMDirectAtom();
   useBindRoomToParentsAtom();
   useBindRoomToUnreadAtom();
+  if (collapsible) return <CollapsibleClient />;
   return (
     <main className={`${configClass} ${varsClass} ${darkTheme}`} style={{ padding: 24 }}>
       <nav style={{ width: 66, display: 'flex', flexDirection: 'column', gap: 24 }}>

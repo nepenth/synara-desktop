@@ -122,13 +122,14 @@ const invoke = async (command: string, args?: Record<string, unknown>) => {
   }
   if (command === 'matrix_presence_unsubscribe') return { status: 'ok' };
   if (command === 'matrix_user_status_snapshot') return { sessionGeneration: 1, userId };
-  if (command === 'matrix_room_list_snapshot') {
-    return {
+  if (command === 'matrix_room_list_snapshot' || command === 'matrix_room_list_snapshot_since') {
+    const snapshot = {
       sessionGeneration: 1,
       orderedRoomIds: rooms.map((r) => r.roomId),
       rooms,
       presentation: presentationFor(rooms),
     };
+    return command === 'matrix_room_list_snapshot' ? snapshot : { revision: 0, snapshot };
   }
   if (command === 'matrix_space_parents_snapshot') return { sessionGeneration: 1, entries: [] };
   throw new Error(`Unexpected fixture command ${command}`);

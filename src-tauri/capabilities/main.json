@@ -122,6 +122,7 @@
     "allow-matrix-room-key-import-select",
     "allow-matrix-room-key-import",
     "allow-matrix-room-list-snapshot",
+    "allow-matrix-room-list-snapshot-since",
     "allow-matrix-inbox-notifications",
     "allow-matrix-invites-snapshot",
     "allow-matrix-invites-accept",

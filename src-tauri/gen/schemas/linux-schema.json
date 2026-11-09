@@ -369,6 +369,12 @@
           "markdownDescription": "Enables the desktop_diagnostics_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_dismiss_all_notifications command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-dismiss-all-notifications",
+          "markdownDescription": "Enables the desktop_dismiss_all_notifications command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_dismiss_notifications command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-dismiss-notifications",
@@ -405,6 +411,12 @@
           "markdownDescription": "Enables the desktop_hide command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_link_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-link-preview",
+          "markdownDescription": "Enables the desktop_link_preview command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_log_path command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-log-path",
@@ -433,6 +445,12 @@
           "type": "string",
           "const": "allow-desktop-play-notification-sound",
           "markdownDescription": "Enables the desktop_play_notification_sound command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_quit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-quit",
+          "markdownDescription": "Enables the desktop_quit command without any pre-configured scope."
         },
         {
           "description": "Enables the desktop_read_diagnostics command without any pre-configured scope.",
@@ -531,28 +549,10 @@
           "markdownDescription": "Enables the desktop_show command without any pre-configured scope."
         },
         {
-          "description": "Enables the desktop_update_tray_state command without any pre-configured scope.",
+          "description": "Enables the desktop_take_notification_responses command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-desktop-update-tray-state",
-          "markdownDescription": "Enables the desktop_update_tray_state command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the desktop_updater_install command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-desktop-updater-install",
-          "markdownDescription": "Enables the desktop_updater_install command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the desktop_window_close command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-desktop-window-close",
-          "markdownDescription": "Enables the desktop_window_close command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the desktop_window_minimize command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-desktop-window-minimize",
-          "markdownDescription": "Enables the desktop_window_minimize command without any pre-configured scope."
+          "const": "allow-desktop-take-notification-responses",
+          "markdownDescription": "Enables the desktop_take_notification_responses command without any pre-configured scope."
         },
         {
           "description": "Enables the desktop_timeline_subscribe command without any pre-configured scope.",
@@ -565,6 +565,36 @@
           "type": "string",
           "const": "allow-desktop-timeline-unsubscribe",
           "markdownDescription": "Enables the desktop_timeline_unsubscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_update_tray_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-update-tray-state",
+          "markdownDescription": "Enables the desktop_update_tray_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_updater_install command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-updater-install",
+          "markdownDescription": "Enables the desktop_updater_install command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_updater_relaunch command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-updater-relaunch",
+          "markdownDescription": "Enables the desktop_updater_relaunch command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_window_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-window-close",
+          "markdownDescription": "Enables the desktop_window_close command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_window_minimize command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-window-minimize",
+          "markdownDescription": "Enables the desktop_window_minimize command without any pre-configured scope."
         },
         {
           "description": "Enables the desktop_window_toggle_maximize command without any pre-configured scope.",
@@ -627,6 +657,18 @@
           "markdownDescription": "Enables the matrix_agent_notification_preferences_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_agent_question_answer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-agent-question-answer",
+          "markdownDescription": "Enables the matrix_agent_question_answer command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_attachment_stage command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-attachment-stage",
+          "markdownDescription": "Enables the matrix_attachment_stage command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_backup_repair command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-backup-repair",
@@ -663,10 +705,28 @@
           "markdownDescription": "Enables the matrix_composer_clear_reply_draft command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_composer_command_suggestions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-composer-command-suggestions",
+          "markdownDescription": "Enables the matrix_composer_command_suggestions command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_composer_get_reply_draft command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-composer-get-reply-draft",
           "markdownDescription": "Enables the matrix_composer_get_reply_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_composer_resolve_mentions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-composer-resolve-mentions",
+          "markdownDescription": "Enables the matrix_composer_resolve_mentions command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_composer_run_command command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-composer-run-command",
+          "markdownDescription": "Enables the matrix_composer_run_command command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_composer_set_reply_draft command without any pre-configured scope.",
@@ -1291,6 +1351,12 @@
           "type": "string",
           "const": "allow-matrix-room-list-snapshot",
           "markdownDescription": "Enables the matrix_room_list_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_list_snapshot_since command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-list-snapshot-since",
+          "markdownDescription": "Enables the matrix_room_list_snapshot_since command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_room_local_aliases command without any pre-configured scope.",
@@ -1947,6 +2013,12 @@
           "markdownDescription": "Denies the desktop_diagnostics_status command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_dismiss_all_notifications command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-dismiss-all-notifications",
+          "markdownDescription": "Denies the desktop_dismiss_all_notifications command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_dismiss_notifications command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-dismiss-notifications",
@@ -1983,6 +2055,12 @@
           "markdownDescription": "Denies the desktop_hide command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_link_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-link-preview",
+          "markdownDescription": "Denies the desktop_link_preview command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_log_path command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-log-path",
@@ -2011,6 +2089,12 @@
           "type": "string",
           "const": "deny-desktop-play-notification-sound",
           "markdownDescription": "Denies the desktop_play_notification_sound command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_quit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-quit",
+          "markdownDescription": "Denies the desktop_quit command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_read_diagnostics command without any pre-configured scope.",
@@ -2109,6 +2193,24 @@
           "markdownDescription": "Denies the desktop_show command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_take_notification_responses command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-take-notification-responses",
+          "markdownDescription": "Denies the desktop_take_notification_responses command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_timeline_subscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-timeline-subscribe",
+          "markdownDescription": "Denies the desktop_timeline_subscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_timeline_unsubscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-timeline-unsubscribe",
+          "markdownDescription": "Denies the desktop_timeline_unsubscribe command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_update_tray_state command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-update-tray-state",
@@ -2119,6 +2221,12 @@
           "type": "string",
           "const": "deny-desktop-updater-install",
           "markdownDescription": "Denies the desktop_updater_install command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_updater_relaunch command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-updater-relaunch",
+          "markdownDescription": "Denies the desktop_updater_relaunch command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_window_close command without any pre-configured scope.",
@@ -2163,18 +2271,6 @@
           "markdownDescription": "Denies the matrix_account_data_types command without any pre-configured scope."
         },
         {
-          "description": "Denies the desktop_timeline_subscribe command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-desktop-timeline-subscribe",
-          "markdownDescription": "Denies the desktop_timeline_subscribe command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the desktop_timeline_unsubscribe command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-desktop-timeline-unsubscribe",
-          "markdownDescription": "Denies the desktop_timeline_unsubscribe command without any pre-configured scope."
-        },
-        {
           "description": "Denies the matrix_agent_approval_decide command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-agent-approval-decide",
@@ -2203,6 +2299,18 @@
           "type": "string",
           "const": "deny-matrix-agent-notification-preferences-snapshot",
           "markdownDescription": "Denies the matrix_agent_notification_preferences_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_agent_question_answer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-agent-question-answer",
+          "markdownDescription": "Denies the matrix_agent_question_answer command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_attachment_stage command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-attachment-stage",
+          "markdownDescription": "Denies the matrix_attachment_stage command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_backup_repair command without any pre-configured scope.",
@@ -2241,10 +2349,28 @@
           "markdownDescription": "Denies the matrix_composer_clear_reply_draft command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_composer_command_suggestions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-composer-command-suggestions",
+          "markdownDescription": "Denies the matrix_composer_command_suggestions command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_composer_get_reply_draft command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-composer-get-reply-draft",
           "markdownDescription": "Denies the matrix_composer_get_reply_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_composer_resolve_mentions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-composer-resolve-mentions",
+          "markdownDescription": "Denies the matrix_composer_resolve_mentions command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_composer_run_command command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-composer-run-command",
+          "markdownDescription": "Denies the matrix_composer_run_command command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_composer_set_reply_draft command without any pre-configured scope.",
@@ -2869,6 +2995,12 @@
           "type": "string",
           "const": "deny-matrix-room-list-snapshot",
           "markdownDescription": "Denies the matrix_room_list_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_list_snapshot_since command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-list-snapshot-since",
+          "markdownDescription": "Denies the matrix_room_list_snapshot_since command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_local_aliases command without any pre-configured scope.",

@@ -95,8 +95,11 @@ test('topics, attributions, plain bodies and highlights use the shared helpers',
 
 test('plain-text links go through the formatted anchor and only open what the desktop can', () => {
   const body = read('features/room/nativeTimelineFormattedBody.tsx');
-  assert.match(body, /url: \(value\) => isNativeOpenableHref\(value\)/);
-  assert.match(body, /return renderNativeAnchor\(href, content, content, context\);/);
+  // Links come from the shared message-link rule (no file names or path
+  // pieces) and only open what the desktop opener handles.
+  assert.match(body, /segmentMessageLinks\(text\)/);
+  assert.match(body, /!segment\.href \|\| !isNativeOpenableHref\(segment\.href\)/);
+  assert.match(body, /renderNativeAnchor\(segment\.href, segment\.text, content, context\)/);
   // Search highlighting leaves inline code exactly as sent.
   assert.match(body, /domNode\.parent\.name === 'code'/);
 });

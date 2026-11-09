@@ -1,4 +1,4 @@
-import { find } from 'linkifyjs';
+import { findMessageLinks } from '../../utils/messageLinks';
 import type { DesktopInvokeResult } from '../../utils/desktop';
 import { hasForbiddenWireFields, isObject } from '../matrix-dto/parseUtil';
 import { projectNativeFormattedBody } from './nativeTimelinePresentationProjection';
@@ -54,18 +54,18 @@ export const isPreviewCandidateUrl = (value: string): boolean => {
   }
 };
 
-const urlsInText = (text: string): string[] => {
-  if (!text.trim()) return [];
-  return find(text)
-    .filter((match) => match.type === 'url' && isPreviewCandidateUrl(match.href))
-    .map((match) => match.href);
-};
+// The same links the timeline draws: a file name or a piece of a path is
+// never previewed as a website.
+const urlsInText = (text: string): string[] =>
+  findMessageLinks(text)
+    .map((link) => link.href)
+    .filter((href) => /^https?:/i.test(href) && isPreviewCandidateUrl(href));
 
 export const trailingComposerPreviewUrl = (plainText: string): string | undefined => {
   const trimmed = plainText.trim();
   if (!trimmed) return undefined;
-  const matches = find(trimmed).filter(
-    (match) => match.type === 'url' && isPreviewCandidateUrl(match.href)
+  const matches = findMessageLinks(trimmed).filter(
+    (match) => /^https?:/i.test(match.href) && isPreviewCandidateUrl(match.href)
   );
   if (matches.length !== 1) return undefined;
   const lastToken = trimmed.split(/\s+/).pop();

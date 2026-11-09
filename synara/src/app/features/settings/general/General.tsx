@@ -56,6 +56,7 @@ import {
   widgetsSettingsDescription,
 } from '../../widgets/experimentalWidgets';
 import { isSafeWidgetUrl } from '../../widgets/widgetUrl';
+import { roomListShortcut } from '../../room-list-pane/roomListPane';
 import {
   snapshotRtcTransportsNative,
   type NativeRtcTransportsSnapshot,
@@ -597,6 +598,23 @@ function DesktopShortcutsSection() {
           </SettingTile>
         </SequenceCard>
       </Box>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title={t(
+            'modernization.settings.desktop_shortcuts.room_list_label',
+            'Show or hide the room list'
+          )}
+          description={t(
+            'modernization.settings.desktop_shortcuts.room_list_description',
+            'Works in the Synara window, also while typing. On macOS it is in the View menu too.'
+          )}
+          after={
+            <Text as="kbd" size="T300" priority="300">
+              {roomListShortcut(isMacOS()).label}
+            </Text>
+          }
+        />
+      </SequenceCard>
     </SettingsSection>
   );
 }

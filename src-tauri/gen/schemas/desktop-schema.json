@@ -1353,6 +1353,12 @@
           "markdownDescription": "Enables the matrix_room_list_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_list_snapshot_since command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-list-snapshot-since",
+          "markdownDescription": "Enables the matrix_room_list_snapshot_since command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_local_aliases command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-local-aliases",
@@ -2989,6 +2995,12 @@
           "type": "string",
           "const": "deny-matrix-room-list-snapshot",
           "markdownDescription": "Denies the matrix_room_list_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_list_snapshot_since command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-list-snapshot-since",
+          "markdownDescription": "Denies the matrix_room_list_snapshot_since command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_local_aliases command without any pre-configured scope.",

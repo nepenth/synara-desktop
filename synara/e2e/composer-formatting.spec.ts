@@ -16,8 +16,30 @@ const doc = (page: Page) =>
 const outline = async (page: Page) =>
   (await doc(page)).map((node) => `${node.type}${node.start ? `@${node.start}` : ''}`);
 
-/** Puts the caret at the start of the first text node containing `word`. */
-const caretBefore = (page: Page, word: string) =>
+/**
+ * Puts the caret at the start of the first text node containing `word`, and
+ * waits until Slate has read it: Slate takes the DOM selection on a throttled
+ * selectionchange, so a key pressed at once can still act on the old caret
+ * (seen on loaded CI runners).
+ */
+const caretBefore = async (page: Page, word: string) => {
+  await placeCaretBefore(page, word);
+  await page.waitForFunction((target) => {
+    type Point = { path: number[]; offset: number };
+    type Ed = { selection: { anchor: Point; focus: Point } | null; children: unknown[] };
+    const editor = (window as unknown as { synaraComposerEditor: Ed }).synaraComposerEditor;
+    const anchor = editor.selection?.anchor;
+    if (!anchor) return false;
+    let node: unknown = { children: editor.children };
+    for (const index of anchor.path) {
+      node = (node as { children?: unknown[] }).children?.[index];
+    }
+    const text = (node as { text?: string } | undefined)?.text ?? '';
+    return text.slice(anchor.offset).startsWith(target);
+  }, word);
+};
+
+const placeCaretBefore = (page: Page, word: string) =>
   page.evaluate((target) => {
     const editable = document.querySelector('[data-slate-editor]')!;
     const walker = document.createTreeWalker(editable, NodeFilter.SHOW_TEXT);
