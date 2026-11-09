@@ -934,6 +934,19 @@ mod tests {
         .is_none());
     }
     #[test]
+    fn a_prompt_edited_to_its_outcome_leaves_the_inbox_rather_than_reading_decided() {
+        // Clients that withdraw an alert must treat this disappearance as
+        // settled: there is no `decided` row for it.
+        let state = std::sync::Mutex::new(RoomSnapshot::default());
+        let mut item = prompt();
+        item.origin_server_ts = agent_approval_now_ms().unwrap();
+        publish_room(&state, std::iter::once(item.clone()), USER, true);
+        assert_eq!(state.lock().unwrap().items.len(), 1);
+        item.body = "✅ Approved: rm example".into();
+        publish_room(&state, std::iter::once(item), USER, true);
+        assert!(state.lock().unwrap().items.is_empty());
+    }
+    #[test]
     fn incomplete_coverage_and_decryption_do_not_masquerade_as_an_empty_inbox() {
         let state = std::sync::Mutex::new(RoomSnapshot::default());
         publish_room(&state, std::iter::empty(), USER, false);
