@@ -341,9 +341,9 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func bindHttpPusherOwner(userId: String, deviceId: String, homeserverUrl: String) throws -> HttpPusherOwner
   open func composerClearReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
   open func composerCommandSuggestions(roomId: String, prefix: String) async throws -> [CommandSuggestion]
+  open func composerExecute(roomId: String, text: String, confirmed: Bool) async throws -> CommandOutcome
   open func composerGetReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
   open func composerResolveMentions(text: String, members: [MentionCandidate], ownUserId: String) -> [TypedMention]
-  open func composerRunCommand(roomId: String, text: String, confirmed: Bool) async throws -> CommandOutcome
   open func composerSetReplyDraft(roomId: String, eventId: String, startThread: Bool) async throws -> ComposerReplyDraftDto
   open func crossSigningSetup() async throws -> CrossSigningSetupDto
   open func crossSigningSetupPassword(password: String) async throws -> CrossSigningSetupDto
@@ -1182,9 +1182,9 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func bindHttpPusherOwner(userId: String, deviceId: String, homeserverUrl: String) throws -> HttpPusherOwner
   func composerClearReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
   func composerCommandSuggestions(roomId: String, prefix: String) async throws -> [CommandSuggestion]
+  func composerExecute(roomId: String, text: String, confirmed: Bool) async throws -> CommandOutcome
   func composerGetReplyDraft(roomId: String) async throws -> ComposerReplyDraftDto
   func composerResolveMentions(text: String, members: [MentionCandidate], ownUserId: String) -> [TypedMention]
-  func composerRunCommand(roomId: String, text: String, confirmed: Bool) async throws -> CommandOutcome
   func composerSetReplyDraft(roomId: String, eventId: String, startThread: Bool) async throws -> ComposerReplyDraftDto
   func crossSigningSetup() async throws -> CrossSigningSetupDto
   func crossSigningSetupPassword(password: String) async throws -> CrossSigningSetupDto

@@ -266,7 +266,7 @@ final class SharedCoreComposerCommandService: ComposerCommandServicing {
             throw SynaraCommandError.signedOut
         }
         do {
-            let outcome = try await host.core.composerRunCommand(roomId: roomID, text: text, confirmed: confirmed)
+            let outcome = try await host.core.composerExecute(roomId: roomID, text: text, confirmed: confirmed)
             return SynaraCommandOutcome(dto: outcome)
         } catch let error as ComposerCommandRunError {
             switch error {

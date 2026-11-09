@@ -129,7 +129,7 @@ impl SharedCore {
     /// Run what the composer holds in `room_id`. Message commands come back
     /// as `SendMessage` for the composer to send with its reply and thread;
     /// destructive ones come back as `NeedsConfirmation` until `confirmed`.
-    pub async fn composer_run_command(
+    pub async fn composer_execute(
         &self,
         room_id: String,
         text: String,
@@ -171,7 +171,7 @@ mod tests {
     async fn commands_without_a_session_say_so() {
         let core = SharedCore::new();
         let error = core
-            .composer_run_command("!r:example.org".into(), "/kick @a:b".into(), false)
+            .composer_execute("!r:example.org".into(), "/kick @a:b".into(), false)
             .await
             .expect_err("no session");
         assert_eq!(error.kind(), CoreErrorKind::NotReady);
