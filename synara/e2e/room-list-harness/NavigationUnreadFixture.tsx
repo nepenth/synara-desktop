@@ -82,13 +82,14 @@ const invoke = async (command: string, args?: Record<string, unknown>) => {
     return { receiptSent: true, acknowledgedEventId: '$latest', unreadFlagCleared: false };
   }
   if (command === 'matrix_session_snapshot') return session;
-  if (command === 'matrix_room_list_snapshot') {
-    return {
+  if (command === 'matrix_room_list_snapshot' || command === 'matrix_room_list_snapshot_since') {
+    const snapshot = {
       sessionGeneration: 1,
       orderedRoomIds: rooms.map((r) => r.roomId),
       rooms,
       presentation: presentationFor(rooms),
     };
+    return command === 'matrix_room_list_snapshot' ? snapshot : { revision: 0, snapshot };
   }
   if (command === 'matrix_mdirect_snapshot') {
     return {

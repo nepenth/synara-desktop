@@ -724,6 +724,7 @@ pub fn run() {
             matrix::auth::product::matrix_x509_identity_remove_ca,
             matrix::auth::product::matrix_x509_identity_import_signer,
             matrix::auth::product::matrix_room_list_snapshot,
+            matrix::auth::product::matrix_room_list_snapshot_since,
             matrix::auth::product::matrix_room_members_snapshot,
             matrix::auth::product::matrix_room_power_levels_snapshot,
             matrix::auth::product::matrix_room_retention,

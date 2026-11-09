@@ -1,6 +1,7 @@
-//! Desktop bridge for `matrix_room_list_snapshot` through `Core::command`.
+//! Desktop bridge for `matrix_room_list_snapshot` and
+//! `matrix_room_list_snapshot_since` through `Core`.
 
-use synara_core::app::room_list::NativeRoomListSnapshot;
+use synara_core::app::room_list::{NativeRoomListSnapshot, RoomListSnapshotReply};
 use synara_core::transport::{MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
@@ -14,6 +15,15 @@ pub(crate) async fn room_list_snapshot(
         .await
         .map_err(map_room_list_core_error)?;
     Ok(response)
+}
+
+pub(crate) async fn room_list_snapshot_since(
+    core: &Core,
+    known_revision: Option<u64>,
+) -> Result<RoomListSnapshotReply, MatrixAuthCommandError> {
+    core.room_list_snapshot_since(known_revision)
+        .await
+        .map_err(map_room_list_core_error)
 }
 
 fn map_room_list_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {

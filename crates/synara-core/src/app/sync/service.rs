@@ -177,6 +177,9 @@ pub struct SyncServiceOwner {
     /// Highlight notifications read from the server for mention badges;
     /// refreshed by the room-list owner, read by room-list snapshots.
     server_highlights: Arc<crate::app::room_list::ServerHighlights>,
+    /// Room-list rows and space graph reused between snapshots, with the
+    /// change revision; the room-list owner marks what changed.
+    room_list_cache: Arc<crate::app::room_list::RoomListSnapshotCache>,
 }
 
 #[derive(Default)]
@@ -347,6 +350,11 @@ impl SyncServiceOwner {
     /// Server highlight notifications for this session's mention badges.
     pub fn server_highlights(&self) -> &Arc<crate::app::room_list::ServerHighlights> {
         &self.server_highlights
+    }
+
+    /// Room-list snapshot cache and change revision for this session.
+    pub(crate) fn room_list_cache(&self) -> &Arc<crate::app::room_list::RoomListSnapshotCache> {
+        &self.room_list_cache
     }
 
     /// Keep the SDK's latest-event calculation active for the current room-list
@@ -527,6 +535,7 @@ pub(crate) async fn build_sync_service_with_heartbeat(
         heartbeat_task,
         session_change_task,
         server_highlights: Arc::default(),
+        room_list_cache: Arc::default(),
     })
 }
 
