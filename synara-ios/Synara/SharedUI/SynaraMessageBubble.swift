@@ -398,16 +398,43 @@ enum SynaraPlainTextLinks {
         guard let detector, text.isEmpty == false else {
             return []
         }
-        let matches = detector.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
+        let ns = text as NSString
+        let matches = detector.matches(in: text, range: NSRange(location: 0, length: ns.length))
         return matches.compactMap { match in
             guard let url = match.url,
                   let scheme = url.scheme?.lowercased(),
-                  allowedSchemes.contains(scheme)
+                  allowedSchemes.contains(scheme),
+                  scheme == "mailto" || isIntendedLink(ns.substring(with: match.range), in: ns, at: match.range.location)
             else {
                 return nil
             }
             return (match.range, url)
         }
+    }
+
+    /// Endings that are real top-level domains but, written bare, almost
+    /// always name a file (`README.md`, `setup.py`). Desktop uses the same list.
+    static let fileLikeBareTLDs: Set<String> = ["md", "py", "rs", "sh", "zip", "mov"]
+
+    /// Whether a detected web address is one a reader meant: not a piece of a
+    /// longer word, path or file name (`/Users/me/README_SUBMISSION.md` once
+    /// linked `SUBMISSION.md`), and not a bare file name with a file-like ending.
+    static func isIntendedLink(_ written: String, in text: NSString, at location: Int) -> Bool {
+        if location > 0 {
+            let before = text.substring(with: NSRange(location: location - 1, length: 1))
+            if before.unicodeScalars.contains(where: { scalar in
+                CharacterSet.alphanumerics.contains(scalar) || "_-./\\~".unicodeScalars.contains(scalar)
+            }) {
+                return false
+            }
+        }
+        let lowered = written.lowercased()
+        if lowered.range(of: "^[a-z][a-z0-9+.-]*:", options: .regularExpression) != nil || lowered.hasPrefix("www.") {
+            return true
+        }
+        let host = lowered.split(whereSeparator: { "/?#:".contains($0) }).first.map(String.init) ?? lowered
+        let tld = host.split(separator: ".").last.map(String.init) ?? ""
+        return fileLikeBareTLDs.contains(tld) == false
     }
 
     /// `text` with a `.link` on each detected link, and with a long bare

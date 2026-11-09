@@ -2,8 +2,6 @@ import { isTag, isText, type ChildNode } from 'domhandler';
 import { reactDomNodes } from '../../utils/reactDomNodes';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
-import Linkify from 'linkify-react';
-import type { IntermediateRepresentation, Opts as LinkifyOpts } from 'linkifyjs';
 import '../../plugins/react-prism/ReactPrism.css';
 import {
   NATIVE_PRISM_CHAR_LIMIT,
@@ -27,6 +25,7 @@ import { convertDesktopFileSrc } from '../../utils/desktop';
 import { IN_APP_LINK_ATTRIBUTE } from '../../utils/appLinks';
 import { getMyUserId } from '../../state/nativeIdentity';
 import { highlightText } from '../../utils/highlightText';
+import { segmentMessageLinks } from '../../utils/messageLinks';
 import {
   isNativeOpenableHref,
   nativeCustomEmojiContentUri,
@@ -282,7 +281,6 @@ const hasAncestorTag = (node: ChildNode, name: string): boolean => {
 export const createNativeFormattedHtmlParserOptions = (
   context: NativeFormattedRenderContext
 ): HTMLReactParserOptions => {
-  const linkifyOptions = createNativeLinkifyOptions(context);
   const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
     replace: (domNode) => {
       if (isText(domNode)) {
@@ -299,7 +297,7 @@ export const createNativeFormattedHtmlParserOptions = (
         if (hasAncestorTag(domNode, 'a')) {
           return highlightRegex ? <>{content}</> : undefined;
         }
-        return <Linkify options={linkifyOptions}>{content}</Linkify>;
+        return <>{renderNativeLinkifiedText(domNode.data, context)}</>;
       }
       if (!isTag(domNode) || !('name' in domNode)) {
         return undefined;
@@ -452,18 +450,30 @@ export function NativeFormattedBody({
  * Plain-text links: only addresses the desktop opener handles (an ftp or
  * magnet address is already readable as text), each through the formatted
  * renderer's anchor, so matrix.to links become mentions and permalinks too.
+ * `segmentMessageLinks` decides what counts as a link (not a file name or a
+ * piece of a path); search highlighting applies inside and outside links.
  */
-const createNativeLinkifyOptions = (context: NativeFormattedRenderContext): LinkifyOpts => ({
-  validate: {
-    url: (value) => isNativeOpenableHref(value),
-  },
-  ignoreTags: ['span'],
-  render: ({ tagName, attributes, content }: IntermediateRepresentation) => {
-    const href = typeof attributes.href === 'string' ? attributes.href : undefined;
-    if (tagName !== 'a' || !href) return <>{content}</>;
-    return renderNativeAnchor(href, content, content, context);
-  },
-});
+const renderNativeLinkifiedText = (
+  text: string,
+  context: NativeFormattedRenderContext
+): React.ReactNode[] => {
+  const { highlightRegex } = context;
+  const highlighted = (value: string) =>
+    highlightRegex ? highlightText(highlightRegex, [value]) : value;
+  return segmentMessageLinks(text).map((segment, index) => {
+    const content = highlighted(segment.text);
+    if (!segment.href || !isNativeOpenableHref(segment.href)) {
+      // eslint-disable-next-line react/no-array-index-key -- segments never reorder
+      return <React.Fragment key={index}>{content}</React.Fragment>;
+    }
+    return (
+      // eslint-disable-next-line react/no-array-index-key -- segments never reorder
+      <React.Fragment key={index}>
+        {renderNativeAnchor(segment.href, segment.text, content, context)}
+      </React.Fragment>
+    );
+  });
+};
 
 /**
  * Plain text with its links: message bodies without HTML, room topics and
@@ -479,15 +489,11 @@ export function NativeLinkifiedText({
   const onPermalink = useContext(NativePermalinkContext);
   const ownUserId = getMyUserId() ?? undefined;
   const [shortenLinks] = useSetting(settingsAtom, 'shortenLinks');
-  const options = useMemo(
-    () => createNativeLinkifyOptions({ onPermalink, ownUserId, highlightRegex, shortenLinks }),
-    [onPermalink, ownUserId, highlightRegex, shortenLinks]
+  const content = useMemo(
+    () => renderNativeLinkifiedText(text, { onPermalink, ownUserId, highlightRegex, shortenLinks }),
+    [text, onPermalink, ownUserId, highlightRegex, shortenLinks]
   );
-  return (
-    <Linkify options={options}>
-      {highlightRegex ? highlightText(highlightRegex, [text]) : text}
-    </Linkify>
-  );
+  return <>{content}</>;
 }
 
 /**

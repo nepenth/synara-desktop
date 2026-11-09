@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Links (desktop and iOS): a file path or file name in a message is no longer turned into a web link. `/Users/me/README_SUBMISSION.md` linked to submission.md, because `.md` is a real top-level domain and the underscore ends a domain name. An address now links only when it starts a word, and a bare name ending in .md, .py, .rs, .sh, .zip or .mov links only with a scheme or www. Link previews follow the same rule.
 - Question cards (desktop and iOS): the 1️⃣–🔟 and ⏭️ reactions Hermes seeds on a structured question card, and answers sent as those reactions, no longer repeat as reaction pills under the card, which already shows the choices and the answer. Other reactions stay; plain-text fallback cards are unchanged.
 - Desktop: the room list can be hidden to give the room the window's width. The new button at the top of the rail, Cmd+Shift+D (Ctrl+Shift+D on Linux and Windows, also from the composer) or View → Show/Hide Room List on macOS slides the pane into the rail and back. The list keeps its scroll position, search and collapsed sections, and the choice is remembered on this device. While the list is hidden, the button shows its unread like the rail does: a red count for mentions and DMs, a dot for other unread. With reduced motion the pane hides without sliding. Settings → General → Keyboard shortcuts lists the shortcut.
 
