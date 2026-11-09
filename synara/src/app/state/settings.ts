@@ -125,6 +125,8 @@ export interface DesktopPlatformSettings {
   desktopDiagnosticsRoomState: boolean;
   desktopDiagnosticsOverlay: boolean;
   agentWidgetEntries: AgentWidgetEntry[];
+  /** The desktop room list pane is hidden (⌘⇧D / Ctrl+Shift+D). Per device. */
+  roomListCollapsed: boolean;
 }
 
 export type PlatformSettings = DesktopPlatformSettings;
@@ -228,6 +230,7 @@ const sanitizeAgentWidgetEntries = (value: unknown): AgentWidgetEntry[] => {
 const sanitizePlatformSettings = (settings: DesktopPlatformSettings): DesktopPlatformSettings => ({
   ...settings,
   agentWidgetEntries: sanitizeAgentWidgetEntries(settings.agentWidgetEntries),
+  roomListCollapsed: settings.roomListCollapsed === true,
 });
 
 /**
@@ -291,6 +294,7 @@ export const defaultDesktopPlatformSettings: DesktopPlatformSettings = {
   desktopDiagnosticsRoomState: false,
   desktopDiagnosticsOverlay: false,
   agentWidgetEntries: [],
+  roomListCollapsed: false,
 };
 
 export const defaultPlatformSettings: PlatformSettings = {

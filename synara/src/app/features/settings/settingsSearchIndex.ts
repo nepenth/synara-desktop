@@ -136,6 +136,12 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   },
   {
     page: SettingsPages.GeneralPage,
+    title: 'Show or hide the room list',
+    description: 'Cmd/Ctrl+Shift+D hides the room list pane or brings it back.',
+    synonyms: ['sidebar', 'room list', 'collapse', 'hide', 'navigation pane', 'shortcut'],
+  },
+  {
+    page: SettingsPages.GeneralPage,
     title: 'Storage',
     synonyms: ['cache', 'disk', 'data'],
   },

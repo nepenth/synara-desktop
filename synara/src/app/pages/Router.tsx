@@ -199,6 +199,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
         <Route
           element={
             <PageRoot
+              collapsibleNav
               nav={
                 <MobileFriendlyPageNav path={[HOME_PATH, DIRECT_PATH]}>
                   <Home />
@@ -273,6 +274,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
           element={
             <RouteSpaceProvider>
               <PageRoot
+                collapsibleNav
                 nav={
                   <MobileFriendlyPageNav path={SPACE_PATH}>
                     <Space />
@@ -320,6 +322,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
           path={EXPLORE_PATH}
           element={
             <PageRoot
+              collapsibleNav
               nav={
                 <MobileFriendlyPageNav path={EXPLORE_PATH}>
                   <Explore />
@@ -346,6 +349,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
           path={INBOX_PATH}
           element={
             <PageRoot
+              collapsibleNav
               nav={
                 <MobileFriendlyPageNav path={INBOX_PATH}>
                   <Inbox />

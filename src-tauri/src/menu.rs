@@ -8,11 +8,12 @@ use crate::desktop_logging;
 pub const MENU_CHECK_FOR_UPDATES: &str = "synara_check_for_updates";
 pub const CHECK_FOR_UPDATES_EVENT: &str = "synara://check-for-updates";
 
-/// Menu items whose action the renderer owns (page zoom, Settings). The
+/// Menu items whose action the renderer owns (page zoom, Settings, the room
+/// list). The
 /// webview sees the key first and handles it there; these items cover
 /// discoverability and mouse use. Payload: the renderer's action name.
 pub const APP_SHORTCUT_EVENT: &str = "synara://app-shortcut";
-const MENU_APP_SHORTCUTS: [(&str, &str, &str, &str); 4] = [
+const MENU_APP_SHORTCUTS: [(&str, &str, &str, &str); 5] = [
     // (menu id, label, accelerator, renderer action)
     ("synara_settings", "Settings…", "CmdOrCtrl+,", "settings"),
     (
@@ -23,6 +24,12 @@ const MENU_APP_SHORTCUTS: [(&str, &str, &str, &str); 4] = [
     ),
     ("synara_zoom_in", "Zoom In", "CmdOrCtrl+=", "zoom-in"),
     ("synara_zoom_out", "Zoom Out", "CmdOrCtrl+-", "zoom-out"),
+    (
+        "synara_toggle_room_list",
+        "Show/Hide Room List",
+        "CmdOrCtrl+Shift+D",
+        "toggle-room-list",
+    ),
 ];
 
 fn app_shortcut_action_for_menu_id(id: &str) -> Option<&'static str> {
@@ -119,6 +126,8 @@ pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R
         .build()?;
 
     let view_menu = SubmenuBuilder::new(app, "View")
+        .item(&app_shortcut_item(app, "synara_toggle_room_list")?)
+        .separator()
         .item(&app_shortcut_item(app, "synara_zoom_reset")?)
         .item(&app_shortcut_item(app, "synara_zoom_in")?)
         .item(&app_shortcut_item(app, "synara_zoom_out")?)
@@ -162,6 +171,10 @@ mod tests {
             Some("zoom-reset")
         );
         assert_eq!(
+            app_shortcut_action_for_menu_id("synara_toggle_room_list"),
+            Some("toggle-room-list")
+        );
+        assert_eq!(
             app_shortcut_action_for_menu_id(MENU_CHECK_FOR_UPDATES),
             None
         );
@@ -171,7 +184,13 @@ mod tests {
             .collect();
         assert_eq!(
             accelerators,
-            ["CmdOrCtrl+,", "CmdOrCtrl+0", "CmdOrCtrl+=", "CmdOrCtrl+-"]
+            [
+                "CmdOrCtrl+,",
+                "CmdOrCtrl+0",
+                "CmdOrCtrl+=",
+                "CmdOrCtrl+-",
+                "CmdOrCtrl+Shift+D"
+            ]
         );
     }
 }
