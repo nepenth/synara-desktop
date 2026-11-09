@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Question cards (desktop and iOS): the 1️⃣–🔟 and ⏭️ reactions Hermes seeds on a structured question card, and answers sent as those reactions, no longer repeat as reaction pills under the card, which already shows the choices and the answer. Other reactions stay; plain-text fallback cards are unchanged.
 - Desktop: the room list can be hidden to give the room the window's width. The new button at the top of the rail, Cmd+Shift+D (Ctrl+Shift+D on Linux and Windows, also from the composer) or View → Show/Hide Room List on macOS slides the pane into the rail and back. The list keeps its scroll position, search and collapsed sections, and the choice is remembered on this device. While the list is hidden, the button shows its unread like the rail does: a red count for mentions and DMs, a dot for other unread. With reduced motion the pane hides without sliding. Settings → General → Keyboard shortcuts lists the shortcut.
 
 ## [2.9.2] - 2026-11-09

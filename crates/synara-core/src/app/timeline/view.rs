@@ -28,8 +28,9 @@ use serde_json::Value as JsonValue;
 use crate::app::account_data::SynaraAgentApprovalHistoryDecision;
 use crate::app::agent_approvals::is_eligible_agent_approval_prompt;
 use crate::app::agent_questions::{
-    can_answer_agent_question, own_reaction_answer, recognize_agent_question, AgentQuestionChoice,
-    AgentQuestionOwnAnswer, AgentQuestionSource, AgentQuestionState,
+    can_answer_agent_question, is_skip_reaction, keycap_reaction_index, own_reaction_answer,
+    recognize_agent_question, AgentQuestionChoice, AgentQuestionOwnAnswer, AgentQuestionSource,
+    AgentQuestionState,
 };
 use crate::dto::{EventId, LocalEchoState, RoomId, TimelineItemId, UserId};
 
@@ -207,6 +208,25 @@ pub struct TimelineAgentQuestion {
 /// Project a clarifying question for a text or notice message from another
 /// account. The raw event (latest edit first) is probed for the content key
 /// before any JSON parse; the body fallback is a cheap line scan.
+/// A structured question card draws its choices and answer itself, so the
+/// keycap and skip reactions Hermes seeds on it (and the answers sent as
+/// those reactions) are not repeated as reaction pills. Other emoji stay.
+/// Fallback cards have no reaction route, so their reactions are untouched.
+fn question_card_reactions(
+    reactions: Vec<TimelineReaction>,
+    question: Option<&TimelineAgentQuestion>,
+) -> Vec<TimelineReaction> {
+    if !question.is_some_and(|question| question.source == AgentQuestionSource::Structured) {
+        return reactions;
+    }
+    reactions
+        .into_iter()
+        .filter(|reaction| {
+            keycap_reaction_index(&reaction.key).is_none() && !is_skip_reaction(&reaction.key)
+        })
+        .collect()
+}
+
 fn project_agent_question(
     event: &EventTimelineItem,
     msgtype: &MessageType,
@@ -639,6 +659,10 @@ fn project_event_row_for_user(
                 } else {
                     None
                 };
+                let reactions = question_card_reactions(
+                    project_reactions(content, own_user_id),
+                    agent_question.as_ref(),
+                );
                 TimelineViewRow::Message(Box::new(TimelineMessageRow {
                     event: base,
                     body,
@@ -655,7 +679,7 @@ fn project_event_row_for_user(
                     reply: project_reply(content),
                     thread_root: content.thread_root.as_ref().map(ToString::to_string),
                     thread: project_thread_summary(content, event),
-                    reactions: project_reactions(content, own_user_id),
+                    reactions,
                     media,
                 }))
             }
@@ -1706,6 +1730,56 @@ pub fn project_timeline_diffs_with_media(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn structured_question_cards_drop_their_answer_reaction_pills() {
+        let reaction = |key: &str| TimelineReaction {
+            key: key.to_owned(),
+            count: 1,
+            own: Some(false),
+            senders: Vec::new(),
+        };
+        let question = |source| TimelineAgentQuestion {
+            source,
+            clarify_id: None,
+            question: "Which?".to_owned(),
+            choices: Vec::new(),
+            multi_select: false,
+            allow_other: true,
+            allow_skip: true,
+            requester_user_id: None,
+            expires_at_ms: None,
+            state: AgentQuestionState::Pending,
+            answer: None,
+            can_answer: true,
+            own_answer: None,
+        };
+        let all = || {
+            vec![
+                reaction("1\u{fe0f}\u{20e3}"),
+                reaction("2\u{20e3}"),
+                reaction("🔟"),
+                reaction("⏭️"),
+                reaction("👍"),
+            ]
+        };
+        let keys = |reactions: Vec<TimelineReaction>| {
+            reactions
+                .into_iter()
+                .map(|reaction| reaction.key)
+                .collect::<Vec<_>>()
+        };
+
+        let structured = question(AgentQuestionSource::Structured);
+        assert_eq!(
+            keys(question_card_reactions(all(), Some(&structured))),
+            vec!["👍"]
+        );
+        // Fallback cards and ordinary messages keep every reaction.
+        let fallback = question(AgentQuestionSource::Fallback);
+        assert_eq!(question_card_reactions(all(), Some(&fallback)).len(), 5);
+        assert_eq!(question_card_reactions(all(), None).len(), 5);
+    }
     use matrix_sdk::ruma::events::room::message::{
         EmoteMessageEventContent, ImageMessageEventContent, LocationMessageEventContent,
         NoticeMessageEventContent, TextMessageEventContent,
