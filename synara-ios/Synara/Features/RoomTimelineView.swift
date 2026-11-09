@@ -10524,7 +10524,8 @@ private struct ComposerView: View {
             } label: {
                 Text(verbatim: confirmation.confirmLabel)
             }
-            .accessibilityIdentifier("ComposerCommandConfirmButton")
+            // No accessibility identifier: on an alert button it nests a
+            // second copy of the button in the accessibility tree.
             // Cancel leaves the command in the composer, as typed.
             Button("Cancel", role: .cancel) {}
         } message: { confirmation in
