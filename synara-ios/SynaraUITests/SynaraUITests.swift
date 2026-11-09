@@ -1506,6 +1506,28 @@ final class SynaraUITests: XCTestCase {
         XCTAssertLessThanOrEqual(fieldFrame.maxY, surfaceFrame.maxY + 0.5)
     }
 
+    func testTappingAMentionOpensTheProfileInTheApp() {
+        let app = launchAgentQuestionRoomApp()
+
+        let timeline = app.descendants(matching: .any)["TimelineList"]
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        let message = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", "the cover is ready")).firstMatch
+        for _ in 0 ..< 4 where message.exists == false {
+            timeline.swipeDown()
+        }
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        let mention = app.links["https://matrix.to/#/@ada:matrix.example.com"]
+        XCTAssertTrue(mention.waitForExistence(timeout: 5))
+        mention.tap()
+
+        // Ada is not in the fixture room: Synara shows its profile note
+        // instead of handing matrix.to to Safari.
+        XCTAssertTrue(app.staticTexts["Not a member of this room."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["@ada:matrix.example.com"].exists)
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
     func testAgentQuestionChoiceAnswersWithoutAnAlert() {
         let app = launchAgentQuestionRoomApp()
 

@@ -127,6 +127,7 @@
 		77BB9B4205AFA015039056CA /* SynaraNotificationDiagnosticReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B95960CDE57677680BDB4E /* SynaraNotificationDiagnosticReport.swift */; };
 		7AACA3CBB4EFEA0B37D140AC /* SynaraNseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9E884BD5BADA8458FC94D90D /* SynaraNseCore */; };
 		7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55BBDF32970A214C2829B1B /* AppRouteTests.swift */; };
+		7CDAE2C9E8B885BD7B9C0957 /* MentionProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92CBE5CC8CAB2C4CB79F2778 /* MentionProfile.swift */; };
 		7D325777FCB71B71B460A30F /* RoomUnreadPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 643AFA2D05F02E0DB1C2B849 /* RoomUnreadPresentationTests.swift */; };
 		7DAF60D7071DFEF42CDE68AC /* SharedCoreTimelineLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E9AB178A8E40E8BE4EFA42 /* SharedCoreTimelineLive.swift */; };
 		80E6E0634B604D68A3C25882 /* NotificationDeliveryCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9975634D76234E39E607E3EF /* NotificationDeliveryCoordinatorTests.swift */; };
@@ -404,6 +405,7 @@
 		9096E8A9449AC68D133146A0 /* TimelineReactionSendersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReactionSendersTests.swift; sourceTree = "<group>"; };
 		90A203B905E3CBD0DC7BD126 /* TimelineReplyPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReplyPreviewTests.swift; sourceTree = "<group>"; };
 		913C066F73C49F3FE86ED2B6 /* AgentQuestionCardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentQuestionCardTests.swift; sourceTree = "<group>"; };
+		92CBE5CC8CAB2C4CB79F2778 /* MentionProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MentionProfile.swift; sourceTree = "<group>"; };
 		9412F741C7E9E08EEA44E0BC /* SharedCoreTypingLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTypingLive.swift; sourceTree = "<group>"; };
 		96EA442C8DDA97FC8AD8DE63 /* TimelineMessageCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineMessageCopyTests.swift; sourceTree = "<group>"; };
 		97935343FA1DD873AA712230 /* SharedCoreRoomNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomNotification.swift; sourceTree = "<group>"; };
@@ -578,6 +580,7 @@
 				C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */,
 				B5BE26F02C5C59C8ED097BF8 /* LaterListView.swift */,
 				2515972271FDB4E4717F0CEE /* LoginView.swift */,
+				92CBE5CC8CAB2C4CB79F2778 /* MentionProfile.swift */,
 				E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */,
 				AF6F2D9A62CF70F391CBB5D0 /* RichLinkEmbeds.swift */,
 				417DD4194803886BB803C6A6 /* RoomListView.swift */,
@@ -1180,6 +1183,7 @@
 				CDCDCDD2EFC9D72CA218D821 /* MatrixClientPolicies.swift in Sources */,
 				D0F9ECDAFC0C1996B350149B /* MatrixSessionProjectionMirror.swift in Sources */,
 				9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */,
+				7CDAE2C9E8B885BD7B9C0957 /* MentionProfile.swift in Sources */,
 				65511A3B9DF81A3B7E52A0CD /* NotificationDeliveryCoordinator.swift in Sources */,
 				27F8472586C8C97BFB42B087 /* NotificationPermissionCoordinator.swift in Sources */,
 				959345A0355779AC54153DC0 /* OutgoingSendService.swift in Sources */,

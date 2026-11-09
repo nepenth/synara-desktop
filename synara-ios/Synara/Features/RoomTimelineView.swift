@@ -616,6 +616,7 @@ struct RoomTimelineView: View {
     @State private var cryptoActionMessage: String?
     @State private var isCryptoBannerDismissed = false
     @State private var isRoomDetailsPresented = false
+    @State private var mentionProfile: MentionProfileTarget?
     @State private var shouldReturnToListAfterDetailsDismiss = false
     @State private var isTimelineSearchPresented = false
     @State private var timelineSearchQuery = ""
@@ -797,6 +798,7 @@ struct RoomTimelineView: View {
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
+        .synaraMentionProfiles($mentionProfile, roomID: roomID, ownUserID: currentUserID)
         .sheet(isPresented: $isRoomDetailsPresented) {
             RoomDetailsView(
                 roomID: roomID,
@@ -4898,6 +4900,7 @@ struct ThreadTimelineView: View {
     @State private var replyTarget: ComposerRelationTarget?
     @State private var editSession: ComposerEditSession?
     @State private var viewerResource: MediaResource?
+    @State private var mentionProfile: MentionProfileTarget?
     /// Bumped to scroll to the newest reply (after a send).
     @State private var scrollToNewestRequest: UInt64 = 0
     @State private var hasPlacedInitialThread = false
@@ -4975,6 +4978,7 @@ struct ThreadTimelineView: View {
         .onReceive(environment.outgoingSends.queue.$items) { _ in
             refreshPendingReplies()
         }
+        .synaraMentionProfiles($mentionProfile, roomID: roomID, ownUserID: currentUserID)
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
@@ -6388,6 +6392,7 @@ private struct MatrixInlineGroupView: View {
     let font: Font
     let presentationContext: MatrixRichTextPresentationContext
     @State private var revealedSpoilers: Set<Int> = []
+    @Environment(\.synaraOpenUserProfile) private var openUserProfile
 
     var body: some View {
         Text(
@@ -6405,9 +6410,16 @@ private struct MatrixInlineGroupView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .environment(\.openURL, OpenURLAction { url in
-                guard let index = matrixInlineSpoilerIndex(url) else { return .systemAction }
-                revealedSpoilers.insert(index)
-                return .handled
+                if let index = matrixInlineSpoilerIndex(url) {
+                    revealedSpoilers.insert(index)
+                    return .handled
+                }
+                // A mention opens the member's profile here, not matrix.to.
+                if let userID = TimelineMentionPolicy.userID(inPermalink: url), let openUserProfile {
+                    openUserProfile(userID)
+                    return .handled
+                }
+                return .systemAction
             })
     }
 }

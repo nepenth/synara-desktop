@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- iOS: tapping a mention opens that person's member sheet in Synara (the one the room's member list shows), or a short note when they are not in the room, instead of opening matrix.to in Safari. Room and thread timelines both handle it.
 ## [2.9.1] - 2026-11-06
 
 - Security: vodozemac 0.11.2 (Matrix end-to-end encryption) fixes degraded zeroization of secrets in memory (RUSTSEC-2026-0445, RUSTSEC-2026-0451, published 2026-11-06).
