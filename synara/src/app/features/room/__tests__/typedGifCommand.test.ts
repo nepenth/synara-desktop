@@ -29,9 +29,11 @@ test('any command can be typed out instead of picked from the list', () => {
 
 test('the composer opens the picker for typed /gif and for Enter on /gif', () => {
   const roomInput = readFileSync('src/app/features/room/RoomInput.tsx', 'utf8');
-  assert.match(roomInput, /getBeginCommand\(editor\) \?\?\s*typedCommandName\(plainText\)/);
+  assert.match(roomInput, /getBeginCommand\(editor\) \?\?\s*typedCommandName\(fullText\)/);
+  // Every other command, known or not, goes to Core; none is sent as text.
+  assert.match(roomInput, /runComposerCommand\(roomId, run\.text, confirmed\)/);
   assert.match(
     roomInput,
-    /autocompleteQuery\.prefix === AutocompletePrefix\.Command &&\s*autocompleteQuery\.text === Command\.Gif/
+    /autocompleteQuery\.prefix === AutocompletePrefix\.Command &&\s*autocompleteQuery\.text === GIF_COMMAND/
   );
 });

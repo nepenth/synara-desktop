@@ -80,6 +80,9 @@ struct AppEnvironment {
     var draftSync: DraftSyncServicing = NoDraftSync()
     /// Answers Hermes clarifying questions (question cards) through Core.
     var agentQuestions: AgentQuestionAnswering = UnavailableAgentQuestionService()
+    /// Slash commands, their suggestions and typed "@Name" mentions, run by Core.
+    /// The default sends every text as typed.
+    var composerCommands: ComposerCommandServicing = MockComposerCommandService()
 
     @MainActor
     static func live() -> AppEnvironment {
@@ -191,7 +194,8 @@ struct AppEnvironment {
             connectionStatus: connectionStatus,
             outgoingSends: outgoingSends,
             draftSync: SharedCoreDraftSyncService(host: host),
-            agentQuestions: SharedCoreAgentQuestionService(host: host)
+            agentQuestions: SharedCoreAgentQuestionService(host: host),
+            composerCommands: SharedCoreComposerCommandService(host: host)
         )
     }
 
@@ -229,7 +233,8 @@ struct AppEnvironment {
         settings: SettingsStoring = InMemorySettingsStore(),
         connectionStatus: ConnectionStatusStore = ConnectionStatusStore(),
         outgoingSends: OutgoingSendCoordinator? = nil,
-        agentQuestions: AgentQuestionAnswering = MockAgentQuestionService()
+        agentQuestions: AgentQuestionAnswering = MockAgentQuestionService(),
+        composerCommands: ComposerCommandServicing = MockComposerCommandService()
     ) -> AppEnvironment {
         let resolvedOutgoingSends = outgoingSends ?? OutgoingSendCoordinator(
             messageSender: messageSender,
@@ -277,7 +282,8 @@ struct AppEnvironment {
             sessionReadiness: sessionReadiness,
             connectionStatus: connectionStatus,
             outgoingSends: resolvedOutgoingSends,
-            agentQuestions: agentQuestions
+            agentQuestions: agentQuestions,
+            composerCommands: composerCommands
         )
     }
 

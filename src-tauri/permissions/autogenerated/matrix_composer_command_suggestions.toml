@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-composer-command-suggestions"
+description = "Enables the matrix_composer_command_suggestions command without any pre-configured scope."
+commands.allow = ["matrix_composer_command_suggestions"]
+
+[[permission]]
+identifier = "deny-matrix-composer-command-suggestions"
+description = "Denies the matrix_composer_command_suggestions command without any pre-configured scope."
+commands.deny = ["matrix_composer_command_suggestions"]

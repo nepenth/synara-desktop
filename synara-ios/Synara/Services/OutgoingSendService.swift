@@ -150,6 +150,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
     var serverEventID: String?
     /// People the message mentions (`m.mentions`).
     var mentionUserIDs: [String]?
+    /// `m.emote` or `m.notice` from a composer command; nil sends `m.text`.
+    var msgType: String?
 
     init(
         id: String,
@@ -165,7 +167,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
         deliveryStatus: TimelineDeliveryStatus,
         transactionID: String? = nil,
         serverEventID: String? = nil,
-        mentionUserIDs: [String]? = nil
+        mentionUserIDs: [String]? = nil,
+        msgType: String? = nil
     ) {
         self.id = id
         self.clientTransactionID = clientTransactionID ?? Self.newClientTransactionID()
@@ -181,6 +184,7 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
         self.transactionID = transactionID
         self.serverEventID = serverEventID
         self.mentionUserIDs = mentionUserIDs
+        self.msgType = msgType
     }
 
     static func newClientTransactionID() -> String {
@@ -215,7 +219,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
             editEventID: nil,
             threadRootEventID: threadRootEventID,
             transactionID: clientTransactionID,
-            mentionUserIDs: mentionUserIDs
+            mentionUserIDs: mentionUserIDs,
+            msgType: msgType
         )
     }
 
@@ -231,7 +236,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
             senderID: senderID,
             timestamp: timestamp,
             failed: deliveryStatus == .failed,
-            mentionUserIDs: mentionUserIDs
+            mentionUserIDs: mentionUserIDs,
+            msgType: msgType
         )
     }
 
@@ -249,7 +255,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
             senderID: message.senderID,
             timestamp: message.timestamp,
             deliveryStatus: message.failed ? .failed : .queued,
-            mentionUserIDs: message.mentionUserIDs
+            mentionUserIDs: message.mentionUserIDs,
+            msgType: message.msgType
         )
     }
 }
@@ -464,7 +471,8 @@ final class OutgoingSendCoordinator {
         senderAvatarURL: URL? = nil,
         timestamp: Date,
         clearingDraft: Bool = false,
-        mentionUserIDs: [String]? = nil
+        mentionUserIDs: [String]? = nil,
+        msgType: String? = nil
     ) -> OutgoingQueuedMessage {
         let message = OutgoingQueuedMessage(
             id: localID,
@@ -478,7 +486,8 @@ final class OutgoingSendCoordinator {
             senderAvatarURL: senderAvatarURL,
             timestamp: timestamp,
             deliveryStatus: .sending,
-            mentionUserIDs: mentionUserIDs
+            mentionUserIDs: mentionUserIDs,
+            msgType: msgType
         )
         queue.upsert(message, clearingDraftOf: clearingDraft ? roomID : nil)
         return message
@@ -501,7 +510,8 @@ final class OutgoingSendCoordinator {
             threadRootEventID: item.threadRootEventID,
             senderID: senderID,
             senderAvatarURL: item.senderAvatarURL,
-            timestamp: item.timestamp
+            timestamp: item.timestamp,
+            msgType: queue.item(id: item.id)?.msgType
         )
     }
 

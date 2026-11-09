@@ -1027,7 +1027,10 @@ private extension AppEnvironment {
                 ? MockLinkPreviewService(previews: uiTestLinkPreviews())
                 : MockLinkPreviewService(),
             crypto: crypto,
-            settings: uiTestSettings(processEnvironment)
+            settings: uiTestSettings(processEnvironment),
+            composerCommands: processEnvironment["SYNARA_UI_TEST_COMPOSER_COMMANDS"] == "1"
+                ? MockComposerCommandService.uiTestFixture()
+                : MockComposerCommandService()
         )
     }
 

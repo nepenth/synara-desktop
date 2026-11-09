@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-composer-resolve-mentions"
+description = "Enables the matrix_composer_resolve_mentions command without any pre-configured scope."
+commands.allow = ["matrix_composer_resolve_mentions"]
+
+[[permission]]
+identifier = "deny-matrix-composer-resolve-mentions"
+description = "Denies the matrix_composer_resolve_mentions command without any pre-configured scope."
+commands.deny = ["matrix_composer_resolve_mentions"]

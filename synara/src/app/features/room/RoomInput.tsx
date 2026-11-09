@@ -65,7 +65,7 @@ import {
   exitFormatting,
   getBeginCommand,
   trimCommand,
-  getMentions,
+  getContentMentions,
   shouldPreventDefaultForClipboardInsert,
   insertClipboardData,
   type AutocompleteSelectFirstRef,
@@ -108,7 +108,14 @@ import { settingsAtom } from '../../state/settings';
 import { getMemberDisplayName, trimReplyFromBody } from '../../utils/room';
 import { stopPropagation } from '../../utils/keyboard';
 import { CommandAutocomplete } from './CommandAutocomplete';
-import { Command, SHRUG, TABLEFLIP, UNFLIP, useCommands } from '../../hooks/useCommands';
+import { useRoomNavigate } from '../../hooks/useRoomNavigate';
+import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
+import { useSpaceOptionally } from '../../hooks/useSpace';
+import { readRoomMembersWithNativeOwner } from '../../hooks/nativeRoomMembersOwner';
+import type { CommandSuggestion, ComposerMessage } from '../matrix-dto/generated';
+import { resolveTypedMentions, runComposerCommand } from './nativeComposerCommands';
+import { applyTypedMentions, typedMentionSource } from './typedMentions';
+import { CommandConfirmDialog, CommandHelpDialog } from './ComposerCommandDialogs';
 import { mobileOrTablet } from '../../utils/user-agent';
 import { ReplyQuote, ThreadIndicator } from '../../components/message';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
@@ -201,14 +208,27 @@ import {
   mediaConfigUploadLimit,
 } from '../../utils/nativeMediaLimits';
 
-/** Commands that send a message rather than run an action. */
-const MESSAGE_COMMANDS: ReadonlySet<string> = new Set([
-  Command.Me,
-  Command.Notice,
-  Command.Shrug,
-  Command.TableFlip,
-  Command.UnFlip,
-]);
+/** The composer opens its GIF picker for /gif itself; Core runs every other command. */
+const GIF_COMMAND = 'gif';
+
+const WIRE_MSGTYPE = {
+  text: MsgType.Text,
+  emote: MsgType.Emote,
+  notice: MsgType.Notice,
+} as const;
+
+/** A command Core is asked to run, kept so a confirmation can run it again. */
+type ComposerCommandRun = {
+  draftKey: string;
+  content: Descendant[];
+  commandName: string;
+  /** The whole composer text, command included. */
+  text: string;
+  /** The reply draft shown when the command was sent. */
+  reply?: NativeComposerReplyDraftLike;
+};
+
+type NativeComposerReplyDraftLike = Parameters<typeof nativeComposerSendRelation>[0];
 
 /** One queued composer send, with what goes back to the composer if it fails. */
 type ComposerSendItem = {
@@ -471,9 +491,36 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       },
       [clearReplyDraftAfterSend, replyDraft, roomId, t, threadRootEventId]
     );
-    const commands = useCommands(
-      room as unknown as Parameters<typeof useCommands>[0],
-      sendSlashPoll
+    const { navigateRoom } = useRoomNavigate();
+    const openUserProfile = useOpenUserRoomProfile();
+    const space = useSpaceOptionally();
+    const [commandNotice, setCommandNotice] = useState<string>();
+    const [commandConfirmation, setCommandConfirmation] = useState<
+      ComposerCommandRun & { title: string; message: string; confirmLabel: string }
+    >();
+    const [commandHelp, setCommandHelp] = useState<CommandSuggestion[]>();
+
+    /**
+     * `content` with "@Name" typed as text turned into mention pills when
+     * Core finds exactly one member by that name. A failed member read sends
+     * the text as typed.
+     */
+    const withTypedMentions = useCallback(
+      async (content: Descendant[]): Promise<Descendant[]> => {
+        const source = typedMentionSource(content);
+        if (!source.includes('@')) return content;
+        try {
+          const members = (await readRoomMembersWithNativeOwner(roomId, isSynaraDesktop())) ?? [];
+          const candidates = members
+            .filter((member) => member.membership === 'join' || member.membership === 'invite')
+            .map((member) => ({ userId: member.userId, displayName: member.displayName ?? null }));
+          const mentions = await resolveTypedMentions(source, candidates, getMyUserId() ?? '');
+          return applyTypedMentions(content, mentions);
+        } catch {
+          return content;
+        }
+      },
+      [roomId]
     );
 
     const handleFiles = useCallback(
@@ -891,20 +938,144 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
      * puts its text back (see `handleSendFailure`); nothing typed is lost,
      * and a second press can never send the same content twice.
      */
+    /**
+     * Send a message a command produced (/me, /shrug, /spoiler, …) with the
+     * reply and thread it was written in. Core gives the body and msgtype;
+     * the HTML comes from the composer content unless Core built it.
+     */
+    const sendCommandMessage = useCallback(
+      async (run: ComposerCommandRun, message: ComposerMessage) => {
+        const sendRelation = nativeComposerSendRelation(run.reply, threadRootEventId);
+        let formattedBody = message.formattedBody ?? undefined;
+        let mentionData = { room: false, users: new Set<string>() };
+        if (!formattedBody && message.allowFormatting) {
+          const content = await withTypedMentions(run.content);
+          mentionData = getContentMentions(content);
+          const html = trimCommand(
+            run.commandName,
+            trimCustomHtml(
+              isMarkdown
+                ? await renderComposerHtml(content)
+                : toMatrixCustomHTML(content, { allowTextFormatting: true })
+            )
+          );
+          const withPrefix = message.prefix ? `${message.prefix} ${html}`.trim() : html;
+          if (!customHtmlEqualsPlainText(withPrefix, message.body)) formattedBody = withPrefix;
+        }
+        if (run.reply && run.reply.senderId !== getMyUserId()) {
+          mentionData.users.add(run.reply.senderId);
+        }
+        const nativeOwner = await sendPlainTextWithNativeOwner({
+          roomId,
+          body: message.body,
+          msgType: WIRE_MSGTYPE[message.msgtype],
+          formattedBody,
+          mentionUserIds: Array.from(mentionData.users),
+          mentionRoom: mentionData.room,
+          replyTo: sendRelation.replyTo,
+          threadRoot: sendRelation.threadRoot,
+        });
+        if (nativeOwner === 'legacy') throw new ComposerUserError(COMPOSER_NOT_SIGNED_IN);
+        requestRoomLatestAfterSend(roomId, sendRelation.threadRoot);
+        await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
+          setSendError(
+            t(
+              'composer.reply_clear_after_send_failed',
+              'Message sent, but the reply state could not be cleared.'
+            )
+          );
+        });
+      },
+      [clearReplyDraftAfterSend, isMarkdown, roomId, t, threadRootEventId, withTypedMentions]
+    );
+
+    /**
+     * Ask Core to run a command and do what it says. A refusal throws with
+     * user copy, so the queue puts the text back and shows it.
+     */
+    const runCommand = useCallback(
+      async (run: ComposerCommandRun, confirmed: boolean) => {
+        const outcome = await runComposerCommand(roomId, run.text, confirmed);
+        switch (outcome.kind) {
+          case 'done':
+            setCommandNotice(outcome.message);
+            return;
+          case 'needs_confirmation':
+            setCommandConfirmation({
+              ...run,
+              title: outcome.title,
+              message: outcome.message,
+              confirmLabel: outcome.confirm_label,
+            });
+            return;
+          case 'send_message':
+            await sendCommandMessage(run, outcome.message);
+            return;
+          case 'send_poll':
+            await sendSlashPoll({
+              question: outcome.poll.question,
+              answers: outcome.poll.answers.map((text, index) => ({ id: `a${index + 1}`, text })),
+              maxSelections: outcome.poll.maxSelections,
+            });
+            return;
+          case 'open_gif_picker':
+            setGifPickerQuery((current) => ({ query: outcome.query, key: current.key + 1 }));
+            setGifPickerAnchor(
+              (composerToolsBtnRef.current ?? dropAnchorRef.current)?.getBoundingClientRect()
+            );
+            return;
+          case 'navigate':
+            navigateRoom(outcome.room_id, outcome.event_id ?? undefined);
+            return;
+          case 'open_profile': {
+            const anchor = dropAnchorRef.current?.getBoundingClientRect();
+            if (anchor) openUserProfile(roomId, space?.roomId, outcome.user_id, anchor);
+            return;
+          }
+          case 'help':
+            setCommandHelp(outcome.commands);
+            break;
+          default:
+        }
+      },
+      [navigateRoom, openUserProfile, roomId, sendCommandMessage, sendSlashPoll, space]
+    );
+
+    /** Queue `run`; a failure puts its text back in the composer with Core's copy. */
+    const enqueueCommand = useCallback(
+      (run: ComposerCommandRun, confirmed: boolean) => {
+        sendQueue.enqueue(
+          {
+            draftKey: run.draftKey,
+            content: run.content,
+            commandName: run.commandName,
+            transactionIds: [],
+          },
+          () => runCommand(run, confirmed)
+        );
+      },
+      [runCommand, sendQueue]
+    );
+
+    /**
+     * Queue what the composer holds and clear it at once, so the user can
+     * write the next message while Core waits for the server. A failed send
+     * puts its text back (see `handleSendFailure`); nothing typed is lost,
+     * and a second press can never send the same content twice.
+     */
     const submit = useCallback(
       (options: { filesOnly?: boolean } = {}) => {
         const { filesOnly = false } = options;
         const content = filesOnly ? [] : cloneComposerContent(editor.children);
-        let plainText = filesOnly ? '' : toPlainText(content, isMarkdown).trim();
+        const fullText = filesOnly ? '' : toPlainText(content, isMarkdown).trim();
         // A command typed out (`/kick @a:b`), not picked from the command list,
-        // runs too; an unknown one is refused below instead of sent as text.
+        // runs too; Core refuses an unknown one instead of sending it as text.
         const commandName = filesOnly
           ? undefined
-          : (getBeginCommand(editor) ?? typedCommandName(plainText));
-        let msgType: 'm.text' | 'm.emote' | 'm.notice' = MsgType.Text;
-        if (commandName) plainText = trimCommand(commandName, plainText);
+          : (getBeginCommand(editor) ?? typedCommandName(fullText));
+        setCommandNotice(undefined);
 
-        if (commandName === Command.Gif) {
+        if (commandName === GIF_COMMAND) {
           if (!gifPickerAvailable && !gifOnboardingVisible) {
             setSendError(
               gifProviderAvailable
@@ -924,26 +1095,26 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           sendTypingStatus(false);
           setSendError(undefined);
           setGifSendError(undefined);
-          setGifPickerQuery((current) => ({ query: plainText, key: current.key + 1 }));
+          setGifPickerQuery((current) => ({
+            query: trimCommand(commandName, fullText),
+            key: current.key + 1,
+          }));
           setGifPickerAnchor(
             (composerToolsBtnRef.current ?? dropAnchorRef.current)?.getBoundingClientRect()
           );
           return;
         }
 
-        if (commandName && !MESSAGE_COMMANDS.has(commandName)) {
-          const commandContent = commands[commandName as Command];
-          if (!commandContent) {
-            setSendError(`Synara does not know the command /${commandName}.`);
-            return;
-          }
+        if (commandName) {
           resetEditor(editor);
           resetEditorHistory(editor);
           sendTypingStatus(false);
           setSendError(undefined);
-          sendQueue.enqueue({ draftKey, content, commandName, transactionIds: [] }, () =>
-            commandContent.exe(plainText)
-          );
+          const reply =
+            coreReplyDraft && !claimedReplyRevisionsRef.current.has(coreReplyDraft.draftRevision)
+              ? coreReplyDraft
+              : undefined;
+          enqueueCommand({ draftKey, content, commandName, text: fullText, reply }, false);
           return;
         }
 
@@ -953,25 +1124,13 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           return;
         }
 
-        let prefix = '';
-        if (commandName === Command.Me) msgType = MsgType.Emote;
-        else if (commandName === Command.Notice) msgType = MsgType.Notice;
-        else if (commandName === Command.Shrug) prefix = SHRUG;
-        else if (commandName === Command.TableFlip) prefix = TABLEFLIP;
-        else if (commandName === Command.UnFlip) prefix = UNFLIP;
-        const body = prefix ? `${prefix} ${plainText}` : plainText;
-        if (body === '' && files.length === 0) return;
-        const mentionData = getMentions(roomId, editor);
+        if (fullText === '' && files.length === 0) return;
 
         // A reply already claimed by a queued send is not reused.
         const sendReply =
           coreReplyDraft && !claimedReplyRevisionsRef.current.has(coreReplyDraft.draftRevision)
             ? coreReplyDraft
             : undefined;
-        if (sendReply && sendReply.senderId !== getMyUserId()) {
-          mentionData.users.add(sendReply.senderId);
-        }
-        const mentionUserIds = Array.from(mentionData.users);
         const sendRelation = nativeComposerSendRelation(sendReply, threadRootEventId);
         const transactionIds = files.map((file) => file.transactionId);
         const sendDraftKey = draftKey;
@@ -1006,13 +1165,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             replyRevision: sendReply?.draftRevision,
           },
           async () => {
-            let customHtml = trimCustomHtml(
+            // "@Name" typed out becomes a pill before the HTML and m.mentions
+            // are built, as if it had been picked from the list.
+            const sendContent = await withTypedMentions(content);
+            const body =
+              sendContent === content ? fullText : toPlainText(sendContent, isMarkdown).trim();
+            const mentionData = getContentMentions(sendContent);
+            if (sendReply && sendReply.senderId !== getMyUserId()) {
+              mentionData.users.add(sendReply.senderId);
+            }
+            const mentionUserIds = Array.from(mentionData.users);
+            const formattedBody = trimCustomHtml(
               isMarkdown
-                ? await renderComposerHtml(content)
-                : toMatrixCustomHTML(content, { allowTextFormatting: true })
+                ? await renderComposerHtml(sendContent)
+                : toMatrixCustomHTML(sendContent, { allowTextFormatting: true })
             );
-            if (commandName) customHtml = trimCommand(commandName, customHtml);
-            const formattedBody = prefix ? `${prefix} ${customHtml}` : customHtml;
             const htmlDiffers = !customHtmlEqualsPlainText(formattedBody, body);
 
             if (files.length > 0) {
@@ -1045,7 +1212,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             const nativeOwner = await sendPlainTextWithNativeOwner({
               roomId,
               body,
-              msgType,
+              msgType: MsgType.Text,
               formattedBody: sendReply || htmlDiffers ? formattedBody : undefined,
               mentionUserIds,
               mentionRoom: mentionData.room,
@@ -1067,7 +1234,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         sendTypingStatus,
         clearReplyDraftAfterSend,
         isMarkdown,
-        commands,
+        enqueueCommand,
         sendQueue,
         takeSendableFiles,
         claimTransactionIds,
@@ -1078,6 +1245,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         gifPickerAvailable,
         gifOnboardingVisible,
         gifProviderAvailable,
+        withTypedMentions,
       ]
     );
 
@@ -1175,7 +1343,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             ) &&
             !(
               autocompleteQuery.prefix === AutocompletePrefix.Command &&
-              autocompleteQuery.text === Command.Gif
+              autocompleteQuery.text === GIF_COMMAND
             );
           if (pickSuggestion && autocompleteSelectFirst.current?.()) return;
           submit();
@@ -1355,6 +1523,58 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               <Icon src={Icons.Cross} size="50" />
             </IconButton>
           </Box>
+        )}
+        {commandNotice && (
+          <Box
+            className={css.ComposerError}
+            gap="200"
+            alignItems="Center"
+            role="status"
+            data-testid="composer-command-notice"
+          >
+            <Icon src={Icons.Check} size="100" />
+            <Box grow="Yes">
+              <Text size="T200">{commandNotice}</Text>
+            </Box>
+            <IconButton
+              onClick={() => setCommandNotice(undefined)}
+              variant="Surface"
+              fill="None"
+              size="300"
+              radii="300"
+              aria-label="Dismiss"
+            >
+              <Icon src={Icons.Cross} size="50" />
+            </IconButton>
+          </Box>
+        )}
+        {commandConfirmation && (
+          <CommandConfirmDialog
+            title={commandConfirmation.title}
+            message={commandConfirmation.message}
+            confirmLabel={commandConfirmation.confirmLabel}
+            onConfirm={() => {
+              const {
+                draftKey: runDraftKey,
+                content,
+                commandName,
+                text,
+                reply,
+              } = commandConfirmation;
+              setCommandConfirmation(undefined);
+              enqueueCommand({ draftKey: runDraftKey, content, commandName, text, reply }, true);
+            }}
+            onCancel={() => {
+              // Not run: the command goes back into the composer it came from.
+              if (mountedDraftKey.current === commandConfirmation.draftKey) {
+                restoreComposerContent(editor, commandConfirmation.content);
+              }
+              setCommandConfirmation(undefined);
+            }}
+          />
+        )}
+        {commandHelp && (
+          <CommandHelpDialog commands={commandHelp} onClose={() => setCommandHelp(undefined)} />
         )}
         {syncedDraft.prompt && (
           <Box

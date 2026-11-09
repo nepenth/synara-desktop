@@ -34,7 +34,11 @@ test('the composer clears synchronously when a send is queued, never after the s
 test('slash commands are queued and awaited so failures reach the composer', () => {
   assert.match(
     submitRoute,
-    /sendQueue\.enqueue\([\s\S]{0,120}commandName[\s\S]{0,120}commandContent\.exe\(plainText\)/
+    /enqueueCommand\(\{ draftKey, content, commandName, text: fullText, reply \}, false\)/
+  );
+  assert.match(
+    roomInput,
+    /sendQueue\.enqueue\([\s\S]{0,200}commandName: run\.commandName[\s\S]{0,120}runCommand\(run, confirmed\)/
   );
   assert.match(roomInput, /composerCommandErrorMessage\(failed\.commandName, error\)/);
 });

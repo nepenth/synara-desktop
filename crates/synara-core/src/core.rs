@@ -111,6 +111,7 @@ use crate::transport::{MatrixIpcError, MatrixIpcErrorCategory, MAX_WIRE_COUNTER}
 // and owner error mapping together. Only the parent registry imports them.
 mod account_data;
 use account_data::*;
+mod composer;
 mod drafts;
 mod identity_reset;
 mod messaging;
@@ -133,6 +134,10 @@ mod typed_api;
 /// Request and result types of the typed [`Core`] API, for shells.
 pub mod api {
     pub use super::account_data::*;
+    pub use super::composer::{
+        MatrixComposerCommandSuggestionsRequest, MatrixComposerResolveMentionsRequest,
+        MatrixComposerRunCommandRequest,
+    };
     pub use super::drafts::{
         MatrixDraftResolveRequest, MatrixDraftSaveRequest, MatrixDraftSetEnabledRequest,
         MatrixDraftSlotRequest, NativeDraftDeleteAllResult, NativeDraftWriteResult,
@@ -1164,6 +1169,7 @@ fn built_in_registry() -> CommandRegistry {
     profile_media::register_commands(&mut registry);
     realtime::register_commands(&mut registry);
     native_extras::register_commands(&mut registry);
+    composer::register_commands(&mut registry);
     registry
 }
 

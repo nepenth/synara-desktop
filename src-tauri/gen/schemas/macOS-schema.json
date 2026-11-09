@@ -705,10 +705,28 @@
           "markdownDescription": "Enables the matrix_composer_clear_reply_draft command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_composer_command_suggestions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-composer-command-suggestions",
+          "markdownDescription": "Enables the matrix_composer_command_suggestions command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_composer_get_reply_draft command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-composer-get-reply-draft",
           "markdownDescription": "Enables the matrix_composer_get_reply_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_composer_resolve_mentions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-composer-resolve-mentions",
+          "markdownDescription": "Enables the matrix_composer_resolve_mentions command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_composer_run_command command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-composer-run-command",
+          "markdownDescription": "Enables the matrix_composer_run_command command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_composer_set_reply_draft command without any pre-configured scope.",
@@ -2325,10 +2343,28 @@
           "markdownDescription": "Denies the matrix_composer_clear_reply_draft command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_composer_command_suggestions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-composer-command-suggestions",
+          "markdownDescription": "Denies the matrix_composer_command_suggestions command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_composer_get_reply_draft command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-composer-get-reply-draft",
           "markdownDescription": "Denies the matrix_composer_get_reply_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_composer_resolve_mentions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-composer-resolve-mentions",
+          "markdownDescription": "Denies the matrix_composer_resolve_mentions command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_composer_run_command command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-composer-run-command",
+          "markdownDescription": "Denies the matrix_composer_run_command command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_composer_set_reply_draft command without any pre-configured scope.",

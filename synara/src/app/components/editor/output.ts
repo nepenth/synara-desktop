@@ -260,7 +260,14 @@ export type MentionsData = {
   room: boolean;
   users: Set<string>;
 };
-export const getMentions = (roomId: string, editor: Editor): MentionsData => {
+export const getMentions = (roomId: string, editor: Editor): MentionsData =>
+  getContentMentions(editor.children);
+
+/**
+ * The mentions in composer `content`: picked pills, and typed "@Name"
+ * mentions once the send has turned them into pills (`applyTypedMentions`).
+ */
+export const getContentMentions = (content: Descendant[]): MentionsData => {
   const mentionData: MentionsData = {
     room: false,
     users: new Set(),
@@ -285,7 +292,7 @@ export const getMentions = (roomId: string, editor: Editor): MentionsData => {
     node.children.forEach(parseMentions);
   };
 
-  editor.children.forEach(parseMentions);
+  content.forEach(parseMentions);
 
   return mentionData;
 };
