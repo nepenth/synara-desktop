@@ -24,7 +24,7 @@ export type NativeRoomRetentionSnapshot = {
 };
 
 const unavailableMessage = 'Native Matrix room retention is unavailable.';
-const roomIdPattern = /^![^:\s]+:[^\s]+$/;
+const roomIdPattern = /^![^:\s]+(:[^\s]+)?$/;
 
 const isSafeGeneration = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value > 0;

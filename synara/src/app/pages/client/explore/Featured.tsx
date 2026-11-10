@@ -19,6 +19,7 @@ import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
 import * as depthCss from '../../../styles/Depth.css';
+import { ShowRoomListHeader } from '../../../features/room-list-pane/RoomListToggleButton';
 
 export function FeaturedRooms() {
   const { featuredCommunities } = useClientConfig();
@@ -29,6 +30,7 @@ export function FeaturedRooms() {
 
   return (
     <Page>
+      <ShowRoomListHeader />
       {screenSize === ScreenSize.Mobile && (
         <PageHeader>
           <Box shrink="No">

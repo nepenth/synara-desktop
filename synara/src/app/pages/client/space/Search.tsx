@@ -10,6 +10,7 @@ import { mDirectAtom } from '../../../state/mDirectList';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
+import { ShowRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 
 export function SpaceSearch() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -38,6 +39,7 @@ export function SpaceSearch() {
                 )}
               </BackRouteHandler>
             )}
+            <ShowRoomListButton />
           </Box>
           <Box justifyContent="Center" alignItems="Center" gap="200">
             {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Search} />}

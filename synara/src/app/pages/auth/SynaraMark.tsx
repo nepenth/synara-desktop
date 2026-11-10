@@ -1,90 +1,63 @@
 import React, { useId } from 'react';
 
-// Geometry from assets/branding/synara-symbolic.svg (viewBox 0 0 256 256).
-const ORBIT = 'M105 48A82 82 0 0 0 84 215';
-const SPOKES = 'M51 91 101 125M47 153l55-14M80 207l30-45M95 60l16 42';
+// The one Synara mark: a heavy orbit, a ring core, two nodes and three
+// separated feathers, flat (no glow), so the same drawing holds from a 16px
+// row icon to the sign-in hero. Source art: assets/branding/synara-mark.svg;
+// assets/branding/synara-symbolic.svg is the single-colour version. Keep the
+// three in step.
+const ORBIT = 'M112 44A88 88 0 0 0 78 214';
 const NODES = [
-  { cx: 95, cy: 60 },
-  { cx: 51, cy: 91 },
-  { cx: 47, cy: 153 },
-  { cx: 80, cy: 207 },
+  { cx: 40, cy: 100 },
+  { cx: 42, cy: 170 },
 ];
 const FEATHERS = [
-  'M133 111C160 75 205 66 238 28c-2 48-28 84-95 111-8 3-15-19-10-28Z',
-  'M141 143c31-30 67-33 91-59-4 42-32 69-84 83-9 2-15-17-7-24Z',
-  'M139 174c29-22 56-19 77-36-8 34-30 56-70 65-10 2-16-20-7-29Z',
+  'M136 104C162 72 205 66 238 28c-2 44-26 76-88 100-8 3-18-14-14-24Z',
+  'M146 148c30-27 64-32 86-64-4 38-30 62-78 76-9 2-14-6-8-12Z',
+  'M146 186c26-20 50-20 70-48-8 32-28 50-64 60-9 2-12-6-6-12Z',
 ];
-const TAIL = 'm115 164 30 66-10-61Z';
 
 /**
- * The Synara mark: blue linework with its soft glow, drawn still. Pass
- * `decorative` where a visible "Synara" name sits beside it, so screen readers
- * hear the name once.
+ * The Synara mark. Without `size` it fills its container. Pass `decorative`
+ * where a visible "Synara" or list name sits beside it, so screen readers hear
+ * the name once.
  */
 export function SynaraMark({ size, decorative = false }: { size?: number; decorative?: boolean }) {
   const id = useId().replace(/:/g, '');
   const line = `${id}-line`;
   const wing = `${id}-wing`;
-  const core = `${id}-core`;
-  const glow = `${id}-glow`;
 
   return (
     <svg
       width={size ?? '100%'}
       height={size ?? '100%'}
-      // Square box centered on the drawn geometry (x 5–240, y 27–232).
+      // Square box centered on the drawn geometry (x 13–238, y 28–223).
       viewBox="-3 4 250 250"
       data-synara-mark=""
+      style={{ display: 'block' }}
       {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': 'Synara' })}
     >
       <defs>
         <linearGradient id={line} x1="40" y1="40" x2="150" y2="230" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#8BF6FF" />
-          <stop offset="0.55" stopColor="#3FB8FF" />
-          <stop offset="1" stopColor="#2F6BFF" />
+          <stop offset="1" stopColor="#3FA0FF" />
         </linearGradient>
         <linearGradient id={wing} x1="240" y1="28" x2="130" y2="200" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#2F7DFF" />
-          <stop offset="0.6" stopColor="#123C9C" />
-          <stop offset="1" stopColor="#0A1F5C" />
+          <stop offset="0" stopColor="#6FB0FF" />
+          <stop offset="1" stopColor="#2F6BFF" />
         </linearGradient>
-        <radialGradient id={core} cx="0.4" cy="0.35" r="0.75">
-          <stop offset="0" stopColor="#2B6DFF" />
-          <stop offset="1" stopColor="#081A4F" />
-        </radialGradient>
-        <filter id={glow} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="3.5" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
       </defs>
-
-      <g filter={`url(#${glow})`}>
-        <g fill={`url(#${wing})`} stroke={`url(#${line})`} strokeWidth="3" strokeLinejoin="round">
-          {FEATHERS.map((d) => (
-            <path key={d} d={d} />
-          ))}
-          <path d={TAIL} />
-        </g>
-        <g fill="none" stroke={`url(#${line})`} strokeLinecap="round" strokeLinejoin="round">
-          <path d={ORBIT} strokeWidth="11" strokeOpacity="0.85" />
-          <path d={SPOKES} strokeWidth="6" />
-          <circle cx="112" cy="132" r="32" strokeWidth="9" fill={`url(#${core})`} />
-        </g>
-        <circle opacity="0.55" cx="112" cy="132" r="17" fill="#3FB8FF" />
-
+      <g fill="none" stroke={`url(#${line})`} strokeLinecap="round" strokeWidth="18">
+        <path d={ORBIT} />
+        <circle cx="108" cy="132" r="26" />
+      </g>
+      <g fill={`url(#${line})`}>
         {NODES.map((node) => (
-          <circle
-            key={`${node.cx}-${node.cy}`}
-            cx={node.cx}
-            cy={node.cy}
-            r="12"
-            fill={`url(#${core})`}
-            stroke={`url(#${line})`}
-            strokeWidth="6"
-          />
+          <circle key={`${node.cx}-${node.cy}`} cx={node.cx} cy={node.cy} r="17" />
+        ))}
+      </g>
+      <g fill={`url(#${wing})`}>
+        {FEATHERS.map((d) => (
+          <path key={d} d={d} />
         ))}
       </g>
     </svg>

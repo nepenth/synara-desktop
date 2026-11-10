@@ -45,7 +45,6 @@ import {
   NavItemContent,
   NavLink,
   NavLoading,
-  NavPaneTitle,
   NavSearchField,
   NavSectionHeader,
 } from '../../../components/nav';
@@ -75,7 +74,13 @@ import {
   useNativeRoomListLoaded,
   useNativeRoomListSnapshot,
 } from '../../../state/room-list/roomList';
-import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
+import { PageNav, PageNavContent } from '../../../components/page';
+import { NavPaneHeader } from '../../../features/nav-pane/NavPaneHeader';
+import { NavBottomBar } from '../../../features/nav-pane/NavBottomBar';
+import { HideRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
+import { RoomAvatar } from '../../../components/room-avatar';
+import { getRoomAvatarUrl } from '../../../utils/room';
+import { nameInitials } from '../../../utils/common';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
@@ -110,6 +115,10 @@ import * as depthCss from '../../../styles/Depth.css';
 
 import { getNativeRoom } from '../../../native/nativeSession';
 import { composerErrorMessage } from '../../../features/room/composerSendError';
+import {
+  useRoomListNavSource,
+  type RoomListNavSource,
+} from '../../../features/desktop-keyboard/roomListNavigation';
 type SpaceMenuProps = {
   room: EventedRoomReading;
   requestClose: () => void;
@@ -300,48 +309,59 @@ function SpaceHeader() {
   };
 
   return (
-    <>
-      <PageNavHeader>
-        <Box alignItems="Center" grow="Yes" gap="300">
-          <Box grow="Yes" alignItems="Center" gap="100">
-            <NavPaneTitle text={spaceName} />
-            {joinRules?.join_rule !== 'public' && <Icon src={Icons.Lock} size="50" />}
-          </Box>
-          <Box shrink="No">
-            <IconButton
-              aria-label={`${spaceName} options`}
-              aria-pressed={!!menuAnchor}
-              variant="Surface"
-              onClick={handleOpenMenu}
-            >
-              <Icon src={Icons.VerticalDots} size="200" />
-            </IconButton>
-          </Box>
-        </Box>
-      </PageNavHeader>
-      {menuAnchor && (
-        <PopOut
-          anchor={menuAnchor}
-          position="Bottom"
-          align="End"
-          offset={6}
-          content={
-            <FocusTrap
-              focusTrapOptions={{
-                initialFocus: false,
-                onDeactivate: () => setMenuAnchor(undefined),
-                clickOutsideDeactivates: true,
-                isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
-                isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
-                escapeDeactivates: stopPropagation,
-              }}
-            >
-              <SpaceMenu room={space} requestClose={() => setMenuAnchor(undefined)} />
-            </FocusTrap>
-          }
+    <NavPaneHeader
+      title={spaceName}
+      mark={
+        <RoomAvatar
+          roomId={space.roomId}
+          src={getRoomAvatarUrl(space, 96) ?? undefined}
+          alt=""
+          renderFallback={() => (
+            <Text as="span" size="H6">
+              {nameInitials(spaceName, 2)}
+            </Text>
+          )}
         />
-      )}
-    </>
+      }
+      titleAfter={joinRules?.join_rule !== 'public' && <Icon src={Icons.Lock} size="50" />}
+      actions={
+        <>
+          <HideRoomListButton />
+          <IconButton
+            aria-label={`${spaceName} options`}
+            aria-pressed={!!menuAnchor}
+            size="300"
+            radii="300"
+            variant="Surface"
+            onClick={handleOpenMenu}
+          >
+            <Icon src={Icons.VerticalDots} size="200" />
+          </IconButton>
+          {menuAnchor && (
+            <PopOut
+              anchor={menuAnchor}
+              position="Bottom"
+              align="End"
+              offset={6}
+              content={
+                <FocusTrap
+                  focusTrapOptions={{
+                    initialFocus: false,
+                    onDeactivate: () => setMenuAnchor(undefined),
+                    clickOutsideDeactivates: true,
+                    isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
+                    isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
+                    escapeDeactivates: stopPropagation,
+                  }}
+                >
+                  <SpaceMenu room={space} requestClose={() => setMenuAnchor(undefined)} />
+                </FocusTrap>
+              }
+            />
+          )}
+        </>
+      }
+    />
   );
 }
 
@@ -572,6 +592,26 @@ export function Space() {
     32
   );
 
+  // Previous/next (unread) room walk these rows, not the rendered ones.
+  useRoomListNavSource(
+    useMemo<RoomListNavSource>(() => {
+      const pathFor = (roomId: string) =>
+        getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(roomId));
+      return {
+        selectedRoomId,
+        sections: [
+          { rows: visibleFavoriteRoomIds, pathFor },
+          {
+            // Sub-space headers are rows of the same virtual list.
+            rows: hierarchy.map((item) => ('space' in item ? undefined : item.roomId)),
+            pathFor,
+            reveal: (index) => virtualizer.scrollToIndex(index, { align: 'auto' }),
+          },
+        ],
+      };
+    }, [selectedRoomId, spaceIdOrAlias, visibleFavoriteRoomIds, hierarchy, virtualizer])
+  );
+
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
     closedCategories.has(categoryId)
   );
@@ -609,8 +649,7 @@ export function Space() {
   );
 
   return (
-    <PageNav label={roomsLabel}>
-      <SpaceHeader />
+    <PageNav label={roomsLabel} header={<SpaceHeader />} footer={<NavBottomBar />}>
       <NavSearchField />
       {noRoomToDisplay ? (
         <>

@@ -50,7 +50,7 @@ Current surface:
 - `synara/src/app/hooks/router/*`
 - `synara/src/app/utils/sort.ts`
 - `synara/src/app/features/room-nav/*`
-- `synara/src/app/pages/client/sidebar/*`
+- `synara/src/app/features/nav-pane/*` (list column header, space switcher, bottom bar)
 
 Target boundary:
 

@@ -37,6 +37,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import * as depthCss from '../../styles/Depth.css';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { ShowRoomListButton } from '../../features/room-list-pane/RoomListToggleButton';
 
 type LobbyMenuProps = {
   powerLevels: IPowerLevels;
@@ -180,7 +181,9 @@ export function LobbyHeader({ showProfile, powerLevels }: LobbyHeaderProps) {
           </>
         ) : (
           <>
-            <Box grow="Yes" basis="No" />
+            <Box grow="Yes" basis="No">
+              <ShowRoomListButton />
+            </Box>
             <Box justifyContent="Center" alignItems="Center" gap="300">
               {showProfile && (
                 <>

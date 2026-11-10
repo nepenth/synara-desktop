@@ -14,22 +14,42 @@ import classNames from 'classnames';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import * as css from './style.css';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
-import { useRoomListCollapsed } from '../../features/room-list-pane/useRoomListPane';
+import { useRoomListHidden } from '../../features/room-list-pane/useRoomListPane';
 import { ROOM_LIST_PANE_ID } from '../../features/room-list-pane/roomListPane';
 
 /** Set by a `PageRoot` whose pane can collapse: whether it is collapsed now. */
 const PageNavCollapsedContext = createContext<boolean | undefined>(undefined);
 
+/**
+ * The same value for the page beside the pane, so its header can offer
+ * "Show room list" while the list (and its bottom bar) is hidden.
+ */
+const PageContentNavCollapsedContext = createContext<boolean | undefined>(undefined);
+
+/** Inside a pane: `undefined` unless it can collapse (desktop), else whether it is hidden. */
+export const usePageNavCollapsed = (): boolean | undefined => useContext(PageNavCollapsedContext);
+
+/** True on a page whose collapsible room list is hidden right now (desktop only). */
+export const useRoomListHiddenBesidePage = (): boolean =>
+  useContext(PageContentNavCollapsedContext) === true;
+
+/**
+ * The list column's width in pixels, or `undefined` when the column fills
+ * the window (Mobile). Lets the column's header and bottom bar adapt.
+ */
+const PageNavWidthContext = createContext<number | undefined>(undefined);
+export const usePageNavWidth = (): number | undefined => useContext(PageNavWidthContext);
+
 type PageRootProps = {
   nav: ReactNode;
   children: ReactNode;
-  /** The client's room list pane, which the rail toggle and ⌘⇧D hide on desktop. */
+  /** The client's room list pane, which the show/hide button and ⌘⇧D hide on desktop. */
   collapsibleNav?: boolean;
 };
 
 export function PageRoot({ nav, children, collapsibleNav }: PageRootProps) {
   const screenSize = useScreenSizeContext();
-  const [roomListCollapsed] = useRoomListCollapsed();
+  const roomListCollapsed = useRoomListHidden();
   const desktop = screenSize !== ScreenSize.Mobile;
   const collapsed = collapsibleNav && desktop ? roomListCollapsed : undefined;
 
@@ -45,7 +65,9 @@ export function PageRoot({ nav, children, collapsibleNav }: PageRootProps) {
           direction="Vertical"
         />
       )}
-      {children}
+      <PageContentNavCollapsedContext.Provider value={collapsed}>
+        {children}
+      </PageContentNavCollapsedContext.Provider>
     </Box>
   );
 }
@@ -54,6 +76,10 @@ type ClientDrawerLayoutProps = {
   children: ReactNode;
   /** Names the pane as a navigation landmark (e.g. "Rooms"). */
   label?: string;
+  /** Pinned above the scrolling content: the pane title (`NavPaneHeader`). */
+  header?: ReactNode;
+  /** Pinned below the scrolling content: the client's bottom bar. */
+  footer?: ReactNode;
 };
 
 const PAGE_NAV_WIDTH_KEY = 'synara.navigationPaneWidth';
@@ -80,7 +106,13 @@ const writePageNavWidth = (width: number): void => {
   }
 };
 
-export function PageNav({ size, label, children }: ClientDrawerLayoutProps & css.PageNavVariants) {
+export function PageNav({
+  size,
+  label,
+  header,
+  footer,
+  children,
+}: ClientDrawerLayoutProps & css.PageNavVariants) {
   const screenSize = useScreenSizeContext();
   const isMobile = screenSize === ScreenSize.Mobile;
   const defaultWidth = size === '300' ? 222 : 256;
@@ -143,6 +175,17 @@ export function PageNav({ size, label, children }: ClientDrawerLayoutProps & css
     />
   );
 
+  // Header and footer stay put; only the list between them scrolls.
+  const frame = (
+    <PageNavWidthContext.Provider value={isMobile ? undefined : navWidth}>
+      {header}
+      <Box grow="Yes" direction="Column" className={css.PageNavBody}>
+        {children}
+      </Box>
+      {footer}
+    </PageNavWidthContext.Provider>
+  );
+
   if (collapsible) {
     // Stays mounted while hidden, so scroll position, search and sections survive.
     return (
@@ -161,7 +204,7 @@ export function PageNav({ size, label, children }: ClientDrawerLayoutProps & css
       >
         <div className={css.PageNavClip}>
           <div className={css.PageNavSlide} style={{ width: navWidth }}>
-            {children}
+            {frame}
           </div>
         </div>
         {divider}
@@ -180,7 +223,7 @@ export function PageNav({ size, label, children }: ClientDrawerLayoutProps & css
       data-compact={!isMobile && navWidth < 232 ? 'true' : undefined}
     >
       <Box grow="Yes" direction="Column">
-        {children}
+        {frame}
       </Box>
       {divider}
     </Box>

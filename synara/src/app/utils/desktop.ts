@@ -13,10 +13,31 @@ type TauriInternals = {
   transformCallback?: <T>(callback: (response: T) => void, once?: boolean) => number;
 };
 
+/**
+ * `window.__SYNARA_DESKTOP__`, injected by `src-tauri/src/desktop_bridge.js`
+ * plus the init script in `lib.rs`.
+ *
+ * Contract with the shell for tiling mode and external theming (the renderer
+ * must keep working when an older shell provides none of it):
+ * - `windowEnvironment`: `'floating' | 'tiling'`, set at startup from the
+ *   window manager (tiling under Hyprland, Sway, niri, i3, river, dwl; macOS
+ *   and Windows always `'floating'`). Absent or any other value means
+ *   `'floating'`; read it through `getDesktopWindowEnvironment()`.
+ * - Command `desktop_system_palette` → `{ source: string, background?: string,
+ *   foreground?: string, accent: string, colors?: string[] } | null`, colors as
+ *   CSS hex. Without `background` the desktop shares only its accent (macOS)
+ *   and Synara's own theme keeps its surfaces and text. `null` means no
+ *   palette right now; a rejected or missing command
+ *   means no provider. Event `synara://system-palette-changed` carries the
+ *   same payload whenever the desktop theme changes. See
+ *   `getDesktopSystemPalette` and `listenDesktopSystemPalette`.
+ */
 type SynaraDesktopBridge = {
   platform: 'tauri';
   /** `std::env::consts::OS` of the shell, e.g. `linux` or `macos`. */
   os?: string;
+  /** `'floating' | 'tiling'`; see the contract above. */
+  windowEnvironment?: string;
   supportsTray?: boolean;
   supportsGlobalShortcuts?: boolean;
   supportsIntegrationStatus?: boolean;
@@ -102,6 +123,9 @@ export type DesktopTrayState = {
   laterCount: number;
   notificationInboxCount: number;
   doNotDisturb: boolean;
+  /** Not shown in the tray; published in the status file (`synara status`). */
+  pendingApprovalCount?: number;
+  inviteCount?: number;
 };
 
 export const DESKTOP_TRAY_STATE_DEBOUNCE_MS = 500;
@@ -239,6 +263,7 @@ export type DesktopNotificationPayload = {
   actions?: DesktopNotificationAction[];
   actionContext?: DesktopNotificationActionContext;
   dismissKeys?: string[];
+  publicReadReceipt?: boolean;
 };
 
 export type DesktopNotificationActionEventPayload = {
@@ -510,6 +535,55 @@ const normalizeDesktopIntegrationStatus = (result: unknown): DesktopIntegrationS
 export const isSynaraDesktop = (): boolean =>
   window.__SYNARA_DESKTOP__?.platform === 'tauri' ||
   typeof window.__TAURI_INTERNALS__?.invoke === 'function';
+
+export type DesktopWindowEnvironment = 'floating' | 'tiling';
+
+export const normalizeDesktopWindowEnvironment = (value: unknown): DesktopWindowEnvironment =>
+  value === 'tiling' ? 'tiling' : 'floating';
+
+/** What the shell detected at startup; `'floating'` outside the shell or on an older one. */
+export const getDesktopWindowEnvironment = (): DesktopWindowEnvironment =>
+  typeof window === 'undefined'
+    ? 'floating'
+    : normalizeDesktopWindowEnvironment(window.__SYNARA_DESKTOP__?.windowEnvironment);
+
+export const DESKTOP_SYSTEM_PALETTE_COMMAND = 'desktop_system_palette';
+export const DESKTOP_SYSTEM_PALETTE_EVENT = 'synara://system-palette-changed';
+
+/**
+ * The desktop's current palette, unvalidated (`normalizeExternalPalette` in
+ * `themeExternalPalette.ts` checks it). `available: false` when the shell has
+ * no palette provider: no bridge, or the command is missing or rejects.
+ */
+export const getDesktopSystemPalette = async (): Promise<
+  { available: false } | { available: true; value: unknown }
+> => {
+  if (!isSynaraDesktop()) return { available: false };
+  try {
+    // An older shell has no such command; that is the normal "no provider"
+    // answer, so it is not logged as a failure.
+    const result = await invokeDesktopWithAvailability<unknown>(
+      DESKTOP_SYSTEM_PALETTE_COMMAND,
+      undefined,
+      { suppressErrorDiagnostic: true }
+    );
+    return result.available ? { available: true, value: result.value ?? null } : result;
+  } catch {
+    return { available: false };
+  }
+};
+
+/** Palette changes pushed by the shell; the payload is unvalidated. */
+export const listenDesktopSystemPalette = async (
+  handler: (payload: unknown) => void
+): Promise<DesktopUnlisten | undefined> => {
+  if (!isSynaraDesktop()) return undefined;
+  try {
+    return await listen<unknown>(DESKTOP_SYSTEM_PALETTE_EVENT, (event) => handler(event.payload));
+  } catch {
+    return undefined;
+  }
+};
 
 export type DesktopInvokeResult<T> =
   { available: false } | { available: true; value: T | undefined };
@@ -1023,6 +1097,8 @@ const invokeDesktopTrayState = async (state: DesktopTrayState): Promise<boolean>
         laterCount: clampCount(state.laterCount),
         notificationInboxCount: clampCount(state.notificationInboxCount),
         doNotDisturb: state.doNotDisturb === true,
+        pendingApprovalCount: clampCount(state.pendingApprovalCount ?? 0),
+        inviteCount: clampCount(state.inviteCount ?? 0),
       },
     });
     if (!invokeResult.available) {
@@ -1149,6 +1225,8 @@ export const showDesktopNotification = async (
   }
 
   if (notification.sound !== undefined) payload.sound = notification.sound;
+  if (notification.actions && notification.publicReadReceipt !== undefined)
+    payload.publicReadReceipt = notification.publicReadReceipt === true;
   if (notification.sessionGeneration !== undefined)
     payload.sessionGeneration = notification.sessionGeneration;
   const result = await invokeDesktop<boolean>('desktop_notify', {

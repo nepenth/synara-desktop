@@ -271,18 +271,46 @@ The package installs:
 
 - `/usr/bin/synara` wrapper.
 - `/usr/lib/synara/synara` release binary.
-- `/usr/share/applications/Synara.desktop` desktop entry from `packaging/arch/synara.desktop`.
+- `/usr/share/applications/Synara.desktop` desktop entry from `packaging/arch/synara.desktop`. It registers Synara for `synara://` links (see "`synara://` links").
 - hicolor app icons (`Icon=synara` under `/usr/share/icons/hicolor/*/apps/`).
 
-The wrapper keeps the app on native Wayland and disables WebKitGTK DMABUF/compositing renderer paths that can crash or blank the WebKit web process on CachyOS/KDE Plasma Wayland, especially on NVIDIA systems:
+The wrapper keeps the app on native Wayland (`GDK_BACKEND=wayland`) and makes CPU drawing this package's default (`SYNARA_RENDERING_DEFAULT=safe`). The Synara binary applies the drawing mode itself when it starts; see the next section.
+
+Keep `gst-plugins-good` installed so WebKitGTK can resolve the `autoaudiosink` GStreamer element during Matrix media setup.
+
+#### Hardware acceleration (`SYNARA_RENDERING`)
+
+On Wayland, the Arch-family package draws the interface on the CPU by default. Before the web view starts, Synara sets the two variables that turn off the WebKitGTK DMABUF and compositing paths, which can crash or blank the WebKit web process on CachyOS/KDE Plasma Wayland, especially on NVIDIA systems:
 
 ```sh
-GDK_BACKEND=wayland
 WEBKIT_DISABLE_DMABUF_RENDERER=1
 WEBKIT_DISABLE_COMPOSITING_MODE=1
 ```
 
-Keep `gst-plugins-good` installed so WebKitGTK can resolve the `autoaudiosink` GStreamer element during Matrix media setup.
+The `.deb`, the AppImage and `tauri dev` have no wrapper and no such default: until you choose, Synara sets nothing and WebKitGTK draws with the graphics card.
+
+**Settings → Appearance → Window → Hardware acceleration** changes it; restart Synara afterwards. The switch is shown only on Linux under Wayland. Until you use it, it shows what is running and nothing is saved. Your choice is saved as one word (`gpu` or `safe`) in `~/.config/com.whylandcreative.synara.desktop/rendering-mode`; delete the file to return to the package's default.
+
+With hardware acceleration turned on by the setting or by `SYNARA_RENDERING=gpu`, Synara leaves WebKitGTK's GPU compositing and DMABUF presentation on. With NVIDIA's driver (when `/proc/driver/nvidia/version` exists) it also sets `__NV_DISABLE_EXPLICIT_SYNC=1` for Synara only: without it the app exits at startup with `Error 71 (Protocol error)` (`wp_linux_drm_syncobj_surface_v1 … Missing acquire timeline`). Checked on Hyprland 0.56 with an RTX 4080 SUPER, driver 615 and WebKitGTK 2.54; other compositors and drivers are untested, which is why the Arch-family package keeps it off by default.
+
+What decides, first match wins:
+
+1. `SYNARA_RENDERING`, when set: `gpu` turns hardware acceleration on, any other value turns it off. The switch in Settings is then disabled and says so.
+2. The saved setting, once you have chosen.
+3. `SYNARA_RENDERING_DEFAULT`, the package's default, read the same way. Only the Arch-family wrapper sets it (to `safe`).
+4. Otherwise Synara sets nothing.
+
+Whichever decides, any of the three variables above that is already set in the environment is left exactly as it is.
+
+`SYNARA_RENDERING` is the way to try a mode for one start, or to get back in when the window blanks or the app exits with hardware acceleration on:
+
+```sh
+SYNARA_RENDERING=safe synara
+```
+
+Then turn the setting off. For a launcher, put the variable in the session environment or in the desktop entry (`Exec=env SYNARA_RENDERING=gpu synara %U`).
+
+If a `.deb` or AppImage build exits at startup on NVIDIA with the `Error 71` above and you have not chosen a mode, that is case 4: nothing was set, so explicit sync is still on. Start it once with `SYNARA_RENDERING=gpu` (which adds `__NV_DISABLE_EXPLICIT_SYNC=1`) or `SYNARA_RENDERING=safe`, then set the switch to match so the choice is saved.
 
 #### Updating an existing clone-built CachyOS install
 
@@ -313,6 +341,8 @@ The Arch `PKGBUILD` derives `pkgver` from `src-tauri/tauri.conf.json`, so a desk
 On CachyOS and other rolling Arch-family systems, `npm run tauri build -- --bundles appimage` can fail in Tauri's `linuxdeploy` step with errors like `unknown type [0x13] section .relr.dyn`. That failure is in the AppImage packaging tool's bundled `strip` binary handling newer system libraries; it does not mean the Synara binary failed to build.
 
 The Arch pacman package no longer depends on Tauri's `.deb` desktop entry output. `packaging/arch/synara.desktop` is installed directly, so `npm run tauri build` (release binary only) is sufficient before `makepkg -f`.
+
+The `.deb` (and an `.rpm`, which is not published) takes its desktop entry from `packaging/deb/synara.desktop`, set as `bundle.linux.deb.desktopTemplate` in `src-tauri/tauri.conf.json`. The bundler fills in the name, command and icon; the rest is the Arch entry line for line, and `scripts/__tests__/linux-desktop-entry.test.mjs` fails if the two drift apart. The bundler has no desktop template for AppImage, so an AppImage's entry would name the `synara` scheme but pass no link to the app.
 
 AppImage is not part of the current supported Linux update strategy. Revisit it
 only after the pacman repo path is stable and tested.
@@ -410,3 +440,114 @@ Recommended first validation matrix:
 - KDE Plasma 6 Wayland on one Debian-family workstation, such as KDE neon or Kubuntu.
 - KDE Plasma 6 Wayland on one rolling workstation, such as Arch.
 - One X11 fallback session for tray and global-shortcut comparison.
+
+## Tiling Window Managers
+
+Under Hyprland, Sway, Niri, i3 and similar window managers Synara starts in tiling mode: it does not
+draw its own title strip, because the window manager frames and moves the window. Detection uses
+`HYPRLAND_INSTANCE_SIGNATURE`, `SWAYSOCK`, `NIRI_SOCKET`, `I3SOCK` and the names in
+`XDG_CURRENT_DESKTOP`. Settings > Appearance > Tiling mode overrides it (Auto, On, Off) and applies
+at once. Ctrl+Q quits in either mode.
+
+The window can be as small as 360×480; below 750px wide the app switches to its single-pane layout.
+
+### Window class and window rules
+
+On Wayland the window's app id is `synara` (the `class` and `initialClass` in `hyprctl clients`, the
+`app_id` in `swaymsg -t get_tree`), for the installed packages and for a development build alike.
+Nothing sets it in code: Tauri leaves the GTK application id unset (`app.enableGTKAppId` is off), so
+GTK uses the program name, which is the file name of the binary, `synara` (`mainBinaryName` in
+`src-tauri/tauri.conf.json`). It changes only if the binary is renamed or started through a
+differently named link. Both desktop entries carry `StartupWMClass=synara` to match.
+
+On X11 (including XWayland) GTK sets `WM_CLASS` from the same name: instance `synara`, class
+`Synara`, with a capital. That is how GTK 3 behaves; it has not been checked on an X11 session.
+
+Hyprland 0.55 and later (Lua configuration):
+
+```lua
+hl.window_rule({ match = { class = "^synara$" }, workspace = "3" })
+```
+
+Hyprland 0.53 and 0.54 (`hyprland.conf`):
+
+```ini
+windowrule = match:class ^synara$, workspace 3
+```
+
+Hyprland 0.52 and earlier:
+
+```ini
+windowrulev2 = workspace 3, class:^(synara)$
+```
+
+Sway:
+
+```
+for_window [app_id="synara"] move container to workspace number 3
+```
+
+i3 (X11; `class` is case-sensitive, so match the instance or the capitalised class):
+
+```
+for_window [instance="synara"] move container to workspace number 3
+```
+
+## `synara://` Links
+
+Synara opens `synara://` links from other apps, the terminal and scripts:
+
+```sh
+xdg-open synara://activity
+xdg-open 'synara://room/!roomid:example.org'
+```
+
+`synara://home`, `settings`, `approvals`, `later`, `activity` (also `inbox`, `notifications`, with
+`/later` or `/invites`) and `room/<room id or alias>[/<event id>]` are accepted; anything else is
+ignored. If Synara is already running, the link goes to that window.
+
+What registers the scheme:
+
+| Platform | Registration |
+| --- | --- |
+| Arch package | `MimeType=x-scheme-handler/synara;` and `Exec=synara %U` in `packaging/arch/synara.desktop` |
+| `.deb` | The same two lines in `packaging/deb/synara.desktop`, the bundler's desktop template |
+| macOS | `CFBundleURLTypes` in `src-tauri/Info.plist` |
+| Windows | Registry entries written by the NSIS and MSI installers (untested; see `docs/windows-support-spike.md`) |
+
+If links open in something else, make Synara the handler and check it:
+
+```sh
+xdg-mime default Synara.desktop x-scheme-handler/synara
+xdg-mime query default x-scheme-handler/synara
+```
+
+## Status Command
+
+The running app publishes its counts to `$XDG_RUNTIME_DIR/synara/status.json`. `synara status` reads
+that file without starting the app:
+
+```sh
+synara status            # 2 mentions, 1 approval, 5 unread messages
+synara status --json     # the raw status
+synara status --waybar   # JSON for a Waybar custom module
+synara status --waybar --follow   # print a line whenever the status changes
+```
+
+It exits with 3 when Synara is not running. A Waybar module:
+
+```jsonc
+"custom/synara": {
+  "exec": "synara status --waybar --follow",
+  "return-type": "json",
+  "format": "{icon} {text}",
+  "format-icons": { "none": "󰭹", "unread": "󰭹", "mention": "󰍡", "approval": "󰒃", "offline": "󰭻" },
+  "on-click": "synara",
+  "tooltip": true
+}
+```
+
+`text` is the number of things waiting on you (mentions, approvals and invites) and is empty when
+there are none. `alt` and `class` are one of `none`, `unread`, `mention`, `approval`, `offline`;
+`class` also carries `dnd` while notifications are paused, so the module can be styled in
+`style.css` (`#custom-synara.approval { ... }`).

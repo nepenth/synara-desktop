@@ -107,7 +107,7 @@ test('via-server owner and all callers keep the native read before effects', () 
   const awaitedCallers = [
     ['src/app/pages/client/space/Space.tsx', /await getViaServers\(room\)/],
     ['src/app/pages/client/space/Space.tsx', /const via = await getViaServers\(currentRoom\)/],
-    ['src/app/pages/client/sidebar/SpaceTabs.tsx', /await getViaServers\(room\)/],
+    ['src/app/features/nav-pane/SpaceRowMenu.tsx', /await getViaServers\(room\)/],
     ['src/app/features/add-existing/AddExisting.tsx', /via: await getViaServers\(room\)/],
     ['src/app/features/room-nav/RoomNavItem.tsx', /await getViaServers\(room\)/],
     [

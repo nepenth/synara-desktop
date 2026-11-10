@@ -21,6 +21,7 @@ import {
   Spinner,
 } from 'folds';
 import classNames from 'classnames';
+import { useStore } from 'jotai';
 import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap, { returnFocusOrFallback } from '../../components/FocusTrap';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
@@ -48,12 +49,20 @@ import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
 import { useNativeRoomSummary, useNativeRoomUnread } from '../../state/room-list/roomList';
 import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavoriteOwner';
-import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import {
+  getDesktopWindowEnvironment,
+  invokeDesktopWithAvailability,
+  isSynaraDesktop,
+} from '../../utils/desktop';
 import { LiveCallChip } from './LiveCallChip';
 import { useNativeUserStatus } from '../matrix-presence/nativeUserStatus';
 import { Presence, useNativeUserPresence } from '../matrix-presence/nativePresence';
 import { MiddleTruncatedText } from '../../components/text';
 import * as css from './styles.css';
+import { desktopPlatformSettingsAtom } from '../../state/settings';
+import { resolveTilingMode } from '../../utils/tilingMode';
+import { isLinuxDesktopShell } from '../../hooks/useTilingMode';
+import { handleVimListKey, resolveVimListKeys } from '../desktop-keyboard/vimListKeys';
 import * as depthCss from '../../styles/Depth.css';
 import { PersonGlyph, roomGlyphFor } from '../../components/room-glyph';
 
@@ -330,6 +339,7 @@ function RoomNavItemImpl({
   // the row's focus-within, so it must stay mounted while focus returns to it.
   const [returningFocus, setReturningFocus] = useState(false);
   const linkRef = useRef<HTMLAnchorElement>(null);
+  const store = useStore();
   // Per-room subscriptions: a row re-renders when its own summary or unread
   // state changes, not on every other room's activity (D10). A new summary
   // also refreshes the reads that go through the in-place room facade.
@@ -379,6 +389,21 @@ function RoomNavItemImpl({
   // Arrow keys, Home and End move between rooms; Tab still leaves the list.
   // Rows render in a virtual list, so only the rows on screen are reachable.
   const handleLinkKeyDown: KeyboardEventHandler<HTMLAnchorElement> = (evt) => {
+    // Vim-style list keys (a setting, read when pressed so rows do not
+    // re-render on every settings change).
+    const { tilingMode, vimListKeys } = store.get(desktopPlatformSettingsAtom);
+    const tiling = resolveTilingMode(
+      tilingMode,
+      getDesktopWindowEnvironment(),
+      isLinuxDesktopShell()
+    );
+    if (
+      resolveVimListKeys(vimListKeys, tiling) &&
+      handleVimListKey(evt.nativeEvent, evt.currentTarget)
+    ) {
+      evt.preventDefault();
+      return;
+    }
     if (evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey) return;
     const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[data-room-nav-link]'));
     const next = listNavigationIndex(evt.key, links.indexOf(evt.currentTarget), links.length);
@@ -422,6 +447,7 @@ function RoomNavItemImpl({
         to={linkPath}
         ref={linkRef}
         data-room-nav-link
+        data-room-nav-id={room.roomId}
         aria-current={selected ? 'page' : undefined}
         onKeyDown={handleLinkKeyDown}
       >

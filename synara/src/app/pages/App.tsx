@@ -29,24 +29,26 @@ function App() {
       <PopOutContainerProvider value={portalContainer}>
         <OverlayContainerProvider value={portalContainer}>
           <ScreenSizeProvider value={screenSize}>
-            <DesktopTitleBar />
-            <ClientConfigLoader
-              fallback={() => <ConfigConfigLoading />}
-              error={(err, retry, ignore) => (
-                <ConfigConfigError error={err} retry={retry} ignore={ignore} />
-              )}
-            >
-              {(clientConfig) => (
-                <ClientConfigProvider value={clientConfig}>
-                  <QueryClientProvider client={queryClient}>
-                    <JotaiProvider>
+            {/* One store for the title strip and the app, so the Tiling mode
+                setting shows or hides the strip at once. */}
+            <JotaiProvider>
+              <DesktopTitleBar />
+              <ClientConfigLoader
+                fallback={() => <ConfigConfigLoading />}
+                error={(err, retry, ignore) => (
+                  <ConfigConfigError error={err} retry={retry} ignore={ignore} />
+                )}
+              >
+                {(clientConfig) => (
+                  <ClientConfigProvider value={clientConfig}>
+                    <QueryClientProvider client={queryClient}>
                       <RouterProvider router={createRouter(clientConfig, screenSize)} />
-                    </JotaiProvider>
-                    <ReactQueryDevtools initialIsOpen={false} />
-                  </QueryClientProvider>
-                </ClientConfigProvider>
-              )}
-            </ClientConfigLoader>
+                      <ReactQueryDevtools initialIsOpen={false} />
+                    </QueryClientProvider>
+                  </ClientConfigProvider>
+                )}
+              </ClientConfigLoader>
+            </JotaiProvider>
           </ScreenSizeProvider>
         </OverlayContainerProvider>
       </PopOutContainerProvider>

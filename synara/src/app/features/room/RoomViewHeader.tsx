@@ -1,4 +1,11 @@
-import React, { MouseEventHandler, forwardRef, useEffect, useState } from 'react';
+import React, {
+  MouseEventHandler,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useAtomValue } from 'jotai';
 import FocusTrap from '../../components/FocusTrap';
 import {
@@ -20,6 +27,7 @@ import {
   PopOut,
   RectCords,
   Badge,
+  IconSrc,
   Spinner,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
@@ -79,14 +87,33 @@ import {
   rtcCallAvailabilityCopy,
   startCallDisabledReason,
 } from '../matrix-rtc/liveCallChrome';
+import { ShowRoomListButton } from '../../features/room-list-pane/RoomListToggleButton';
+import { useElementSizeObserver } from '../../hooks/useElementSizeObserver';
+
+/**
+ * Below this header width the room's tools (search, threads, pins, notes,
+ * members, widgets) move into More options, so the title and the remaining
+ * buttons fit a narrow window or a room squeezed by the list and a side pane.
+ */
+export const ROOM_HEADER_COMPACT_WIDTH = 600;
+
+/** A room tool listed in More options when the header is compact. */
+export type RoomHeaderTool = {
+  label: string;
+  icon: IconSrc;
+  pressed?: boolean;
+  onSelect: () => void;
+};
 
 type Room = ReturnType<typeof useRoom>;
 
 type RoomMenuProps = {
   room: Room;
   requestClose: () => void;
+  /** The header's tool buttons, listed first when the header is too narrow for them. */
+  tools?: RoomHeaderTool[];
 };
-const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
+const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose, tools }, ref) => {
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const powerLevels = usePowerLevelsContext();
 
@@ -150,8 +177,41 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
     <Menu
       ref={ref}
       className={depthCss.floatingSurface}
-      style={{ maxWidth: toRem(160), width: '100vw' }}
+      style={{
+        maxWidth: toRem(tools?.length ? 220 : 160),
+        width: '100vw',
+        // A short window scrolls the menu rather than cutting off its last items.
+        maxHeight: `calc(100vh - ${toRem(16)})`,
+        overflowY: 'auto',
+      }}
     >
+      {tools && tools.length > 0 && (
+        <>
+          <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+            {tools.map((tool) => (
+              <MenuItem
+                key={tool.label}
+                variant="Surface"
+                fill="None"
+                size="300"
+                radii="300"
+                after={<Icon size="100" src={tool.icon} filled={tool.pressed} />}
+                className={depthCss.quietInteractiveSurface}
+                aria-pressed={tool.pressed}
+                onClick={() => {
+                  requestClose();
+                  tool.onSelect();
+                }}
+              >
+                <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+                  {tool.label}
+                </Text>
+              </MenuItem>
+            ))}
+          </Box>
+          <Line variant="Surface" size="300" />
+        </>
+      )}
       {invitePrompt && (
         <InviteUserPrompt
           room={room}
@@ -405,6 +465,13 @@ export function RoomViewHeader({
   const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
   const [notesOverlayOpen, setNotesOverlayOpen] = useState(false);
   const [threadsOverlayOpen, setThreadsOverlayOpen] = useState(false);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const [compact, setCompact] = useState(false);
+  useElementSizeObserver(
+    useCallback(() => headerRef.current, []),
+    useCallback((width: number) => setCompact(width > 0 && width < ROOM_HEADER_COMPACT_WIDTH), [])
+  );
 
   const jsPinnedEvents = useRoomPinnedEvents(room);
   const nativePinned = useNativePinnedEvents(room);
@@ -416,6 +483,8 @@ export function RoomViewHeader({
   const glyph = roomGlyphFor(useNativeRoomSummary(room.roomId), name);
 
   const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
+  // With a room's own toggle (Room), what is on screen; else the drawer setting.
+  const membersOpen = onToggleMembers ? activeSidePanel === 'members' : peopleDrawer;
   const pinsOpen = activeSidePanel === 'pins' || !!pinMenuAnchor;
   const notesOpen = activeSidePanel === 'notes' || notesOverlayOpen;
   const threadsOpen = activeSidePanel === 'threads' || threadsOverlayOpen;
@@ -443,12 +512,15 @@ export function RoomViewHeader({
     setCallMenuAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
-  const handleOpenPinMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
+  const openPins = (anchor: RectCords | undefined) => {
     if (onToggleSidePanel) {
       onToggleSidePanel('pins');
       return;
     }
-    setPinMenuAnchor(evt.currentTarget.getBoundingClientRect());
+    setPinMenuAnchor(anchor);
+  };
+  const handleOpenPinMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
+    openPins(evt.currentTarget.getBoundingClientRect());
   };
 
   const handleOpenNotes = () => {
@@ -474,10 +546,59 @@ export function RoomViewHeader({
     }
     setPeopleDrawer(!peopleDrawer);
   };
+  const showMembersButton = !!onToggleMembers || screenSize === ScreenSize.Desktop;
+  const pinnedLabel = pinnedCount > 0 ? `Pinned Messages, ${pinnedCount}` : 'Pinned Messages';
+
+  // Compact: the same tools, listed in More options.
+  const tools: RoomHeaderTool[] | undefined = compact
+    ? [
+        { label: 'Search', icon: Icons.Search, onSelect: handleSearchClick },
+        {
+          label: 'Threads',
+          icon: Icons.Thread,
+          pressed: threadsOpen,
+          onSelect: handleOpenThreads,
+        },
+        {
+          label: pinnedLabel,
+          icon: Icons.Pin,
+          pressed: pinsOpen,
+          onSelect: () => openPins(moreRef.current?.getBoundingClientRect()),
+        },
+        {
+          label: 'Personal Notes',
+          icon: Icons.Pencil,
+          pressed: notesOpen,
+          onSelect: handleOpenNotes,
+        },
+        ...(showMembersButton
+          ? [
+              {
+                label: membersOpen ? 'Hide Members' : 'Show Members',
+                icon: Icons.User,
+                pressed: membersOpen,
+                onSelect: handleMemberToggle,
+              },
+            ]
+          : []),
+        ...(isSynaraDesktop() && onToggleSidePanel
+          ? [
+              {
+                label: 'Widgets',
+                icon: Icons.Code,
+                pressed: widgetsOpen,
+                onSelect: () => onToggleSidePanel('widgets'),
+              },
+            ]
+          : []),
+      ]
+    : undefined;
 
   return (
     <PageHeader
+      ref={headerRef}
       data-tauri-drag-region
+      data-compact={compact || undefined}
       className={ContainerColor({ variant: 'SurfaceVariant' })}
       balance={screenSize === ScreenSize.Mobile}
     >
@@ -498,7 +619,8 @@ export function RoomViewHeader({
             )}
           </BackRouteHandler>
         )}
-        <Box grow="Yes" alignItems="Center" gap="300">
+        <ShowRoomListButton />
+        <Box grow="Yes" alignItems="Center" gap="300" style={{ minWidth: 0 }}>
           {screenSize !== ScreenSize.Mobile &&
             (glyph.kind === 'person' ? (
               <PersonGlyph className={css.RoomPersonGlyph} glyph={glyph} />
@@ -507,7 +629,7 @@ export function RoomViewHeader({
                 #
               </Text>
             ))}
-          <Box direction="Column">
+          <Box direction="Column" style={{ minWidth: 0 }}>
             <Text as="h1" size="H5" className={css.RoomTitle} truncate>
               {name}
             </Text>
@@ -592,7 +714,7 @@ export function RoomViewHeader({
               </FocusTrap>
             }
           />
-          {isSynaraDesktop() && onToggleSidePanel && (
+          {!compact && isSynaraDesktop() && onToggleSidePanel && (
             <TooltipProvider
               position="Bottom"
               offset={4}
@@ -616,49 +738,53 @@ export function RoomViewHeader({
               )}
             </TooltipProvider>
           )}
-          <TooltipProvider
-            position="Bottom"
-            offset={4}
-            tooltip={
-              <Tooltip>
-                <Text>Search</Text>
-              </Tooltip>
-            }
-          >
-            {(triggerRef) => (
-              <IconButton
-                className={depthCss.quietInteractiveSurface}
-                fill="None"
-                ref={triggerRef}
-                onClick={handleSearchClick}
-                aria-label="Search"
-              >
-                <Icon size="400" src={Icons.Search} />
-              </IconButton>
-            )}
-          </TooltipProvider>
-          <TooltipProvider
-            position="Bottom"
-            offset={4}
-            tooltip={
-              <Tooltip>
-                <Text>Threads</Text>
-              </Tooltip>
-            }
-          >
-            {(triggerRef) => (
-              <IconButton
-                className={depthCss.quietInteractiveSurface}
-                fill="None"
-                ref={triggerRef}
-                onClick={handleOpenThreads}
-                aria-label="Threads"
-                aria-pressed={threadsOpen}
-              >
-                <Icon size="400" src={Icons.Thread} filled={threadsOpen} />
-              </IconButton>
-            )}
-          </TooltipProvider>
+          {!compact && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>Search</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={handleSearchClick}
+                  aria-label="Search"
+                >
+                  <Icon size="400" src={Icons.Search} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
+          {!compact && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>Threads</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={handleOpenThreads}
+                  aria-label="Threads"
+                  aria-pressed={threadsOpen}
+                >
+                  <Icon size="400" src={Icons.Thread} filled={threadsOpen} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
           {!onToggleSidePanel && (
             <Overlay open={threadsOverlayOpen} backdrop={<OverlayBackdrop />}>
               <OverlayCenter>
@@ -675,46 +801,48 @@ export function RoomViewHeader({
               </OverlayCenter>
             </Overlay>
           )}
-          <TooltipProvider
-            position="Bottom"
-            offset={4}
-            tooltip={
-              <Tooltip>
-                <Text>Pinned Messages</Text>
-              </Tooltip>
-            }
-          >
-            {(triggerRef) => (
-              <IconButton
-                className={depthCss.quietInteractiveSurface}
-                fill="None"
-                style={{ position: 'relative' }}
-                onClick={handleOpenPinMenu}
-                ref={triggerRef}
-                aria-label={pinnedCount > 0 ? `Pinned Messages, ${pinnedCount}` : 'Pinned Messages'}
-                aria-pressed={pinsOpen}
-              >
-                {pinnedCount > 0 && (
-                  <Badge
-                    style={{
-                      position: 'absolute',
-                      left: toRem(3),
-                      top: toRem(3),
-                    }}
-                    variant="Secondary"
-                    size="400"
-                    fill="Solid"
-                    radii="Pill"
-                  >
-                    <Text as="span" size="L400">
-                      {pinnedCount}
-                    </Text>
-                  </Badge>
-                )}
-                <Icon size="400" src={Icons.Pin} filled={pinsOpen} />
-              </IconButton>
-            )}
-          </TooltipProvider>
+          {!compact && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>Pinned Messages</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  fill="None"
+                  style={{ position: 'relative' }}
+                  onClick={handleOpenPinMenu}
+                  ref={triggerRef}
+                  aria-label={pinnedLabel}
+                  aria-pressed={pinsOpen}
+                >
+                  {pinnedCount > 0 && (
+                    <Badge
+                      style={{
+                        position: 'absolute',
+                        left: toRem(3),
+                        top: toRem(3),
+                      }}
+                      variant="Secondary"
+                      size="400"
+                      fill="Solid"
+                      radii="Pill"
+                    >
+                      <Text as="span" size="L400">
+                        {pinnedCount}
+                      </Text>
+                    </Badge>
+                  )}
+                  <Icon size="400" src={Icons.Pin} filled={pinsOpen} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
           {!onToggleSidePanel && (
             <PopOut
               anchor={pinMenuAnchor}
@@ -739,46 +867,48 @@ export function RoomViewHeader({
             />
           )}
 
-          <TooltipProvider
-            position="Bottom"
-            offset={4}
-            tooltip={
-              <Tooltip>
-                <Text>Personal Notes</Text>
-              </Tooltip>
-            }
-          >
-            {(triggerRef) => (
-              <IconButton
-                className={depthCss.quietInteractiveSurface}
-                fill="None"
-                style={{ position: 'relative' }}
-                ref={triggerRef}
-                onClick={handleOpenNotes}
-                aria-label="Personal Notes"
-                aria-pressed={notesOpen}
-              >
-                {notesSummary.total > 0 && (
-                  <Badge
-                    style={{
-                      position: 'absolute',
-                      left: toRem(3),
-                      top: toRem(3),
-                    }}
-                    variant={notesSummary.activeTodos > 0 ? 'Warning' : 'Secondary'}
-                    size="400"
-                    fill="Solid"
-                    radii="Pill"
-                  >
-                    <Text as="span" size="L400">
-                      {notesSummary.activeTodos || notesSummary.total}
-                    </Text>
-                  </Badge>
-                )}
-                <Icon size="400" src={Icons.Pencil} filled={notesOpen} />
-              </IconButton>
-            )}
-          </TooltipProvider>
+          {!compact && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>Personal Notes</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  fill="None"
+                  style={{ position: 'relative' }}
+                  ref={triggerRef}
+                  onClick={handleOpenNotes}
+                  aria-label="Personal Notes"
+                  aria-pressed={notesOpen}
+                >
+                  {notesSummary.total > 0 && (
+                    <Badge
+                      style={{
+                        position: 'absolute',
+                        left: toRem(3),
+                        top: toRem(3),
+                      }}
+                      variant={notesSummary.activeTodos > 0 ? 'Warning' : 'Secondary'}
+                      size="400"
+                      fill="Solid"
+                      radii="Pill"
+                    >
+                      <Text as="span" size="L400">
+                        {notesSummary.activeTodos || notesSummary.total}
+                      </Text>
+                    </Badge>
+                  )}
+                  <Icon size="400" src={Icons.Pencil} filled={notesOpen} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
           {!onToggleSidePanel && (
             <Overlay open={notesOverlayOpen} backdrop={<OverlayBackdrop />}>
               <OverlayCenter>
@@ -796,17 +926,13 @@ export function RoomViewHeader({
             </Overlay>
           )}
 
-          {screenSize === ScreenSize.Desktop && (
+          {!compact && showMembersButton && (
             <TooltipProvider
               position="Bottom"
               offset={4}
               tooltip={
                 <Tooltip>
-                  <Text>
-                    {activeSidePanel === 'members' || peopleDrawer
-                      ? 'Hide Members'
-                      : 'Show Members'}
-                  </Text>
+                  <Text>{membersOpen ? 'Hide Members' : 'Show Members'}</Text>
                 </Tooltip>
               }
             >
@@ -815,9 +941,7 @@ export function RoomViewHeader({
                   className={depthCss.quietInteractiveSurface}
                   fill="None"
                   ref={triggerRef}
-                  aria-label={
-                    activeSidePanel === 'members' || peopleDrawer ? 'Hide Members' : 'Show Members'
-                  }
+                  aria-label={membersOpen ? 'Hide Members' : 'Show Members'}
                   onClick={handleMemberToggle}
                 >
                   <Icon size="400" src={Icons.User} />
@@ -841,7 +965,10 @@ export function RoomViewHeader({
                 className={depthCss.quietInteractiveSurface}
                 fill="None"
                 onClick={handleOpenMenu}
-                ref={triggerRef}
+                ref={(el: HTMLButtonElement | null) => {
+                  triggerRef(el);
+                  moreRef.current = el;
+                }}
                 aria-label="More Options"
                 aria-pressed={!!menuAnchor}
               >
@@ -864,7 +991,7 @@ export function RoomViewHeader({
                   escapeDeactivates: stopPropagation,
                 }}
               >
-                <RoomMenu room={room} requestClose={() => setMenuAnchor(undefined)} />
+                <RoomMenu room={room} tools={tools} requestClose={() => setMenuAnchor(undefined)} />
               </FocusTrap>
             }
           />

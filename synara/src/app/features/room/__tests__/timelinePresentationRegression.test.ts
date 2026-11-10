@@ -80,7 +80,7 @@ test('room overflow Invite is a quiet surface option, not an accent-selected Pri
   assert.match(lobbyInvite, /fill="None"/);
   assert.doesNotMatch(lobbyInvite, /variant="Primary"/);
 
-  const tabs = readFileSync('src/app/pages/client/sidebar/SpaceTabs.tsx', 'utf8');
+  const tabs = readFileSync('src/app/features/nav-pane/SpaceRowMenu.tsx', 'utf8');
   const tabsInviteStart = tabs.indexOf('onClick={handleInvite}');
   const tabsInvite = tabs.slice(
     tabsInviteStart,

@@ -23,6 +23,25 @@ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { resolveThreadPane, type ThreadPaneTarget } from './threadPane';
 import { NativePermalinkProvider } from './nativeTimelineFormattedBody';
 import { useNativePermalinkHandler } from './useNativePermalinkHandler';
+import { useAutoHideRoomList } from '../room-list-pane/useRoomListPane';
+import * as overlayCss from './RoomPanelOverlay.css';
+import { portalOpen, useAppShortcutHandler } from '../desktop-keyboard/appShortcutHandlers';
+
+/**
+ * Esc closes the overlay first (the registry's Escape, `close-thread`): the
+ * most recently mounted handler wins, so an open thread pane closes next.
+ */
+function OverlayEscape({ onClose }: { onClose: () => void }) {
+  useAppShortcutHandler(
+    'close-thread',
+    useCallback(() => {
+      if (portalOpen()) return false;
+      onClose();
+      return true;
+    }, [onClose])
+  );
+  return null;
+}
 
 function ThreadPaneComposer({ rootEventId }: { rootEventId: string }) {
   const room = useRoom();
@@ -50,29 +69,50 @@ export function Room() {
   const [threadDisplay] = useSetting(settingsAtom, 'threadDisplay');
   const [threadPaneWidth, setThreadPaneWidth] = useSetting(settingsAtom, 'threadPaneWidth');
   const [roomSidePanel, setRoomSidePanel] = useState<RoomSidePanelType>();
+  // Below the Desktop width the members drawer is an overlay, opened for the
+  // moment only: the saved drawer setting is the Desktop column's.
+  const [membersOverlay, setMembersOverlay] = useState(false);
   const [openedPane, setOpenedPane] = useState<ThreadPaneTarget>();
   const [roomAreaWidth, setRoomAreaWidth] = useState<number>();
   const roomAreaRef = useRef<HTMLDivElement>(null);
   const screenSize = useScreenSizeContext();
+  // Desktop: side panels and the members drawer sit beside the room. Below
+  // it they open over the room. The thread pane needs more than Mobile.
+  const wide = screenSize === ScreenSize.Desktop;
+  const threadPaneFits = screenSize !== ScreenSize.Mobile;
   const powerLevels = usePowerLevels(room);
   const permalinkHandler = useNativePermalinkHandler(room.roomId);
 
   // A pane belongs to one room.
   useEffect(() => setOpenedPane(undefined), [room.roomId]);
+  useEffect(() => setMembersOverlay(false), [room.roomId, wide]);
 
   const pane = resolveThreadPane({
     mode: threadDisplay,
     opened: openedPane,
     routeThreadRootId: threadRootId,
-    desktop: screenSize === ScreenSize.Desktop,
+    desktop: threadPaneFits,
   });
   // One right pane at a time: an open thread takes the right side, and the
   // members drawer returns when it closes without changing its setting.
-  const activeSidePanel = pane ? undefined : isDrawer ? 'members' : roomSidePanel;
+  // Overlays (below Desktop) cover whatever is on the right, the thread too.
+  const activeSidePanel = wide
+    ? pane
+      ? undefined
+      : isDrawer
+        ? 'members'
+        : roomSidePanel
+    : membersOverlay
+      ? 'members'
+      : roomSidePanel;
+
+  // Tablet: a thread pane hides the room list while it is open (L2).
+  useAutoHideRoomList(screenSize === ScreenSize.Tablet && !!pane);
 
   const handleOpenThreadPane = useCallback(
     (rootEventId: string, latestEventId?: string, focusEventId?: string) => {
       setRoomSidePanel(undefined);
+      setMembersOverlay(false);
       setOpenedPane({ rootEventId, latestEventId, focusEventId });
     },
     []
@@ -84,21 +124,30 @@ export function Room() {
 
   const handleToggleSidePanel = useCallback(
     (panel: RoomSidePanelType) => {
+      setRoomSidePanel((currentPanel) => (currentPanel === panel ? undefined : panel));
+      if (!wide) {
+        setMembersOverlay(false);
+        return;
+      }
       setOpenedPane(undefined);
       setIsDrawer(false);
-      setRoomSidePanel((currentPanel) => (currentPanel === panel ? undefined : panel));
     },
-    [setIsDrawer]
+    [setIsDrawer, wide]
   );
   const handleToggleMembers = useCallback(() => {
-    setOpenedPane(undefined);
     setRoomSidePanel(undefined);
+    if (!wide) {
+      setMembersOverlay((open) => !open);
+      return;
+    }
+    setOpenedPane(undefined);
     setIsDrawer(pane ? true : !isDrawer);
-  }, [isDrawer, pane, setIsDrawer]);
+  }, [isDrawer, pane, setIsDrawer, wide]);
   const handleCloseSidePanel = useCallback(() => {
     setRoomSidePanel(undefined);
-    setIsDrawer(false);
-  }, [setIsDrawer]);
+    if (wide) setIsDrawer(false);
+    else setMembersOverlay(false);
+  }, [setIsDrawer, wide]);
 
   useEffect(() => {
     const element = roomAreaRef.current;
@@ -124,7 +173,7 @@ export function Room() {
   return (
     <PowerLevelsContextProvider value={powerLevels}>
       <NativePermalinkProvider value={permalinkHandler}>
-        <Box as="main" grow="Yes" ref={roomAreaRef}>
+        <Box as="main" grow="Yes" ref={roomAreaRef} style={{ position: 'relative', minWidth: 0 }}>
           <Box grow="Yes" direction="Column" style={{ minWidth: 0 }} data-file-drop-region="room">
             <RoomViewHeader
               activeSidePanel={activeSidePanel}
@@ -135,11 +184,9 @@ export function Room() {
               <RoomView
                 eventId={eventId}
                 threadRootEventId={pane ? undefined : threadRootId}
-                threadDisplay={screenSize === ScreenSize.Desktop ? threadDisplay : 'full'}
+                threadDisplay={threadPaneFits ? threadDisplay : 'full'}
                 onOpenThreadPane={
-                  screenSize === ScreenSize.Desktop && threadDisplay !== 'full'
-                    ? handleOpenThreadPane
-                    : undefined
+                  threadPaneFits && threadDisplay !== 'full' ? handleOpenThreadPane : undefined
                 }
               />
             </Box>
@@ -158,7 +205,25 @@ export function Room() {
             />
           )}
 
-          {screenSize === ScreenSize.Desktop && activeSidePanel && (
+          {!wide && activeSidePanel && (
+            // Not modal: the room stays usable; Esc or the panel's Close closes it.
+            <div className={overlayCss.Overlay} data-room-panel-overlay={activeSidePanel}>
+              <OverlayEscape onClose={handleCloseSidePanel} />
+              {activeSidePanel === 'members' ? (
+                <MembersDrawer key={room.roomId} room={room} requestClose={handleCloseSidePanel} />
+              ) : (
+                <RoomSidePanel
+                  key={`${room.roomId}-${activeSidePanel}`}
+                  room={room}
+                  activePanel={activeSidePanel}
+                  requestClose={handleCloseSidePanel}
+                  overlay
+                />
+              )}
+            </div>
+          )}
+
+          {wide && activeSidePanel && (
             <>
               <Line variant="Background" direction="Vertical" size="300" />
               {activeSidePanel === 'members' ? (

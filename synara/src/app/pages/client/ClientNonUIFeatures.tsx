@@ -1,4 +1,4 @@
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
@@ -9,7 +9,13 @@ import NotificationSound from '../../../../public/sound/notification.ogg';
 import InviteSound from '../../../../public/sound/invite.ogg';
 import { notificationPermission, setFavicon } from '../../utils/dom';
 import { useSetting } from '../../state/hooks/settings';
-import { desktopPlatformSettingsAtom, settingsAtom } from '../../state/settings';
+import {
+  desktopPlatformSettingsAtom,
+  readReceiptsArePublic,
+  settingsAtom,
+} from '../../state/settings';
+import { composerFocusRequestAtom } from '../../state/composerFocusRequest';
+import { messageReplyActionRoom } from '../../notifications/messageNotificationActions';
 import {
   allInvitesAtom,
   useNativeInvites,
@@ -212,6 +218,8 @@ function PlatformBadgeAndTrayUpdater() {
         laterCount: summary.laterActiveCount,
         notificationInboxCount: getTrayNotificationListCount(summary),
         doNotDisturb: !showNotifications,
+        pendingApprovalCount: agentApprovalCount,
+        inviteCount: invites.length,
       }).catch(() => undefined);
     }
   }, [invites.length, laterContent, presentation, showNotifications, agentApprovalCount]);
@@ -405,6 +413,7 @@ function MessageNotifications() {
           eventId,
           sessionGeneration,
           messageSound: sound,
+          publicReadReceipt: readReceiptsArePublic(),
         });
       } catch {
         return 'failed';
@@ -617,6 +626,7 @@ function AgentApprovalNotifications() {
   const nativeActionsInFlight = nativeActionState.inFlight;
   const nativeActionDedupe = nativeActionState.completed;
   const { navigateRoom, roomPath } = useRoomNavigate();
+  const requestComposerFocus = useSetAtom(composerFocusRequestAtom);
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [showApprovalDetails] = useSetting(settingsAtom, 'showApprovalNotificationDetails');
 
@@ -695,6 +705,13 @@ function AgentApprovalNotifications() {
         )
       )
         return;
+      // Reply on a banner that cannot take text: open the room, ready to type.
+      const replyRoomId = messageReplyActionRoom(payload);
+      if (replyRoomId) {
+        requestComposerFocus({ roomId: replyRoomId });
+        navigateRoom(replyRoomId);
+        return;
+      }
       const earlyPlan = planAgentApprovalNativeNotificationAction({
         actionId,
         context,
@@ -780,7 +797,13 @@ function AgentApprovalNotifications() {
         eventId
       );
     },
-    [nativeActionDedupe, nativeActionsInFlight, navigateRoom, reportBannerAction]
+    [
+      nativeActionDedupe,
+      nativeActionsInFlight,
+      navigateRoom,
+      reportBannerAction,
+      requestComposerFocus,
+    ]
   );
   const handleNativeNotificationActionRef = useLatestRef(handleNativeNotificationAction);
 

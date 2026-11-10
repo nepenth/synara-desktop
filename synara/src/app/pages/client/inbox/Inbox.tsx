@@ -11,7 +11,10 @@ import {
 import { UnreadBadge } from '../../../components/unread-badge';
 import { allInvitesAtom } from '../../../state/room-list/inviteList';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
-import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
+import { PageNav, PageNavContent } from '../../../components/page';
+import { NavPaneHeader } from '../../../features/nav-pane/NavPaneHeader';
+import { NavBottomBar } from '../../../features/nav-pane/NavBottomBar';
+import { HideRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 import { laterContentAtom } from '../../../state/laterList';
 import { getLaterDueSummary } from '../../../utils/later';
 
@@ -86,17 +89,11 @@ export function Inbox() {
   const notificationsSelected = useInboxNotificationsSelected();
 
   return (
-    <PageNav label="Activity">
-      <PageNavHeader>
-        <Box grow="Yes" gap="300">
-          <Box grow="Yes">
-            <Text size="H4" truncate>
-              Activity
-            </Text>
-          </Box>
-        </Box>
-      </PageNavHeader>
-
+    <PageNav
+      label="Activity"
+      header={<NavPaneHeader title="Activity" actions={<HideRoomListButton />} />}
+      footer={<NavBottomBar />}
+    >
       <PageNavContent>
         <Box direction="Column" gap="300">
           <NavCategory>

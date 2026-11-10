@@ -1,8 +1,8 @@
 import { expect, test, type Locator } from '@playwright/test';
 
-// Rail rule (Slack): a red count only for mentions and unread DMs, a dot for
-// plain unread. Home is one list of rooms and DMs (NAV-12) and, since wave 3,
-// the rail's only way to them, so its badge carries every DM's attention.
+// Slack rule: a red count only for mentions and unread DMs, a dot for plain
+// unread. Home is one list of rooms and DMs (NAV-12) and the bottom bar's only
+// way to them, so its badge carries every DM's attention.
 const badge = (rail: Locator) => rail.locator('[data-badge-role]');
 const dot = (rail: Locator) => rail.locator('[data-badge-role="neutral"]');
 const red = (rail: Locator) => rail.locator('[data-badge-role="mention"]');
@@ -12,7 +12,7 @@ test('the Home badge counts unread DMs even if m.direct readback lags', async ({
   const home = page.getByTestId('home-rail');
   await expect(home.locator('button')).toHaveAttribute('aria-current', 'page');
   await expect(badge(home)).toHaveCount(0);
-  // No separate Direct messages tab on the rail.
+  // No separate Direct messages item on the bar.
   await expect(page.getByRole('button', { name: 'Direct messages', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Receive DM', exact: true }).click();
   await expect(red(home)).toHaveText('2');
@@ -44,11 +44,13 @@ test('Home aggregate shows a dot for plain unread and a red count for mentions',
   await expect(mention).toHaveText('1');
   // Dark theme Critical.Main.
   await expect(mention).toHaveCSS('background-color', 'rgb(230, 157, 157)');
-  // Bottom-right of the tile.
-  const tile = await home.locator('button').boundingBox();
+  // Top-right of the icon.
+  const icon = await home.locator('button svg').first().boundingBox();
   const pill = await mention.boundingBox();
-  expect(pill!.x + pill!.width / 2).toBeGreaterThan(tile!.x + tile!.width / 2);
-  expect(pill!.y + pill!.height / 2).toBeGreaterThan(tile!.y + tile!.height / 2);
+  expect(pill!.x + pill!.width / 2).toBeGreaterThan(icon!.x + icon!.width / 2);
+  expect(pill!.y + pill!.height / 2).toBeLessThan(icon!.y + icon!.height / 2);
+  // The item's name carries the count; the badge itself is hidden from AT.
+  await expect(home.locator('button')).toHaveAccessibleName('Home, 1 mention or direct message');
   await page.getByRole('button', { name: 'Mark Home read' }).click();
   await expect(badge(home)).toHaveCount(0);
 });
@@ -74,14 +76,14 @@ test('DM attention in the Home badge keeps mention-only, marked-unread and mute'
   await expect(badge(home)).toHaveCount(0);
 });
 
-test('Home Mark as Read clears its whole list, rooms and DMs', async ({ page }) => {
+test('Home Mark as read clears its whole list, rooms and DMs', async ({ page }) => {
   await page.goto('/e2e/room-list-harness/index.html?navigationUnread&laggingMDirect');
   const home = page.getByTestId('home-rail');
   await page.getByRole('button', { name: 'Receive DM', exact: true }).click();
   await page.getByRole('button', { name: 'Receive Home', exact: true }).click();
   await expect(red(home)).toHaveText('2');
-  await page.getByRole('button', { name: 'Home', exact: true }).click({ button: 'right' });
-  await page.getByRole('button', { name: 'Mark as Read', exact: true }).click();
+  await home.locator('button').click({ button: 'right' });
+  await page.getByRole('button', { name: 'Mark as read', exact: true }).click();
   await expect(badge(home)).toHaveCount(0);
   await expect(page.locator('body')).toHaveAttribute(
     'data-read-rooms',
@@ -127,13 +129,13 @@ test('DMs open from the Direct messages section of the one Home list', async ({ 
   await expect(pane.locator('[data-selected="true"]')).toContainText('!dm:example.test');
   await expect(homeRail.locator('button')).toHaveAttribute('aria-current', 'page');
 
-  // A Home room from the same list moves the selection, not the rail.
+  // A Home room from the same list moves the selection, not the bar.
   await pane.locator('a[href="/home/!home%3Aexample.test"]').click();
   await expect(page.getByTestId('current-route')).toHaveText('/home/!home%3Aexample.test');
   await expect(pane.locator('[data-selected="true"]')).toContainText('!home:example.test');
   await expect(homeRail.locator('button')).toHaveAttribute('aria-current', 'page');
 
-  // The pane's search field opens the global search (the rail's Search moved here).
+  // The pane's search field opens the global search.
   const field = pane.getByTestId('nav-search-field');
   await expect(field).toHaveAttribute('aria-expanded', 'false');
   await field.click();

@@ -21,11 +21,11 @@ use tauri::{AppHandle, Runtime};
 
 use super::{
     handle_notification_response, is_critical_notification, is_time_sensitive_agent_approval,
-    macos_delivery, response_for_action, sanitize_dismiss_key,
+    macos_delivery, response_for_banner_action, sanitize_dismiss_key,
     sanitize_notification_action_context, sanitize_notification_actions,
     sanitize_notification_route, DesktopNotificationAction, DesktopNotificationActionContext,
     DesktopNotificationPayload, DesktopNotificationSoundPolicy, DismissKeyIndex,
-    NotificationBinding, NotificationResponse,
+    NotificationBinding, NotificationResponse, MESSAGE_REPLY_ACTION,
 };
 
 const CONTEXT_KEY: &str = "synara-response";
@@ -98,6 +98,9 @@ struct ResponseContext {
     /// Kept so a relaunched process can rebuild its dismiss index.
     #[serde(default)]
     dismiss_keys: Vec<String>,
+    /// The read-receipt setting a message banner was posted with.
+    #[serde(default)]
+    public_read_receipt: Option<bool>,
 }
 
 impl ResponseContext {
@@ -134,25 +137,37 @@ fn retained_response_has_required_binding(context: &ResponseContext) -> bool {
 }
 
 /// What a click or action on a delivered banner asks for; `None` when the
-/// banner has nothing to do (no route, an unknown action).
-fn response_for_context(context: &ResponseContext, action: &str) -> Option<NotificationResponse> {
+/// banner has nothing to do (no route, an unknown action). `reply_text` is
+/// the text typed into a text-input action.
+fn response_for_context(
+    context: &ResponseContext,
+    action: &str,
+    reply_text: Option<&str>,
+) -> Option<NotificationResponse> {
     if action == "default" {
         return context
             .route
             .clone()
             .map(|route| NotificationResponse::Open { route });
     }
-    context
-        .actions
-        .iter()
-        .any(|item| item.id == action)
-        .then(|| {
-            response_for_action(
-                action,
-                context.route.as_deref(),
-                context.action_context.clone(),
-            )
-        })
+    if !context.actions.iter().any(|item| item.id == action) {
+        return None;
+    }
+    response_for_banner_action(
+        action,
+        context.route.as_deref(),
+        context.action_context.clone(),
+        context.public_read_receipt,
+        reply_text,
+    )
+}
+
+/// The text of a text-input response (Reply). An empty string when the user
+/// sent nothing, so a text-input action never falls back to opening a room.
+fn response_reply_text(response: &UNNotificationResponse) -> Option<String> {
+    response
+        .downcast_ref::<UNTextInputNotificationResponse>()
+        .map(|response| response.userText().to_string())
 }
 
 pub(super) fn initialize<R: Runtime>(app: &AppHandle<R>) {
@@ -186,7 +201,8 @@ pub(super) fn initialize<R: Runtime>(app: &AppHandle<R>) {
             } else {
                 action.to_string()
             };
-            if let Some(next) = response_for_context(&context, &action) {
+            let reply_text = response_reply_text(response);
+            if let Some(next) = response_for_context(&context, &action, reply_text.as_deref()) {
                 let critical =
                     is_critical_notification(context.action_context.as_ref(), &context.actions);
                 handle_notification_response(&app, context.binding(), critical, next);
@@ -394,10 +410,25 @@ fn register_category(actions: &[DesktopNotificationAction]) -> (String, bool) {
             let native_actions = actions
                 .iter()
                 .map(|action| {
-                    UNNotificationAction::actionWithIdentifier_title_options(
-                        &NSString::from_str(&action.id),
-                        &NSString::from_str(&action.label),
-                        notification_action_options(&action.id),
+                    let identifier = NSString::from_str(&action.id);
+                    let title = NSString::from_str(&action.label);
+                    let options = notification_action_options(&action.id);
+                    if !collects_reply_text(&action.id) {
+                        return UNNotificationAction::actionWithIdentifier_title_options(
+                            &identifier,
+                            &title,
+                            options,
+                        );
+                    }
+                    // Reply is typed into the banner and sent without opening Synara.
+                    Retained::into_super(
+                        UNTextInputNotificationAction::actionWithIdentifier_title_options_textInputButtonTitle_textInputPlaceholder(
+                            &identifier,
+                            &title,
+                            options,
+                            &NSString::from_str("Send"),
+                            &NSString::from_str("Message"),
+                        ),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -424,6 +455,11 @@ fn notification_action_options(action_id: &str) -> UNNotificationActionOptions {
         }
         _ => UNNotificationActionOptions::empty(),
     }
+}
+
+/// Reply is a text-input action; every other action is a plain button.
+fn collects_reply_text(action_id: &str) -> bool {
+    action_id == MESSAGE_REPLY_ACTION
 }
 
 fn remove_requests(identifiers: &[String]) {
@@ -577,6 +613,7 @@ pub(super) async fn show<R: Runtime>(
             actions: actions.to_vec(),
             action_context: action_context.cloned(),
             dismiss_keys: dismiss_keys.to_vec(),
+            public_read_receipt: notification.public_read_receipt,
         })
         .map_err(|_| "macOS notification response encoding failed".to_owned())?;
         let key = NSString::from_str(CONTEXT_KEY);
@@ -814,20 +851,64 @@ mod tests {
         );
         let context = decode_context(r#"{"sessionGeneration":3,"route":"/direct/!a:x/$e","actions":[{"id":"agent-approval.review","label":"Review"},{"id":"agent-approval.deny","label":"Deny"}],"actionContext":{"kind":"agent-approval","roomId":"!a:x","eventId":"$e"}}"#).unwrap();
         assert_eq!(
-            response_for_context(&context, "agent-approval.review"),
+            response_for_context(&context, "agent-approval.review", None),
             Some(NotificationResponse::Open {
                 route: "/direct/!a:x/$e".to_owned()
             })
         );
         assert!(matches!(
-            response_for_context(&context, "agent-approval.deny"),
+            response_for_context(&context, "agent-approval.deny", None),
             Some(NotificationResponse::Action { .. })
         ));
-        assert_eq!(response_for_context(&context, "agent-approval.other"), None);
+        assert_eq!(
+            response_for_context(&context, "agent-approval.other", None),
+            None
+        );
         assert!(matches!(
-            response_for_context(&context, "default"),
+            response_for_context(&context, "default", None),
             Some(NotificationResponse::Open { .. })
         ));
+    }
+
+    #[test]
+    fn a_message_banner_marks_read_and_sends_typed_replies_for_its_own_room() {
+        let context = decode_context(r#"{"sessionGeneration":3,"account":"@a:x","process":9,"route":"/home/!a:x/$e","actions":[{"id":"message.mark-read","label":"Mark as read"},{"id":"message.reply","label":"Reply"}],"actionContext":{"kind":"message","roomId":"!a:x","eventId":"$e"},"publicReadReceipt":true}"#).unwrap();
+        assert!(retained_response_has_required_binding(&context));
+        assert!(collects_reply_text("message.reply"));
+        assert!(!collects_reply_text("message.mark-read"));
+        assert_eq!(
+            notification_action_options("message.mark-read"),
+            UNNotificationActionOptions::empty()
+        );
+        assert_eq!(
+            notification_action_options("message.reply"),
+            UNNotificationActionOptions::empty()
+        );
+        assert!(matches!(
+            response_for_context(&context, "message.mark-read", None),
+            Some(NotificationResponse::MarkRead { target })
+                if target.room_id == "!a:x" && target.event_id == "$e" && target.public_receipt
+        ));
+        assert!(matches!(
+            response_for_context(&context, "message.reply", Some(" hello ")),
+            Some(NotificationResponse::Reply { target, text, .. })
+                if target.room_id == "!a:x" && text == "hello"
+        ));
+        // An empty text-input response sends nothing and opens nothing.
+        assert_eq!(
+            response_for_context(&context, "message.reply", Some("")),
+            None
+        );
+        // A banner that did not offer the action cannot be made to run it.
+        let plain = decode_context(r#"{"sessionGeneration":3,"route":"/home/!a:x/$e","actions":[],"actionContext":{"kind":"message","roomId":"!a:x","eventId":"$e"}}"#).unwrap();
+        assert_eq!(
+            response_for_context(&plain, "message.mark-read", None),
+            None
+        );
+        // Stored without a session binding: ignored, like an approval.
+        let mut unbound = context;
+        unbound.session_generation = None;
+        assert!(!retained_response_has_required_binding(&unbound));
     }
 
     #[test]

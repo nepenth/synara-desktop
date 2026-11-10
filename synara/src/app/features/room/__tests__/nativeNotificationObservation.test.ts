@@ -238,8 +238,25 @@ test('late approval promotion uses the shared actionable presentation and exact 
     { ...candidate, kind: 'message' },
     source
   );
-  assert.equal(ordinary.actions, undefined);
-  assert.equal(ordinary.actionContext, undefined);
+  // A message offers Mark as read and Reply for its own room and event.
+  assert.deepEqual(
+    ordinary.actions?.map((action) => action.id),
+    ['message.mark-read', 'message.reply']
+  );
+  assert.deepEqual(ordinary.actionContext, {
+    kind: 'message',
+    roomId: source.roomId,
+    eventId: source.eventId,
+  });
+  assert.equal(ordinary.publicReadReceipt, undefined);
+  assert.equal(
+    buildNativeObservedNotificationPresentation(
+      { ...candidate, kind: 'message' },
+      { ...source, publicReadReceipt: false }
+    ).publicReadReceipt,
+    false
+  );
+  assert.equal(presentation.publicReadReceipt, undefined);
   assert.deepEqual(ordinary.dismissKeys, [
     `room:${source.roomId}`,
     `event:${source.eventId}`,

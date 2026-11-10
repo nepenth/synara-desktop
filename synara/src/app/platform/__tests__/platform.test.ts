@@ -107,6 +107,8 @@ test('platform capabilities describe Tauri desktop runtime when bridge is presen
             laterCount: 0,
             notificationInboxCount: 4,
             doNotDisturb: true,
+            pendingApprovalCount: 0,
+            inviteCount: 0,
           },
         },
       },

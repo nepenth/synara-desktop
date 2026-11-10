@@ -10,6 +10,7 @@ export default defineConfig({
     'settings-layout.spec.ts',
     'settings-screens.spec.ts',
     'device-verification-prompt.spec.ts',
+    'viewport-matrix.spec.ts',
   ],
   workers: 2,
   retries: 0,

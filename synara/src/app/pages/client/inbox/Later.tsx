@@ -34,6 +34,7 @@ import { VirtualTile } from '../../../components/virtualizer';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 
 import { getNativeRoom } from '../../../native/nativeSession';
+import { ShowRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 const formatDue = (dueTs?: number, now = Date.now()): string | undefined => {
   if (!dueTs) return undefined;
   const due = new Date(dueTs);
@@ -321,6 +322,7 @@ export function Later() {
                 )}
               </BackRouteHandler>
             )}
+            <ShowRoomListButton />
           </Box>
           <Box alignItems="Center" gap="200">
             {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Bookmark} />}

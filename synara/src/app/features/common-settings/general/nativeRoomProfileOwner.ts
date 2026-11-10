@@ -33,7 +33,7 @@ export type NativeRoomDirectoryVisibilityWriteResult = {
 
 const directoryVisibilityUnavailableMessage =
   'Native Matrix room directory visibility is unavailable.';
-const roomIdPattern = /^![^:\s]+:[^\s]+$/;
+const roomIdPattern = /^![^:\s]+(:[^\s]+)?$/;
 
 const isSafeGeneration = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value > 0;

@@ -77,7 +77,7 @@ export const AuthLockup = style({
 });
 
 export const AuthBrandMark = style({
-  // The mark's own soft glow is its only light; no halo behind it.
+  // The mark is flat; no halo or glow behind it.
   width: toRem(96),
   height: toRem(96),
   '@media': {

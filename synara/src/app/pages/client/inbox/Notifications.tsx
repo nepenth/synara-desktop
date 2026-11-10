@@ -109,6 +109,7 @@ import {
 } from '../../../hooks/useRoomsNotificationPreferences';
 
 import { getNativeRoom } from '../../../native/nativeSession';
+import { ShowRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 type LoadTimeline = (from?: string) => Promise<void>;
 type SilentReloadTimeline = () => Promise<void>;
 
@@ -690,6 +691,7 @@ export function Notifications() {
                 )}
               </BackRouteHandler>
             )}
+            <ShowRoomListButton />
           </Box>
           <Box alignItems="Center" gap="200">
             {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Message} />}
@@ -709,7 +711,8 @@ export function Notifications() {
                 <Box ref={scrollTopAnchorRef} direction="Column" gap="100">
                   <span data-spacing-node />
                   <Text size="L400">Filter</Text>
-                  <Box gap="200">
+                  {/* Wraps to a second row in a narrow window rather than squeezing the labels. */}
+                  <Box gap="200" wrap="Wrap" style={{ whiteSpace: 'nowrap' }}>
                     <Chip
                       onClick={() => setOnlyHighlighted(false)}
                       variant={!onlyHighlight ? 'Success' : 'Surface'}

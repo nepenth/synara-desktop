@@ -11,6 +11,8 @@ mod bridge;
 mod build_info;
 mod desktop;
 mod desktop_agent_actions;
+mod desktop_deep_link;
+mod desktop_environment;
 mod desktop_file_transfer;
 mod desktop_integration;
 mod desktop_link_preview;
@@ -19,10 +21,15 @@ mod desktop_navigation;
 mod desktop_notification_sound;
 mod desktop_notifications;
 mod desktop_platform;
+mod desktop_rendering;
+mod desktop_rendering_host;
 mod desktop_sanitize;
 mod desktop_secret_store;
 mod desktop_shortcuts;
 mod desktop_spellcheck;
+mod desktop_status;
+mod desktop_system_palette;
+mod desktop_system_palette_host;
 mod desktop_tray;
 mod desktop_unread_badge;
 mod desktop_updater_macos;
@@ -47,6 +54,9 @@ use tauri::{
 use tauri_plugin_opener::OpenerExt;
 
 const SYNARA_MEDIA_PROTOCOL: &str = "synara-media";
+/// Smallest main window, in logical pixels.
+const MIN_WINDOW_WIDTH: f64 = 360.0;
+const MIN_WINDOW_HEIGHT: f64 = 480.0;
 const INVITE_AVATAR_MAX_BYTES: usize = 1_048_576;
 const TIMELINE_MEDIA_MAX_BYTES: usize = 64 * 1_048_576;
 
@@ -594,8 +604,18 @@ fn updater_plugin_configured<R: tauri::Runtime>(context: &tauri::Context<R>) -> 
         .is_some_and(|config| !config.is_null())
 }
 
+/// Command lines that print and exit instead of starting the app
+/// (`synara status`). Returns the exit code, or `None` to start the app.
+pub fn run_cli(args: &[String]) -> Option<i32> {
+    desktop_status::run_cli(args)
+}
+
 pub fn run() {
     let context = tauri::generate_context!();
+    // First thing after the context exists (it carries the app identifier
+    // that names the config directory) and before anything starts a thread
+    // or GTK: the web view reads these variables when it initialises.
+    desktop_rendering_host::apply_at_startup(&context.config().identifier);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let updater_configured = updater_plugin_configured(&context);
     #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -603,7 +623,12 @@ pub fn run() {
     let mut builder = register_synara_media_protocol(tauri::Builder::default());
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // A second launch with a synara:// link hands the link to this
+            // copy; without one it only brings the window forward.
+            if let Some(route) = desktop_deep_link::route_from_args(&argv) {
+                desktop_notifications::open_route_when_ready(app, route);
+            }
             if let Err(error) = desktop::show_main_window(app) {
                 eprintln!("[synara] failed to focus the running window: {error}");
             }
@@ -619,7 +644,10 @@ pub fn run() {
             let window_state = tauri_plugin_window_state::Builder::default();
             #[cfg(target_os = "linux")]
             let window_state =
-                window_state.with_state_flags(desktop_window_drag::linux_window_state_flags());
+                window_state.with_state_flags(desktop_window_drag::linux_window_state_flags(
+                    desktop_environment::window_environment()
+                        == desktop_environment::WindowEnvironment::Tiling,
+                ));
             window_state.build()
         })
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -658,6 +686,9 @@ pub fn run() {
             desktop_file_transfer::desktop_read_dropped_file_chunk,
             desktop_file_transfer::desktop_read_dropped_file_end,
             desktop::desktop_get_performance_capabilities,
+            desktop_system_palette_host::desktop_system_palette,
+            desktop_rendering_host::desktop_rendering_mode,
+            desktop_rendering_host::desktop_set_rendering_mode,
             desktop_logging::desktop_append_log,
             desktop_logging::desktop_log_path,
             desktop_logging::desktop_record_diagnostic,
@@ -1014,17 +1045,23 @@ pub fn run() {
             // `desktop_secret_store_status`, which the warm-up below caches.
             desktop::warm_secret_store_status();
             let bridge_script = format!(
-                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = false; window.__SYNARA_DESKTOP__.os = {}; }}",
+                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = false; window.__SYNARA_DESKTOP__.os = {}; window.__SYNARA_DESKTOP__.windowEnvironment = {}; }}",
                 include_str!("desktop_bridge.js"),
                 updater_configured,
                 // WebKitGTK may present a macOS user agent; the renderer
                 // reads the real OS from here instead.
                 serde_json::to_string(std::env::consts::OS).unwrap_or_else(|_| "\"\"".to_owned()),
+                // Whether a tiling window manager owns the window; the
+                // renderer drops its own title strip when it does.
+                serde_json::to_string(desktop_environment::window_environment().as_str())
+                    .unwrap_or_else(|_| "\"floating\"".to_owned()),
             );
             let window_builder = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Synara")
                 .inner_size(1280.0, 900.0)
-                .min_inner_size(960.0, 720.0);
+                // Narrow enough for a quarter-screen tile: the renderer has a
+                // single-pane layout below 750px.
+                .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
             // Keep the native macOS titlebar: the OS owns window movement and
             // traffic lights without requiring an asynchronous WebView drag.
             // Linux uses the in-app strip and its explicit window controls.
@@ -1066,7 +1103,9 @@ pub fn run() {
             }
 
             if let Ok(size) = window.inner_size() {
-                if size.width < 960 || size.height < 720 {
+                if f64::from(size.width) < MIN_WINDOW_WIDTH
+                    || f64::from(size.height) < MIN_WINDOW_HEIGHT
+                {
                     window.set_size(Size::Logical(LogicalSize::new(1280.0, 900.0)))?;
                     let _ = window.center();
                 }
@@ -1075,6 +1114,13 @@ pub fn run() {
             window.show()?;
             window.unminimize()?;
             window.set_focus()?;
+
+            // Started by a synara:// link (Linux, Windows): open it once the
+            // session and the renderer are ready.
+            let launch_args: Vec<String> = std::env::args().skip(1).collect();
+            if let Some(route) = desktop_deep_link::route_from_args(&launch_args) {
+                desktop_notifications::open_route_when_ready(app.handle(), route);
+            }
 
             #[cfg(target_os = "macos")]
             desktop_notifications::initialize_macos_notifications(app.handle());
@@ -1088,6 +1134,7 @@ pub fn run() {
             app.manage(Arc::clone(&platform));
             app.manage(Arc::new(synara_core::Core::new(platform)));
             matrix::auth::product::spawn_suspend_resume_watch(app.handle().clone());
+            desktop_system_palette_host::watch_system_palette(app.handle());
             Ok(())
         })
         .build(context)
@@ -1096,6 +1143,21 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
                 let _ = desktop::show_main_window(app);
+            }
+
+            // macOS hands synara:// links to the running app as an event.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = &event {
+                for url in urls {
+                    if let Some(route) = desktop_deep_link::route_for_deep_link(url.as_str()) {
+                        desktop_notifications::open_route_when_ready(app, route);
+                    }
+                }
+                let _ = desktop::show_main_window(app);
+            }
+
+            if matches!(event, tauri::RunEvent::Exit) {
+                desktop_status::publish_not_running();
             }
 
             if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {

@@ -11,6 +11,7 @@ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
 
 import { getNativeRoom } from '../../native/nativeSession';
+import { ShowRoomListButton } from '../../features/room-list-pane/RoomListToggleButton';
 type JoinBeforeNavigateProps = {
   roomIdOrAlias: string;
   eventId?: string;
@@ -53,6 +54,7 @@ export function JoinBeforeNavigate({
                 )}
               </BackRouteHandler>
             )}
+            <ShowRoomListButton />
           </Box>
           <Box grow="Yes" justifyContent="Center" alignItems="Center" gap="200">
             <Text size="H3" truncate>

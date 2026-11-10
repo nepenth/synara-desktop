@@ -49,7 +49,7 @@ const isSafeGeneration = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
 const isRoomId = (value: unknown): value is string =>
-  typeof value === 'string' && /^![^:\s]+:[^\s]+$/.test(value);
+  typeof value === 'string' && /^![^:\s]+(:[^\s]+)?$/.test(value);
 
 const isPowerLevelMap = (value: unknown): boolean =>
   isRecord(value) && Object.values(value).every(isSafePowerLevel);

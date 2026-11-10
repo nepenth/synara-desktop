@@ -2,8 +2,8 @@
 
 Status (2.6.0): Windows ships as unsigned x64 MSI and NSIS installers on each
 GitHub Release, built by the `windows` job in `release.yml`, and updates in
-the app through the Tauri updater, like macOS. It has no code signing,
-notification actions or deep links yet (see "Still open"). The fixes listed under "Current state" are on main.
+the app through the Tauri updater, like macOS. It has no code signing or
+notification actions yet, and its `synara://` link registration is untested (see "Still open"). The fixes listed under "Current state" are on main.
 The numbered sections below are the original spike findings (2026-10-27) and
 describe the code before those fixes. They come from one run of `.github/workflows/windows-spike.yml` on
 `windows-latest` against the v2.4.0 code (`eade6d9f`), plus a read of the
@@ -37,7 +37,21 @@ Still open:
 - Windows toasts with actions and routes.
 - Code signing and SmartScreen reputation. (The updater works: Tauri
   verifies updates with its own key, not Authenticode.)
-- Single instance and deep links.
+- Single instance and deep links: written, never run on Windows. Both
+  installers register the `synara` URL scheme through the bundler, from
+  `plugins.deep-link.desktop.schemes` in `src-tauri/tauri.conf.json` (the
+  bundler reads that key; the app does not load `tauri-plugin-deep-link`).
+  NSIS writes `Software\Classes\synara` (`URL Protocol`, `DefaultIcon`,
+  `shell\open\command` = `"<install dir>\synara.exe" "%1"`) under HKCU for
+  the default per-user install and deletes the key on uninstall if it still
+  points at this install; the MSI writes the same values under HKLM as
+  component registry entries, which Windows Installer removes with the
+  product. Windows then starts `synara.exe "synara://…"`: a cold start reads
+  the link from its arguments, and a second start hands them to the running
+  app through `tauri-plugin-single-instance` (`desktop_deep_link.rs`,
+  `lib.rs`; neither path is gated by platform). To check on real hardware:
+  the registry keys after each installer, `start synara://settings` with the
+  app closed and with it running, and that uninstalling removes the keys.
 - A manual pass on real hardware (the first published installers are 2.6.0).
 - Lock in the app origin before the first Windows release. The build uses
   `http://tauri.localhost`, not `useHttpsScheme`; WebView2 keys localStorage

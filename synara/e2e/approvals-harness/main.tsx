@@ -13,14 +13,7 @@ import {
 } from '../../src/app/features/approvals/ApprovalInboxProvider';
 import { ApprovalsView } from '../../src/app/features/approvals/Approvals';
 import type { ApprovalInboxItem } from '../../src/app/features/approvals/nativeApprovalInbox';
-import { ApprovalsTab } from '../../src/app/pages/client/sidebar/ApprovalsTab';
-import {
-  Sidebar,
-  SidebarStack,
-  SidebarAvatar,
-  SidebarItem,
-  SidebarStackSeparator,
-} from '../../src/app/components/sidebar';
+import { ApprovalsBarItem } from '../../src/app/features/nav-pane/NavBottomBar';
 import { useEditor } from '../../src/app/components/editor/Editor';
 import {
   createMentionElement,
@@ -490,32 +483,27 @@ function Fixture() {
         <output data-testid="pending-count">{pendingCount} pending</output>
       </div>
       <div style={{ display: 'flex', height: 'calc(100vh - 62px)', minHeight: 0 }}>
-        <Sidebar>
-          <SidebarStack>
-            <SidebarItem>
-              <SidebarAvatar as="button" aria-label="Home" outlined>
-                <Icon src={Icons.Home} />
-              </SidebarAvatar>
-            </SidebarItem>
-            <SidebarItem>
-              <SidebarAvatar as="button" aria-label="People" outlined>
-                <Icon src={Icons.User} />
-              </SidebarAvatar>
-            </SidebarItem>
-            <SidebarStackSeparator />
-            <SidebarItem>
-              <SidebarAvatar as="button" aria-label="Search" outlined>
-                <Icon src={Icons.Search} />
-              </SidebarAvatar>
-            </SidebarItem>
-            <ApprovalsTab />
-            <SidebarItem>
-              <SidebarAvatar as="button" aria-label="Activity" outlined>
-                <Icon src={Icons.Inbox} />
-              </SidebarAvatar>
-            </SidebarItem>
-          </SidebarStack>
-        </Sidebar>
+        {/* The list column's bottom bar, with the production Approvals item. */}
+        {/* `?narrow`: the page alone, as the Mobile layout shows it (viewport matrix). */}
+        <div
+          style={{
+            width: 256,
+            display: query.has('narrow') ? 'none' : 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+            background: color.Surface.Container,
+          }}
+        >
+          <nav aria-label="Main" style={{ display: 'flex', padding: 4, gap: 4 }}>
+            <button type="button" aria-label="Home" style={{ flex: 1 }}>
+              <Icon src={Icons.Home} />
+            </button>
+            <button type="button" aria-label="Activity" style={{ flex: 1 }}>
+              <Icon src={Icons.Inbox} />
+            </button>
+            <ApprovalsBarItem showLabel={false} />
+          </nav>
+        </div>
         <main
           style={{
             flex: 1,

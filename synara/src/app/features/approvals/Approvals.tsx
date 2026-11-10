@@ -13,6 +13,7 @@ import { compareRecentApprovals, historyDecisionLabel } from './approvalHistoryP
 import * as css from './Approvals.css';
 
 import { getNativeRoom } from '../../native/nativeSession';
+import { ShowRoomListButton } from '../../features/room-list-pane/RoomListToggleButton';
 type Filter = 'pending' | 'recent';
 
 function remainingTime(expiresAt: number, now: number): string {
@@ -389,6 +390,7 @@ export function Approvals() {
               )}
             </BackRouteHandler>
           )}
+          <ShowRoomListButton />
           <Icon src={Icons.Shield} />
           <Text as="h1" size="H4" tabIndex={-1} ref={headingRef}>
             Approvals

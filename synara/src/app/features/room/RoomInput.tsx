@@ -88,6 +88,7 @@ import {
   roomUploadAtomFamily,
 } from '../../state/room/roomInputDrafts';
 import { composerMentionInsertAtom } from '../../state/composerMentionInsert';
+import { composerFocusRequestAtom } from '../../state/composerFocusRequest';
 import { UploadCardRenderer } from '../../components/upload-card';
 import {
   UploadBoard,
@@ -288,6 +289,13 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       ReactEditor.focus(editor);
       setMentionInsert(undefined);
     }, [mentionInsert, roomId, editor, setMentionInsert]);
+    // A notification's Reply opens this room ready to type.
+    const [focusRequest, setFocusRequest] = useAtom(composerFocusRequestAtom);
+    useEffect(() => {
+      if (!focusRequest || focusRequest.roomId !== roomId || threadRootOverride) return;
+      focusEditorAfterRender(editor);
+      setFocusRequest(undefined);
+    }, [focusRequest, roomId, threadRootOverride, editor, setFocusRequest]);
     const roomThreadRootEventId = useNativeThreadRoot(roomId);
     const threadRootEventId = threadRootOverride ?? roomThreadRootEventId;
     // "Message #room" in a channel and "Message Name" in a DM, as on iOS.

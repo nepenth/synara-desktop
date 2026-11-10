@@ -22,6 +22,8 @@ export type SystemNotificationRequest = {
   actions?: SystemNotificationAction[];
   actionContext?: SystemNotificationActionContext;
   dismissKeys?: string[];
+  /** Whether a banner's Mark as read may send a public receipt. */
+  publicReadReceipt?: boolean;
   privacy?: SystemNotificationPrivacy;
   sound?: SystemNotificationSoundPolicy;
 };
@@ -127,6 +129,9 @@ export const normalizeSystemNotificationRequest = (
   }
   if (dismissKeys) {
     normalized.dismissKeys = dismissKeys;
+  }
+  if (actions && typeof request.publicReadReceipt === 'boolean') {
+    normalized.publicReadReceipt = request.publicReadReceipt;
   }
   return normalized;
 };

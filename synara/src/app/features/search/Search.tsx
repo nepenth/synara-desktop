@@ -58,7 +58,6 @@ import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { searchModalAtom } from '../../state/searchModal';
-import { useKeyDown } from '../../hooks/useKeyDown';
 import { KeySymbol } from '../../utils/key-symbol';
 import { isMacOS } from '../../utils/user-agent';
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
@@ -610,30 +609,8 @@ export function Search({ requestClose }: SearchProps) {
   );
 }
 
+/** ⌘K / Ctrl+K (the `search` app shortcut) toggles `searchModalAtom`. */
 export function SearchModalRenderer() {
   const [opened, setOpen] = useAtom(searchModalAtom);
-
-  useKeyDown(
-    window,
-    useCallback(
-      (event) => {
-        if (isKeyHotkey('mod+k', event)) {
-          event.preventDefault();
-          if (opened) {
-            setOpen(false);
-            return;
-          }
-
-          const portalContainer = document.getElementById('portalContainer');
-          if (portalContainer && portalContainer.children.length > 0) {
-            return;
-          }
-          setOpen(true);
-        }
-      },
-      [opened, setOpen]
-    )
-  );
-
   return opened && <Search requestClose={() => setOpen(false)} />;
 }

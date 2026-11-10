@@ -10,12 +10,16 @@ import { isLinuxOS } from '../../utils/user-agent';
 import * as css from './DesktopTitleBar.css';
 import { observeNativeMaximizedState } from './nativeMaximizedState';
 import { appShortcutAction } from '../desktop-keyboard/appShortcuts';
+import { useTilingMode } from '../../hooks/useTilingMode';
 
 /** A persistent drag strip and window controls for the borderless Linux shell.
- * macOS and Windows use their native titlebars.
+ * macOS and Windows use their native titlebars. In tiling mode the window
+ * manager frames the window, so there is no strip; switching the setting
+ * shows or hides it at once.
  */
 export function useDesktopTitleBarVisible(): boolean {
-  return isSynaraDesktop() && isLinuxOS();
+  const tiling = useTilingMode();
+  return isSynaraDesktop() && isLinuxOS() && !tiling;
 }
 
 // Drawn on the folds 24-unit grid with the Cross icon's 1.5-unit line, and
@@ -40,6 +44,7 @@ const RestoreIconSrc = () => (
 
 export function DesktopTitleBar() {
   const [maximized, setMaximized] = useState(false);
+  const linuxShell = isSynaraDesktop() && isLinuxOS();
   const visible = useDesktopTitleBarVisible();
   const observation = useRef<ReturnType<typeof observeNativeMaximizedState> | undefined>(undefined);
   useEffect(() => {
@@ -52,10 +57,11 @@ export function DesktopTitleBar() {
     };
   }, [visible]);
   // Linux has no app menu, and a panel without a tray host hides the tray's
-  // Quit item; Ctrl+Q is the standard way out. The strip is mounted on every
-  // screen (sign-in too), so it owns this shortcut.
+  // Quit item; Ctrl+Q is the standard way out. This component is mounted on
+  // every screen (sign-in too), so it owns this shortcut, also in tiling
+  // mode when the strip itself is not drawn.
   useEffect(() => {
-    if (!visible) return undefined;
+    if (!linuxShell) return undefined;
     const onKeyDown = (evt: KeyboardEvent) => {
       if (appShortcutAction(evt, { macOS: false, linux: true }) !== 'quit') return;
       evt.preventDefault();
@@ -63,7 +69,7 @@ export function DesktopTitleBar() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [visible]);
+  }, [linuxShell]);
   const toggleMaximize = useCallback(() => {
     const current = observation.current;
     void invokeDesktopWithAvailability<boolean>('desktop_window_toggle_maximize').then(() => {

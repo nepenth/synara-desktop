@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## [3.0.0] - 2026-11-10
+
+- Desktop navigation: the left rail is gone. A bar at the bottom of the room list holds Home, Activity, Approvals and your account menu, and spaces moved into a switcher on the list's title (Ctrl/Cmd+Shift+S), with search, folders, drag to reorder and a Manage spaces dialog. The list header says Home, as the switcher and the bar do.
+- Desktop (Linux): tiling mode. Under Hyprland, Sway, Niri, i3 and similar window managers Synara drops its own title strip and no longer restores window size and position, which the compositor decides. Settings → Appearance → Window has Auto, On and Off, applied at once.
+- Desktop: windows can be as small as 360×480. Layouts were checked and fixed from 380 to 1100px, side panels open as overlays below desktop width, and the width breakpoints follow page zoom.
+- Desktop keyboard: one shortcut list with a help sheet (Ctrl/Cmd+/). Alt+1–4 (⌃1–4 on macOS) open Home, Activity, Approvals and Settings; next/previous room and next/previous unread reach rooms that are scrolled out of view; F6 moves focus between panes; optional Vim-style list keys (j/k, g g, G), on by default in tiling mode.
+- Desktop: `synara status` prints unread, mention, invite and approval counts as text, JSON or a Waybar module (`--follow` keeps printing), and exits with 3 when Synara is not running.
+- Desktop: `synara://` links open a room, an event or a place in the running app. Registered on macOS, in the Arch, deb and rpm desktop entries and by the Windows installers.
+- Desktop (Linux, macOS): message notifications have Mark as read and Reply. Mark as read works with the window closed. On macOS Reply takes your text in the notification; on Linux it opens the room with the composer focused. A reply from a thread notification goes to the room's main timeline.
+- Desktop appearance: Follow system theme colors. On Omarchy, Synara takes the background, text and accent of the current theme and follows theme switches; on macOS it follows the system accent color. New interface and monospace font settings.
+- Desktop (Linux): Hardware acceleration switch in Settings → Appearance → Window, applied on the next start. Each package keeps its current default (the Arch package draws on the CPU; deb builds are unchanged). Choosing it on NVIDIA also turns explicit sync off for Synara, which otherwise ends the app at startup with a Wayland protocol error. `SYNARA_RENDERING=safe` or `gpu` overrides the setting for one start.
+- New Synara mark (desktop and iOS): a simplified mark that stays readable at small sizes replaces the detailed one in the app, the app icons on macOS, Windows, Linux and iOS, the tray icon and the Windows installer.
+- Desktop: rooms created at room version 12, whose IDs have no server part, open again. They failed with "Native Matrix room power levels are unavailable".
+- Desktop sign-in: a homeserver on this machine typed as `http://localhost:8008` now connects. The scheme was dropped and the address tried over HTTPS.
+
 ## [2.9.3] - 2026-11-09
 
 - Links (desktop and iOS): a file path or file name in a message is no longer turned into a web link. `submission/README_SUBMISSION.md` linked to submission.md, because `.md` is a real top-level domain and the underscore ends a domain name. An address now links only when it starts a word, and a bare name ending in .md, .py, .rs, .sh, .zip or .mov links only with a scheme or www. Link previews follow the same rule.

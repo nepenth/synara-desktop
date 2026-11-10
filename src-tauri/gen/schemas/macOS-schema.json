@@ -489,6 +489,12 @@
           "markdownDescription": "Enables the desktop_render_markdown command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_rendering_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-rendering-mode",
+          "markdownDescription": "Enables the desktop_rendering_mode command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_request_notification_permission command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-request-notification-permission",
@@ -537,6 +543,12 @@
           "markdownDescription": "Enables the desktop_set_badge_count command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_set_rendering_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-set-rendering-mode",
+          "markdownDescription": "Enables the desktop_set_rendering_mode command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_set_shortcuts command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-set-shortcuts",
@@ -547,6 +559,12 @@
           "type": "string",
           "const": "allow-desktop-show",
           "markdownDescription": "Enables the desktop_show command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_system_palette command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-system-palette",
+          "markdownDescription": "Enables the desktop_system_palette command without any pre-configured scope."
         },
         {
           "description": "Enables the desktop_take_notification_responses command without any pre-configured scope.",
@@ -2133,6 +2151,12 @@
           "markdownDescription": "Denies the desktop_render_markdown command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_rendering_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-rendering-mode",
+          "markdownDescription": "Denies the desktop_rendering_mode command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_request_notification_permission command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-request-notification-permission",
@@ -2181,6 +2205,12 @@
           "markdownDescription": "Denies the desktop_set_badge_count command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_set_rendering_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-set-rendering-mode",
+          "markdownDescription": "Denies the desktop_set_rendering_mode command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_set_shortcuts command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-set-shortcuts",
@@ -2191,6 +2221,12 @@
           "type": "string",
           "const": "deny-desktop-show",
           "markdownDescription": "Denies the desktop_show command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_system_palette command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-system-palette",
+          "markdownDescription": "Denies the desktop_system_palette command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_take_notification_responses command without any pre-configured scope.",

@@ -1,31 +1,13 @@
 import { ReactNode } from 'react';
-import { matchPath, useLocation, useMatch } from 'react-router-dom';
+import { matchPath, useLocation } from 'react-router-dom';
 import { ScreenSize, useScreenSizeContext } from '../hooks/useScreenSize';
-import { DIRECT_PATH, EXPLORE_PATH, HOME_PATH, INBOX_PATH, SPACE_PATH } from './paths';
-
-type MobileFriendlyClientNavProps = {
-  children: ReactNode;
-};
-export function MobileFriendlyClientNav({ children }: MobileFriendlyClientNavProps) {
-  const screenSize = useScreenSizeContext();
-  const homeMatch = useMatch({ path: HOME_PATH, caseSensitive: true, end: true });
-  const directMatch = useMatch({ path: DIRECT_PATH, caseSensitive: true, end: true });
-  const spaceMatch = useMatch({ path: SPACE_PATH, caseSensitive: true, end: true });
-  const exploreMatch = useMatch({ path: EXPLORE_PATH, caseSensitive: true, end: true });
-  const inboxMatch = useMatch({ path: INBOX_PATH, caseSensitive: true, end: true });
-
-  if (
-    screenSize === ScreenSize.Mobile &&
-    !(homeMatch || directMatch || spaceMatch || exploreMatch || inboxMatch)
-  ) {
-    return null;
-  }
-
-  return children;
-}
 
 type MobileFriendlyPageNavProps = {
-  /** The pane's base path(s); Home serves both `/home/` and `/direct/` (NAV-12). */
+  /**
+   * The pane's base path(s); Home serves both `/home/` and `/direct/` (NAV-12).
+   * On Mobile the list (with its bottom bar) shows only on these exact paths;
+   * deeper routes show the page alone with a Back button. `[]`: never.
+   */
   path: string | readonly string[];
   children: ReactNode;
 };

@@ -7,6 +7,8 @@ import 'folds/dist/style.css';
 import { darkTheme } from '../../src/colors.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
 import { ThreadSidePanel } from '../../src/app/features/room/ThreadSidePanel';
+import { MemoryRouter } from 'react-router-dom';
+import { DesktopAppShortcuts } from '../../src/app/features/desktop-keyboard/DesktopAppShortcuts';
 import { normalizeThreadDisplay } from '../../src/app/utils/threadDisplay';
 import { setNativeIdentity } from '../../src/app/state/nativeIdentity';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
@@ -1230,6 +1232,9 @@ setNativeIdentity({ userId: '@reader0:example.test' });
 // before paint so screenshot/polish captures are not racing the stylesheet.
 
 const threadDisplay = normalizeThreadDisplay(params.get('threadDisplay'));
+// `?fluid`: the room and thread pane share the window's width, as in the app
+// (viewport matrix), instead of the fixed 700px room.
+const fluid = params.has('fluid');
 
 function App() {
   const [mounted, setMounted] = useState(true);
@@ -1239,17 +1244,23 @@ function App() {
   const [paneWidth, setPaneWidth] = useState(360);
   return (
     <>
+      {/* The app's one shortcut dispatcher (Escape closes the thread pane). */}
+      <MemoryRouter>
+        <DesktopAppShortcuts />
+      </MemoryRouter>
       <button onClick={() => setMounted((value) => !value)}>Toggle room</button>
       <button onClick={() => setFocusedEventId('$30')}>Focus middle</button>
       <button onClick={() => setFocusedEventId('$t3')}>Focus thread reply</button>
       <button onClick={() => setFocusedEventId('$gone')}>Focus deleted</button>
       <button onClick={() => setFocusedEventId('$broken')}>Focus broken</button>
-      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', maxWidth: fluid ? '100%' : undefined }}>
         <div
           id="native-timeline"
           style={{
             height: polish ? 640 : 480,
-            width: polish ? 900 : 700,
+            width: fluid ? undefined : polish ? 900 : 700,
+            flex: fluid ? '1 1 0' : undefined,
+            minWidth: fluid ? 0 : undefined,
             display: 'flex',
             flexDirection: 'column',
             border: '1px solid gray',
@@ -1278,7 +1289,7 @@ function App() {
               rootEventId={paneRoot}
               focusEventId={paneFocus}
               width={paneWidth}
-              availableWidth={1600}
+              availableWidth={fluid ? window.innerWidth : 1600}
               onWidthChange={setPaneWidth}
               onClose={() => setPaneRoot(undefined)}
             />

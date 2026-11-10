@@ -483,6 +483,7 @@ mod tests {
                 event_id: Some("$prompt".into()),
             }),
             dismiss_keys: None,
+            public_read_receipt: None,
         };
         let (tracked_key, tracked) = approval_alert(&payload, Some(3), NOW).unwrap();
         assert_eq!(tracked_key, key("$prompt"));

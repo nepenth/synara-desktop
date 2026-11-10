@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-rendering-mode"
+description = "Enables the desktop_rendering_mode command without any pre-configured scope."
+commands.allow = ["desktop_rendering_mode"]
+
+[[permission]]
+identifier = "deny-desktop-rendering-mode"
+description = "Denies the desktop_rendering_mode command without any pre-configured scope."
+commands.deny = ["desktop_rendering_mode"]

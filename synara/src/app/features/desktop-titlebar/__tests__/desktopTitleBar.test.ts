@@ -134,6 +134,20 @@ test('custom titlebar renders only on Linux desktop', () => {
   assert.doesNotMatch(titlebar, /onDoubleClick/);
 });
 
+test('tiling mode hides the strip but Ctrl+Q keeps working', () => {
+  const titlebar = source('src/app/features/desktop-titlebar/DesktopTitleBar.tsx');
+  const app = source('src/app/pages/App.tsx');
+
+  assert.match(titlebar, /isSynaraDesktop\(\) && isLinuxOS\(\) && !tiling/);
+  // The quit listener follows the Linux shell, not the strip's visibility.
+  assert.match(
+    titlebar,
+    /if \(!linuxShell\) return undefined;[\s\S]*'quit'[\s\S]*desktop_quit[\s\S]*\}, \[linuxShell\]\);/
+  );
+  // The strip reads the setting from the app's own store, so a change applies live.
+  assert.match(app, /<JotaiProvider>\s*<DesktopTitleBar \/>/);
+});
+
 test('linux titlebar owns drag and the three window controls', () => {
   const titlebar = source('src/app/features/desktop-titlebar/DesktopTitleBar.tsx');
   const css = source('src/app/features/desktop-titlebar/DesktopTitleBar.css.ts');
@@ -164,7 +178,12 @@ test('native window chrome matches the in-app titlebar contract', () => {
   assert.match(lib, /#\[cfg\(target_os = "linux"\)\]/);
   assert.match(lib, /\.decorations\(false\)/);
   assert.match(lib, /desktop_window_drag::install/);
-  assert.match(lib, /with_state_flags\(desktop_window_drag::linux_window_state_flags\(\)\)/);
+  // Linux never restores decorations; under a tiling window manager it does
+  // not restore size or position either.
+  assert.match(
+    lib,
+    /with_state_flags\(desktop_window_drag::linux_window_state_flags\(\s*desktop_environment::window_environment\(\)\s*== desktop_environment::WindowEnvironment::Tiling,?\s*\)\)/
+  );
   // Window-control commands are registered and ACL-granted.
   assert.match(lib, /desktop::desktop_window_minimize/);
   assert.match(lib, /desktop::desktop_window_toggle_maximize/);
@@ -236,14 +255,14 @@ test('linux strip drag is owned natively and fails closed', () => {
 });
 
 test('native macOS chrome needs no sidebar spacer and headers retain optional drag', () => {
-  const sidebar = source('src/app/pages/client/SidebarNav.tsx');
-  const home = source('src/app/pages/client/home/Home.tsx');
+  // The list column's header (Home, spaces, Activity, Explore) since the rail went.
+  const navPane = source('src/app/features/nav-pane/NavPaneHeader.tsx');
   const header = source('src/app/features/room/RoomViewHeader.tsx');
   const sidePanel = source('src/app/features/room/RoomSidePanel.tsx');
   const members = source('src/app/features/room/MembersDrawer.tsx');
 
-  assert.doesNotMatch(sidebar, /overlaySpacer/);
-  for (const [name, component] of Object.entries({ home, header, sidePanel, members })) {
+  assert.doesNotMatch(navPane, /overlaySpacer/);
+  for (const [name, component] of Object.entries({ navPane, header, sidePanel, members })) {
     assert.match(component, /data-tauri-drag-region/, `${name} header must drag the window`);
   }
 });

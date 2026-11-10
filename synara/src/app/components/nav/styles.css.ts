@@ -378,9 +378,9 @@ export const NavSearchFieldShortcut = style({
 });
 
 /**
- * The pane header's title (the homeserver or space name): 15px semibold, so a
- * typical host name fits; it shrinks into the width left beside the header's
- * buttons and ends in an ordinary ellipsis.
+ * The pane header's title ("Home" or a space name): 15px semibold; it shrinks
+ * into the width left beside the header's buttons and ends in an ordinary
+ * ellipsis.
  */
 export const NavPaneTitle = style({
   flex: '0 1 auto',

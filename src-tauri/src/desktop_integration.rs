@@ -37,25 +37,7 @@ pub struct DesktopIntegrationStatus {
     pub media_portal: DesktopIntegrationCheck,
 }
 
-fn is_kde() -> bool {
-    env::var("XDG_CURRENT_DESKTOP")
-        .map(|value| value.to_ascii_lowercase().contains("kde"))
-        .unwrap_or(false)
-}
-
-fn is_wayland() -> bool {
-    if env::var("WAYLAND_DISPLAY").is_ok() {
-        return true;
-    }
-
-    env::var("XDG_SESSION_TYPE")
-        .map(|value| value.eq_ignore_ascii_case("wayland"))
-        .unwrap_or(false)
-}
-
-fn is_kde_wayland_session() -> bool {
-    is_kde() && is_wayland()
-}
+use crate::desktop_environment::{is_kde, is_kde_wayland_session, is_wayland};
 
 fn detect_session_type() -> String {
     if is_wayland() {

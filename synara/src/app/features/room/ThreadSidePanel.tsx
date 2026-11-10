@@ -1,6 +1,7 @@
-import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import React, { ReactNode, useCallback, useRef, useState } from 'react';
 import { Box, Icon, IconButton, Icons, Text, config } from 'folds';
 import { NativeTimelinePresenter } from './NativeTimelinePresenter';
+import { portalOpen, useAppShortcutHandler } from '../desktop-keyboard/appShortcutHandlers';
 import { clampThreadPaneWidth } from '../../utils/threadDisplay';
 import * as css from './ThreadSidePanel.css';
 
@@ -76,17 +77,16 @@ export function ThreadSidePanel({
     [availableWidth, onWidthChange, width]
   );
 
-  // Escape closes the pane unless a dialog or menu is open over the app.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
-      const portal = document.getElementById('portalContainer');
-      if (portal && portal.children.length > 0) return;
+  // Escape (the `close-thread` app shortcut) closes the pane unless a dialog
+  // or menu is open over the app. The composers keep Escape for themselves.
+  useAppShortcutHandler(
+    'close-thread',
+    useCallback(() => {
+      if (portalOpen()) return false;
       onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+      return true;
+    }, [onClose])
+  );
 
   return (
     <Box

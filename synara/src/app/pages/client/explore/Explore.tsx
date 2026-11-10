@@ -31,7 +31,10 @@ import {
   useExploreServer,
 } from '../../../hooks/router/useExploreSelected';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
-import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
+import { PageNav, PageNavContent } from '../../../components/page';
+import { NavPaneHeader } from '../../../features/nav-pane/NavPaneHeader';
+import { NavBottomBar } from '../../../features/nav-pane/NavBottomBar';
+import { HideRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 import { stopPropagation } from '../../../utils/keyboard';
 import * as depthCss from '../../../styles/Depth.css';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
@@ -174,17 +177,11 @@ export function Explore() {
   const selectedServer = useExploreServer();
 
   return (
-    <PageNav label="Explore">
-      <PageNavHeader>
-        <Box grow="Yes" gap="300">
-          <Box grow="Yes">
-            <Text size="H4" truncate>
-              Explore Community
-            </Text>
-          </Box>
-        </Box>
-      </PageNavHeader>
-
+    <PageNav
+      label="Explore"
+      header={<NavPaneHeader title="Explore rooms" actions={<HideRoomListButton />} />}
+      footer={<NavBottomBar />}
+    >
       <PageNavContent>
         <Box direction="Column" gap="300">
           <NavCategory>

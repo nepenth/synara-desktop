@@ -10,7 +10,7 @@ import { color, config, toRem } from 'folds';
  * | muted    | tertiary             | tertiary  | 400    |
  * | selected | Primary.OnContainer  | same      | 600    |
  *
- * Weights come from `NavItemContent`; colours are the opaque reading roles,
+ * Weights come from `NavItemContent`; colors are the opaque reading roles,
  * never opacity, so each holds AA on the room list and its hover tint.
  */
 
