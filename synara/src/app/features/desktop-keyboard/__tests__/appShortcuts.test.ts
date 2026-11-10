@@ -253,6 +253,10 @@ test('the help sheet lists every bound shortcut once, by group, in sentence case
   assert.deepEqual(
     navigation.items.map((item) => [item.label, item.keys]),
     [
+      ['Open home', '⌃1'],
+      ['Open activity', '⌃2'],
+      ['Open approvals', '⌃3'],
+      ['Open settings', '⌃4'],
       ['Previous room', '⌥↑'],
       ['Next room', '⌥↓'],
       ['Previous unread room', '⌥⇧↑'],
@@ -332,4 +336,14 @@ test('one dispatcher: the shortcuts are mounted for the signed-in app, no other 
   assert.ok(titleBar.includes("invokeDesktopWithAvailability('desktop_quit')"));
   assert.ok(titleBar.includes("appShortcutAction(evt, { macOS: false, linux: true }) !== 'quit'"));
   assert.ok(appShortcut('quit').external);
+});
+
+test('the places are Control+1-4 on macOS and Alt+1-4 elsewhere, clear of the composer', () => {
+  const places = ['go-home', 'go-activity', 'go-approvals', 'go-settings'] as const;
+  places.forEach((id, index) => {
+    const digit = String(index + 1);
+    const shortcut = appShortcut(id);
+    assert.deepEqual(shortcut.mac, { keys: [digit], ctrl: true });
+    assert.deepEqual(shortcut.windowsLinux, { keys: [digit], alt: true });
+  });
 });

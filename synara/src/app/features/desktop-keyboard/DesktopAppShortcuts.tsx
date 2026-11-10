@@ -7,7 +7,14 @@ import { searchModalAtom } from '../../state/searchModal';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { isSynaraDesktop, listen } from '../../utils/desktop';
 import { isLinuxOS, isMacOS } from '../../utils/user-agent';
-import { getSettingsPath } from '../../pages/pathUtils';
+import {
+  getHomePath,
+  getInboxNotificationsPath,
+  getSettingsPath,
+  joinPathComponent,
+} from '../../pages/pathUtils';
+import { useOptionalNavToActivePathAtom } from '../../state/hooks/navToActivePath';
+import { useNavigateToApprovals } from '../../hooks/useNavigateToApprovals';
 import { useToggleRoomList } from '../room-list-pane/useRoomListPane';
 import { ROOM_LIST_PANE_ID } from '../room-list-pane/roomListPane';
 import {
@@ -60,6 +67,8 @@ export function DesktopAppShortcuts() {
   const navigate = useNavigate();
   const store = useStore();
   const toggleRoomList = useToggleRoomList();
+  const navToActivePathAtom = useOptionalNavToActivePathAtom();
+  const navigateToApprovals = useNavigateToApprovals();
   const [helpOpen, setHelpOpen] = useState(false);
   const platform = useMemo(() => ({ macOS: isMacOS(), linux: isLinuxOS() }), []);
 
@@ -101,7 +110,23 @@ export function DesktopAppShortcuts() {
           setPageZoom(nextPageZoom(pageZoom, action));
           return true;
         case 'settings':
+        case 'go-settings':
           navigate(getSettingsPath());
+          return true;
+        // Home and Activity reopen where the user last was in them, as
+        // their bar buttons do.
+        case 'go-home': {
+          const last = navToActivePathAtom && store.get(navToActivePathAtom).get('home');
+          navigate(last ? joinPathComponent(last) : getHomePath());
+          return true;
+        }
+        case 'go-activity': {
+          const last = navToActivePathAtom && store.get(navToActivePathAtom).get('inbox');
+          navigate(last ? joinPathComponent(last) : getInboxNotificationsPath());
+          return true;
+        }
+        case 'go-approvals':
+          navigateToApprovals();
           return true;
         case 'search':
           // A second press closes it; another dialog keeps the key.
@@ -130,7 +155,17 @@ export function DesktopAppShortcuts() {
           return false;
       }
     },
-    [goToRoom, helpOpen, navigate, pageZoom, setPageZoom, store, toggleRoomList]
+    [
+      goToRoom,
+      helpOpen,
+      navToActivePathAtom,
+      navigate,
+      navigateToApprovals,
+      pageZoom,
+      setPageZoom,
+      store,
+      toggleRoomList,
+    ]
   );
 
   useEffect(() => {

@@ -13,3 +13,7 @@ export const useNavToActivePathAtom = (): NavToActivePathAtom => {
 
   return anAtom;
 };
+
+/** For code that also runs where no client is mounted (test harnesses). */
+export const useOptionalNavToActivePathAtom = (): NavToActivePathAtom | null =>
+  useContext(NavToActivePathAtomContext);

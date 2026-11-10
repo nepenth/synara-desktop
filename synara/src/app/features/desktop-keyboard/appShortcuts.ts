@@ -15,6 +15,10 @@ export type AppShortcutAction =
   | 'shortcut-help'
   | 'settings'
   | 'quit'
+  | 'go-home'
+  | 'go-activity'
+  | 'go-approvals'
+  | 'go-settings'
   | 'previous-room'
   | 'next-room'
   | 'previous-unread-room'
@@ -82,6 +86,16 @@ const primary = (
   windowsLinux: { keys, ctrl: true, ...extra },
 });
 
+/**
+ * The places, in bottom-bar order. Control on macOS and Alt on Windows and
+ * Linux: Cmd/Ctrl+1–3 are the composer's heading keys, and Super belongs to
+ * the window manager.
+ */
+const place = (digit: string): Pick<AppShortcut, 'mac' | 'windowsLinux'> => ({
+  mac: { keys: [digit], ctrl: true },
+  windowsLinux: { keys: [digit], alt: true },
+});
+
 /** The same keys on every platform. */
 const everywhere = (binding: KeyBinding): Pick<AppShortcut, 'mac' | 'windowsLinux'> => ({
   mac: binding,
@@ -114,6 +128,10 @@ export const APP_SHORTCUTS: readonly AppShortcut[] = [
     windowsLinux: { keys: ['q'], ctrl: true },
   },
   // Navigation
+  { id: 'go-home', label: 'Open home', scope: 'navigation', ...place('1') },
+  { id: 'go-activity', label: 'Open activity', scope: 'navigation', ...place('2') },
+  { id: 'go-approvals', label: 'Open approvals', scope: 'navigation', ...place('3') },
+  { id: 'go-settings', label: 'Open settings', scope: 'navigation', ...place('4') },
   {
     id: 'previous-room',
     label: 'Previous room',
