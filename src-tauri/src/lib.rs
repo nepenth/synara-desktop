@@ -57,6 +57,21 @@ const SYNARA_MEDIA_PROTOCOL: &str = "synara-media";
 /// Smallest main window, in logical pixels.
 const MIN_WINDOW_WIDTH: f64 = 360.0;
 const MIN_WINDOW_HEIGHT: f64 = 480.0;
+/// Under a tiling window manager the compositor sizes the window and ignores
+/// this hint, but GTK still draws at least this large: a tile shorter than
+/// the minimum got a taller surface with its bottom (the composer) cut off.
+/// So the floor there is only what keeps the window from collapsing.
+const MIN_TILED_WINDOW_WIDTH: f64 = 240.0;
+const MIN_TILED_WINDOW_HEIGHT: f64 = 160.0;
+
+/// The main window's minimum inner size.
+fn main_window_min_size(tiling: bool) -> (f64, f64) {
+    if tiling {
+        (MIN_TILED_WINDOW_WIDTH, MIN_TILED_WINDOW_HEIGHT)
+    } else {
+        (MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
+    }
+}
 const INVITE_AVATAR_MAX_BYTES: usize = 1_048_576;
 const TIMELINE_MEDIA_MAX_BYTES: usize = 64 * 1_048_576;
 
@@ -1056,12 +1071,16 @@ pub fn run() {
                 serde_json::to_string(desktop_environment::window_environment().as_str())
                     .unwrap_or_else(|_| "\"floating\"".to_owned()),
             );
+            let (min_width, min_height) = main_window_min_size(
+                desktop_environment::window_environment()
+                    == desktop_environment::WindowEnvironment::Tiling,
+            );
             let window_builder = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Synara")
                 .inner_size(1280.0, 900.0)
                 // Narrow enough for a quarter-screen tile: the renderer has a
                 // single-pane layout below 750px.
-                .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
+                .min_inner_size(min_width, min_height);
             // Keep the native macOS titlebar: the OS owns window movement and
             // traffic lights without requiring an asynchronous WebView drag.
             // Linux uses the in-app strip and its explicit window controls.
@@ -1103,9 +1122,7 @@ pub fn run() {
             }
 
             if let Ok(size) = window.inner_size() {
-                if f64::from(size.width) < MIN_WINDOW_WIDTH
-                    || f64::from(size.height) < MIN_WINDOW_HEIGHT
-                {
+                if f64::from(size.width) < min_width || f64::from(size.height) < min_height {
                     window.set_size(Size::Logical(LogicalSize::new(1280.0, 900.0)))?;
                     let _ = window.center();
                 }

@@ -1,11 +1,13 @@
 import { style } from '@vanilla-extract/css';
 import { recipe } from '@vanilla-extract/recipes';
-import { DefaultReset, color, config, toRem } from 'folds';
+import { DefaultReset, color, config } from 'folds';
 
+// The strip is empty until Core reports who has read the latest message, so
+// it is only the gap between the composer and the window's edge.
 export const RoomViewFollowingPlaceholder = style([
   DefaultReset,
   {
-    height: toRem(28),
+    height: config.space.S300,
   },
 ]);
 
@@ -13,7 +15,7 @@ export const RoomViewFollowing = recipe({
   base: [
     DefaultReset,
     {
-      minHeight: toRem(28),
+      minHeight: config.space.S300,
       padding: `0 ${config.space.S400}`,
       width: '100%',
       backgroundColor: color.Surface.Container,

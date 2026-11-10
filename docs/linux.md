@@ -449,7 +449,7 @@ draw its own title strip, because the window manager frames and moves the window
 `XDG_CURRENT_DESKTOP`. Settings > Appearance > Tiling mode overrides it (Auto, On, Off) and applies
 at once. Ctrl+Q quits in either mode.
 
-The window can be as small as 360×480; below 750px wide the app switches to its single-pane layout.
+The window can be as small as 360×480; under a tiling window manager there is no such floor (240×160), because the compositor sizes the tile. Below 750px wide the app switches to its single-pane layout.
 
 ### Window class and window rules
 
