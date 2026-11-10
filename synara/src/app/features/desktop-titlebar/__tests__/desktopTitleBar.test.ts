@@ -178,7 +178,12 @@ test('native window chrome matches the in-app titlebar contract', () => {
   assert.match(lib, /#\[cfg\(target_os = "linux"\)\]/);
   assert.match(lib, /\.decorations\(false\)/);
   assert.match(lib, /desktop_window_drag::install/);
-  assert.match(lib, /with_state_flags\(desktop_window_drag::linux_window_state_flags\(\)\)/);
+  // Linux never restores decorations; under a tiling window manager it does
+  // not restore size or position either.
+  assert.match(
+    lib,
+    /with_state_flags\(desktop_window_drag::linux_window_state_flags\(\s*desktop_environment::window_environment\(\)\s*== desktop_environment::WindowEnvironment::Tiling,?\s*\)\)/
+  );
   // Window-control commands are registered and ACL-granted.
   assert.match(lib, /desktop::desktop_window_minimize/);
   assert.match(lib, /desktop::desktop_window_toggle_maximize/);

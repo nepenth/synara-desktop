@@ -1,4 +1,5 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useSetting } from '../../state/hooks/settings';
 import { desktopPlatformSettingsAtom } from '../../state/settings';
 import {
@@ -8,8 +9,40 @@ import {
   roomListFocusTarget,
 } from './roomListPane';
 
+/** The user's choice: the list is hidden (saved per device). */
 export const useRoomListCollapsed = () =>
   useSetting(desktopPlatformSettingsAtom, 'roomListCollapsed');
+
+/**
+ * The list is hidden for now by the app, not by the user: at Tablet width a
+ * thread pane hides it to make room (L2). Never saved; the user's own show or
+ * hide clears it.
+ */
+const roomListAutoHiddenAtom = atom(false);
+
+/** Hidden by the user's choice or, for now, by the app. */
+export const useRoomListHidden = (): boolean => {
+  const [collapsed] = useRoomListCollapsed();
+  const autoHidden = useAtomValue(roomListAutoHiddenAtom);
+  return collapsed || autoHidden;
+};
+
+/**
+ * While `active`, hide a shown list for the time being and show it again
+ * afterwards. A list the user hid stays theirs (nothing to restore), and a
+ * list the user shows or hides meanwhile keeps their choice.
+ */
+export const useAutoHideRoomList = (active: boolean) => {
+  const [collapsed] = useRoomListCollapsed();
+  const setAutoHidden = useSetAtom(roomListAutoHiddenAtom);
+  const collapsedRef = useRef(collapsed);
+  collapsedRef.current = collapsed;
+  useEffect(() => {
+    if (!active || collapsedRef.current) return undefined;
+    setAutoHidden(true);
+    return () => setAutoHidden(false);
+  }, [active, setAutoHidden]);
+};
 
 const isEditable = (element: Element | null): boolean =>
   element instanceof HTMLElement &&
@@ -20,7 +53,9 @@ const isEditable = (element: Element | null): boolean =>
  * the list it shows, unless the user is typing: the composer keeps it.
  */
 export const useToggleRoomList = () => {
-  const [collapsed, setCollapsed] = useRoomListCollapsed();
+  const [savedCollapsed, setCollapsed] = useRoomListCollapsed();
+  const [autoHidden, setAutoHidden] = useAtom(roomListAutoHiddenAtom);
+  const collapsed = savedCollapsed || autoHidden;
 
   return useCallback(
     (options: { revealFocus?: boolean } = {}) => {
@@ -42,6 +77,8 @@ export const useToggleRoomList = () => {
         }
         return;
       }
+      // Showing it is the user's choice, also over an automatic hide.
+      setAutoHidden(false);
       setCollapsed(false);
       if (!options.revealFocus || !pane || isEditable(document.activeElement)) return;
       // Focus once React has dropped `inert` (an inert element ignores
@@ -59,6 +96,6 @@ export const useToggleRoomList = () => {
         });
       focusWhenShown(20);
     },
-    [collapsed, setCollapsed]
+    [collapsed, setAutoHidden, setCollapsed]
   );
 };

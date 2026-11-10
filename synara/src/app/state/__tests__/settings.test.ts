@@ -66,6 +66,20 @@ test('tiling mode is a per-device platform setting on Auto, and odd values read 
   }
 });
 
+test('vim-style list keys are a per-device setting on Auto until chosen', () => {
+  const storage = createMemoryStorage();
+  const store = createLocalStorageSettingsStore(storage);
+  assert.equal(defaultDesktopPlatformSettings.vimListKeys, 'auto');
+  assert.equal('vimListKeys' in store.getSharedSettings(), false);
+  store.setSettings({ ...defaultSettings, vimListKeys: 'off' });
+  assert.equal(storage.getObject('platformSettings')?.vimListKeys, 'off');
+  assert.equal(createLocalStorageSettingsStore(storage).getSettings().vimListKeys, 'off');
+  for (const stored of ['"yes"', 'true', '1', 'null']) {
+    const odd = createMemoryStorage({ platformSettings: `{"vimListKeys":${stored}}` });
+    assert.equal(createLocalStorageSettingsStore(odd).getSettings().vimListKeys, 'auto', stored);
+  }
+});
+
 test('font settings default to the platform fonts and store only sanitized families', () => {
   assert.equal(defaultSharedSettings.interfaceFont, 'default');
   assert.equal(defaultSharedSettings.monospaceFont, 'default');
@@ -249,6 +263,7 @@ test('settings store reads legacy desktop shortcuts from the shared settings blo
     agentWidgetEntries: [],
     roomListCollapsed: false,
     tilingMode: 'auto',
+    vimListKeys: 'auto',
   });
   assert.equal(store.getSettings().desktopShortcutNotifications, 'CmdOrCtrl+3');
 });
@@ -287,6 +302,7 @@ test('settings store writes shared and desktop platform settings separately', ()
     agentWidgetEntries: [],
     roomListCollapsed: false,
     tilingMode: 'auto',
+    vimListKeys: 'auto',
   });
 });
 

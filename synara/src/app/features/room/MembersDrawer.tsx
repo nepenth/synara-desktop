@@ -68,8 +68,9 @@ import { isSynaraDesktop } from '../../utils/desktop';
 
 type MemberDrawerHeaderProps = {
   joinedMemberCount?: number;
+  requestClose?: () => void;
 };
-function MemberDrawerHeader({ joinedMemberCount }: MemberDrawerHeaderProps) {
+function MemberDrawerHeader({ joinedMemberCount, requestClose }: MemberDrawerHeaderProps) {
   const setPeopleDrawer = useSetSetting(settingsAtom, 'isPeopleDrawer');
   const title =
     typeof joinedMemberCount === 'number' ? `${millify(joinedMemberCount)} Members` : 'Members';
@@ -103,7 +104,7 @@ function MemberDrawerHeader({ joinedMemberCount }: MemberDrawerHeaderProps) {
                 ref={triggerRef}
                 className={depthCss.quietInteractiveSurface}
                 variant="Background"
-                onClick={() => setPeopleDrawer(false)}
+                onClick={() => (requestClose ? requestClose() : setPeopleDrawer(false))}
                 aria-label="Close"
               >
                 <Icon src={Icons.Cross} />
@@ -193,8 +194,10 @@ const EMPTY_ROOM_MEMBERS: RoomMemberListItem[] = [];
 
 type MembersDrawerProps = {
   room: EventedRoomReading;
+  /** Closes the drawer when it is an overlay; by default Close turns the drawer setting off. */
+  requestClose?: () => void;
 };
-export function MembersDrawer({ room }: MembersDrawerProps) {
+export function MembersDrawer({ room, requestClose }: MembersDrawerProps) {
   const useAuthentication = useMediaAuthentication();
   const nativeSession = isSynaraDesktop() && getSessionBootstrapResult().source === 'native';
   const memberSnapshot = useRoomMembers(room.roomId, nativeSession);
@@ -280,7 +283,7 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
       shrink="No"
       direction="Column"
     >
-      <MemberDrawerHeader joinedMemberCount={joinedMemberCount} />
+      <MemberDrawerHeader joinedMemberCount={joinedMemberCount} requestClose={requestClose} />
       <Box className={css.MemberDrawerContentBase} grow="Yes">
         <Scroll ref={scrollRef} variant="Background" size="300" visibility="Hover" hideTrack>
           <Box className={css.MemberDrawerContent} direction="Column" gap="200">

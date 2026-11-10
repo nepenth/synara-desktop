@@ -13,7 +13,8 @@ export type ThreadPaneTarget = {
  * Full view never uses the pane. Side panel shows the opened thread, or a
  * thread route (a notification or link) in the pane instead of replacing the
  * room. Inline only uses the pane for "Reply in thread"; a thread route still
- * opens full view there. The pane needs the desktop layout.
+ * opens full view there. The pane needs a window wider than Mobile (`desktop`);
+ * at Tablet width it hides the room list while open (`useAutoHideRoomList`).
  */
 export const resolveThreadPane = ({
   mode,

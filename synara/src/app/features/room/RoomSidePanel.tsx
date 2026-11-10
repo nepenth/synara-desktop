@@ -58,6 +58,8 @@ type RoomSidePanelProps = {
   room: EventedRoomReading;
   activePanel: RoomSidePanelType;
   requestClose: () => void;
+  /** Over the room (below the Desktop width): as wide as it fits, not resizable. */
+  overlay?: boolean;
 };
 
 const DEFAULT_PANEL_WIDTH: Record<RoomSidePanelType, number> = {
@@ -81,7 +83,7 @@ const MAX_PANEL_WIDTH = 760;
 const clampWidth = (value: number, min: number): number =>
   Math.min(Math.max(value, min), Math.min(MAX_PANEL_WIDTH, Math.max(min, window.innerWidth - 360)));
 
-export function RoomSidePanel({ room, activePanel, requestClose }: RoomSidePanelProps) {
+export function RoomSidePanel({ room, activePanel, requestClose, overlay }: RoomSidePanelProps) {
   const [widths, setWidths] = useState(DEFAULT_PANEL_WIDTH);
   const width = widths[activePanel];
   const minWidth = MIN_PANEL_WIDTH[activePanel];
@@ -118,14 +120,19 @@ export function RoomSidePanel({ room, activePanel, requestClose }: RoomSidePanel
     <Box
       className={ContainerColor({ variant: 'Background' })}
       shrink="No"
-      style={{
-        position: 'relative',
-        width: toRem(width),
-        minWidth: toRem(minWidth),
-        maxWidth: `calc(100vw - ${toRem(360)})`,
-      }}
+      style={
+        overlay
+          ? { position: 'relative', width: `min(${toRem(width)}, 100%)`, height: '100%' }
+          : {
+              position: 'relative',
+              width: toRem(width),
+              minWidth: toRem(minWidth),
+              maxWidth: `calc(100vw - ${toRem(360)})`,
+            }
+      }
     >
       <div
+        hidden={overlay}
         aria-hidden
         onPointerDown={handleResizePointerDown}
         style={{

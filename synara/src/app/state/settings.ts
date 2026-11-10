@@ -152,7 +152,17 @@ export interface DesktopPlatformSettings {
    * `auto` follows what the shell detected at startup.
    */
   tilingMode: TilingModeSetting;
+  /**
+   * j/k, g g, G and Enter in the room list. `auto` (not chosen yet) follows
+   * tiling mode: on there, off everywhere else.
+   */
+  vimListKeys: VimListKeysSetting;
 }
+
+export type VimListKeysSetting = 'auto' | 'on' | 'off';
+
+export const normalizeVimListKeysSetting = (value: unknown): VimListKeysSetting =>
+  value === 'on' || value === 'off' ? value : 'auto';
 
 export type TilingModeSetting = 'auto' | 'on' | 'off';
 
@@ -269,6 +279,7 @@ const sanitizePlatformSettings = (settings: DesktopPlatformSettings): DesktopPla
   agentWidgetEntries: sanitizeAgentWidgetEntries(settings.agentWidgetEntries),
   roomListCollapsed: settings.roomListCollapsed === true,
   tilingMode: normalizeTilingModeSetting(settings.tilingMode),
+  vimListKeys: normalizeVimListKeysSetting(settings.vimListKeys),
 });
 
 /**
@@ -334,6 +345,7 @@ export const defaultDesktopPlatformSettings: DesktopPlatformSettings = {
   agentWidgetEntries: [],
   roomListCollapsed: false,
   tilingMode: 'auto',
+  vimListKeys: 'auto',
 };
 
 export const defaultPlatformSettings: PlatformSettings = {

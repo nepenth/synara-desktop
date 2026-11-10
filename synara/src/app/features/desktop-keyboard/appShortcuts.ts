@@ -19,6 +19,7 @@ export type AppShortcutAction =
   | 'go-activity'
   | 'go-approvals'
   | 'go-settings'
+  | 'open-space-switcher'
   | 'previous-room'
   | 'next-room'
   | 'previous-unread-room'
@@ -132,6 +133,14 @@ export const APP_SHORTCUTS: readonly AppShortcut[] = [
   { id: 'go-activity', label: 'Open activity', scope: 'navigation', ...place('2') },
   { id: 'go-approvals', label: 'Open approvals', scope: 'navigation', ...place('3') },
   { id: 'go-settings', label: 'Open settings', scope: 'navigation', ...place('4') },
+  {
+    // Cmd/Ctrl+S alone is the composer's strikethrough; with Shift it is free
+    // (no composer, menu or global default takes it).
+    id: 'open-space-switcher',
+    label: 'Open space switcher',
+    scope: 'navigation',
+    ...primary(['s'], { shift: true }),
+  },
   {
     id: 'previous-room',
     label: 'Previous room',
@@ -336,6 +345,19 @@ export type AppShortcutHelpGroup = {
   scope: AppShortcutScope;
   label: string;
   items: { id: AppShortcutAction; label: string; keys: string; ariaKeyShortcuts: string }[];
+};
+
+/** A shortcut's binding on this platform as shown (`⌃1`) and announced (`Control+1`). */
+export const appShortcutHint = (
+  id: AppShortcutAction,
+  platform: AppShortcutPlatform
+): { label: string; ariaKeyShortcuts: string } | undefined => {
+  const binding = shortcutBinding(appShortcut(id), platform);
+  if (!binding) return undefined;
+  return {
+    label: bindingLabel(binding, platform.macOS),
+    ariaKeyShortcuts: bindingAriaKeyShortcuts(binding),
+  };
 };
 
 /** The help sheet's contents for this platform: every bound shortcut, by group. */

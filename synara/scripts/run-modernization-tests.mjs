@@ -75,6 +75,7 @@ const tests = [
   'src/app/utils/__tests__/themeExternalPalette.test.ts',
   'src/app/utils/__tests__/interfaceFonts.test.ts',
   'src/app/utils/__tests__/tilingMode.test.ts',
+  'src/app/hooks/__tests__/screenSize.test.ts',
   'src/app/utils/__tests__/a11yContrast.test.ts',
   'src/app/components/__tests__/dialogFocusSemantics.test.ts',
   'src/app/components/__tests__/iconButtonLabelGuard.test.ts',

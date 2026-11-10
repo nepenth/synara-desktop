@@ -484,10 +484,11 @@ function Fixture() {
       </div>
       <div style={{ display: 'flex', height: 'calc(100vh - 62px)', minHeight: 0 }}>
         {/* The list column's bottom bar, with the production Approvals item. */}
+        {/* `?narrow`: the page alone, as the Mobile layout shows it (viewport matrix). */}
         <div
           style={{
             width: 256,
-            display: 'flex',
+            display: query.has('narrow') ? 'none' : 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-end',
             background: color.Surface.Container,

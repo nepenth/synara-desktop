@@ -106,3 +106,58 @@ test('the help sheet lists the registry by group and closes again', async ({ pag
   await page.keyboard.press(help);
   await expect(sheet).toHaveCount(0);
 });
+
+test('vim-style list keys: j/k, g g and G move focus through the whole list, Enter opens', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem('platformSettings', JSON.stringify({ vimListKeys: 'on' }))
+  );
+  await open(page);
+  await row(page, '!filler-005:example.test').click();
+  await expect(current(page)).toHaveAttribute('data-room-nav-id', '!filler-005:example.test');
+  await row(page, '!filler-005:example.test').focus();
+  const focused = () =>
+    page.evaluate(() => document.activeElement?.getAttribute('data-room-nav-id') ?? null);
+
+  await page.keyboard.press('j');
+  await expect.poll(focused).toBe('!filler-006:example.test');
+  await page.keyboard.press('k');
+  await page.keyboard.press('k');
+  await expect.poll(focused).toBe('!filler-004:example.test');
+  // Moving focus does not open the room; Enter does.
+  await expect(current(page)).toHaveAttribute('data-room-nav-id', '!filler-005:example.test');
+
+  // G: the last row, far below the rendered window.
+  await page.keyboard.press('Shift+G');
+  await expect.poll(focused).toBe('!other-dm:example.test');
+  await expect(row(page, '!other-dm:example.test')).toBeInViewport();
+  // g g: the first row.
+  await page.keyboard.press('g');
+  await page.keyboard.press('g');
+  await expect
+    .poll(async () => {
+      const first = await pane(page).locator('a[data-room-nav-link]').first();
+      return (await focused()) === (await first.getAttribute('data-room-nav-id'));
+    })
+    .toBe(true);
+  await page.keyboard.press('j');
+  const target = await focused();
+  await page.keyboard.press('Enter');
+  await expect(current(page)).toHaveAttribute('data-room-nav-id', target!);
+
+  // Never while typing: j goes into the composer.
+  const composer = page.getByRole('textbox', { name: 'Composer', exact: true });
+  await composer.click();
+  await page.keyboard.type('jk');
+  await expect(composer).toHaveValue('jk');
+  await expect(composer).toBeFocused();
+});
+
+test('vim-style list keys are off by default outside tiling mode', async ({ page }) => {
+  await open(page);
+  await row(page, '!filler-005:example.test').click();
+  await row(page, '!filler-005:example.test').focus();
+  await page.keyboard.press('j');
+  await expect(row(page, '!filler-005:example.test')).toBeFocused();
+});

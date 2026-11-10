@@ -57,6 +57,8 @@ import {
 } from '../../widgets/experimentalWidgets';
 import { isSafeWidgetUrl } from '../../widgets/widgetUrl';
 import { roomListShortcut } from '../../room-list-pane/roomListPane';
+import { resolveVimListKeys } from '../../desktop-keyboard/vimListKeys';
+import { useTilingMode } from '../../../hooks/useTilingMode';
 import {
   snapshotRtcTransportsNative,
   type NativeRtcTransportsSnapshot,
@@ -614,8 +616,32 @@ function DesktopShortcutsSection() {
             </Text>
           }
         />
+        <VimListKeysTile />
       </SequenceCard>
     </SettingsSection>
+  );
+}
+
+/** K4: j/k, g g, G and Enter in the room list. Not chosen yet, it follows tiling mode. */
+function VimListKeysTile() {
+  const [setting, setSetting] = useSetting(desktopPlatformSettingsAtom, 'vimListKeys');
+  const tilingMode = useTilingMode();
+  const enabled = resolveVimListKeys(setting, tilingMode);
+  return (
+    <SettingTile
+      title="Vim-style list keys"
+      description={`With a room focused in the list: j and k move down and up, g g goes to the top, G to the bottom, and Enter opens the room. Never while typing.${
+        setting === 'auto' ? ' On by default in tiling mode.' : ''
+      }`}
+      after={
+        <Switch
+          variant="Primary"
+          value={enabled}
+          onChange={(value: boolean) => setSetting(value ? 'on' : 'off')}
+          aria-label="Vim-style list keys"
+        />
+      }
+    />
   );
 }
 

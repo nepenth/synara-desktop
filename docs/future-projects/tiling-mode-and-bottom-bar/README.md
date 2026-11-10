@@ -191,14 +191,26 @@ Universal. Depends on F2 and N.
   bottom bar instead of the rail; sign-in and Settings at 380px; modals wider than the window.
 - Done when: a Playwright viewport matrix covers those widths for Home, room, thread, Settings and
   Approvals.
+- Status (2026-11-10): matrix in `synara/e2e/viewportMatrix.ts` and the `*viewport-matrix*` /
+  `nav-pane-viewport` specs (real app, sign-in, Approvals, thread, list column). Fixed: the room
+  header moves its tools into More options below 600px of header width; More options and the
+  shortcut help sheet fit a 480px-tall window; the space header's avatar no longer spills over
+  the list; the Activity filter chips wrap.
 
 **L2. Tablet range** · M
 - 751–1124px: allow the members drawer as an overlay; auto-hide the list when a thread opens and
   restore it on close.
+- Status: below Desktop the members drawer and the room's side panels open over the room
+  (`RoomPanelOverlay`); the thread pane now opens at Tablet width and hides the list for the time
+  being (`useAutoHideRoomList`, never saved; the user's own show or hide wins).
 
 **L3. Measure the window, not the page** · S
 - Confirm `useScreenSize` behaves with page zoom and in pop-out windows (each webview measures its
   own body).
+- Finding: page zoom scales the root font size, not CSS pixels, so the breakpoints ignored zoom (a
+  1200px window at 200% stayed Desktop with every rem-sized control doubled). `useScreenSize` now
+  divides the body width by the zoom, read from a hidden 1rem probe it also observes, so a zoom
+  change re-measures. It already measures its own `body`, which is per webview.
 
 ### K. Keyboard
 
@@ -223,6 +235,8 @@ Universal. Depends on F3.
 
 **K4. Optional list keys** · S — j/k and g g / G when the list has focus, behind a setting that is
 on by default in tiling mode.
+- Status: Settings › General › "Vim-style list keys" (`vimListKeys`: auto, on, off); Auto follows
+  tiling mode. Shortcut added: open the space switcher, ⌘⇧S / Ctrl+Shift+S.
 
 ### I. Desktop integration
 

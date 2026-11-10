@@ -20,6 +20,7 @@ const spaceOrder = (page: Page) =>
     .evaluateAll((rows) =>
       rows.map((el) => el.getAttribute('data-space-id') ?? el.getAttribute('data-folder-id'))
     );
+const isMac = (page: Page) => page.evaluate(() => navigator.userAgent.includes('Mac'));
 const savedSidebar = async (page: Page) =>
   JSON.parse((await page.locator('body').getAttribute('data-saved-spaces')) ?? 'null');
 
@@ -41,7 +42,16 @@ test('the bar: four places, icons with tooltips, labels once the column is wide'
   // At the default 256px the bar is icons only, named and with tooltips.
   await expect(bar(page)).not.toContainText('Activity');
   await barItem(page, 'activity').hover();
-  await expect(page.getByRole('tooltip')).toHaveText('Activity');
+  // The tooltip and aria-keyshortcuts carry the place's key from the registry.
+  const mac = await isMac(page);
+  await expect(page.getByRole('tooltip')).toHaveText(mac ? 'Activity (⌃2)' : 'Activity (Alt+2)');
+  const places = ['home', 'activity', 'approvals'];
+  for (const [index, id] of places.entries()) {
+    await expect(barItem(page, id)).toHaveAttribute(
+      'aria-keyshortcuts',
+      new RegExp(`^${mac ? 'Control' : 'Alt'}\\+${index + 1}( Shift\\+F10)?$`)
+    );
+  }
 
   // Wider than 300px: text labels under the icons.
   const handle = page.getByRole('button', { name: /Resize navigation pane/ });
@@ -92,8 +102,12 @@ test('the account menu: Settings and Log out, focus back on the avatar', async (
   await expect(barItem(page, 'account')).toHaveAccessibleName('Account');
   await barItem(page, 'account').click();
   await expect(barItem(page, 'account')).toHaveAttribute('aria-expanded', 'true');
-  const settings = page.getByRole('button', { name: 'Settings', exact: true });
+  const settings = page.getByRole('button', { name: /^Settings/ });
   await expect(settings).toBeVisible();
+  await expect(settings).toHaveAttribute(
+    'aria-keyshortcuts',
+    (await isMac(page)) ? 'Control+4' : 'Alt+4'
+  );
   await expect(page.getByRole('button', { name: 'Log out', exact: true })).toBeVisible();
   await expect(
     page.getByRole('button', { name: /^(Verify this device|Review unverified)/ })
@@ -305,4 +319,34 @@ test('with the list hidden, page headers offer "Show room list" with its unread'
   await expect(bar(page)).toBeInViewport();
   await expect(show).toHaveCount(0);
   await expect(pane(page).getByTestId('nav-search-field')).toBeFocused();
+});
+
+test('Cmd/Ctrl+Shift+S opens the switcher from anywhere, and shows a hidden list first', async ({
+  page,
+}) => {
+  await open(page);
+  const mod = (await isMac(page)) ? 'Meta' : 'Control';
+  await expect(trigger(page)).toHaveAttribute(
+    'aria-keyshortcuts',
+    `${mod === 'Meta' ? 'Meta' : 'Control'}+Shift+S`
+  );
+  const composer = page.getByRole('textbox', { name: 'Composer', exact: true });
+  if (await composer.count()) await composer.click();
+  await page.keyboard.press(`${mod}+Shift+S`);
+  await expect(switcher(page)).toBeVisible();
+  await expect(switcher(page).getByRole('searchbox', { name: 'Find a space' })).toBeFocused();
+  // A second press closes it.
+  await page.keyboard.press(`${mod}+Shift+S`);
+  await expect(switcher(page)).toHaveCount(0);
+
+  // With the list hidden, the shortcut brings it back and opens the switcher on its title.
+  await pane(page).getByTestId('room-list-hide').click();
+  await expect(bar(page)).not.toBeInViewport();
+  await page.keyboard.press(`${mod}+Shift+S`);
+  await expect(switcher(page)).toBeVisible();
+  await expect(bar(page)).toBeInViewport();
+  const triggerBox = (await trigger(page).boundingBox())!;
+  const menuBox = (await switcher(page).boundingBox())!;
+  expect(menuBox.y).toBeGreaterThanOrEqual(triggerBox.y + triggerBox.height - 1);
+  expect(Math.abs(menuBox.x - triggerBox.x)).toBeLessThan(24);
 });

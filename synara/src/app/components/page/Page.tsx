@@ -14,7 +14,7 @@ import classNames from 'classnames';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import * as css from './style.css';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
-import { useRoomListCollapsed } from '../../features/room-list-pane/useRoomListPane';
+import { useRoomListHidden } from '../../features/room-list-pane/useRoomListPane';
 import { ROOM_LIST_PANE_ID } from '../../features/room-list-pane/roomListPane';
 
 /** Set by a `PageRoot` whose pane can collapse: whether it is collapsed now. */
@@ -49,7 +49,7 @@ type PageRootProps = {
 
 export function PageRoot({ nav, children, collapsibleNav }: PageRootProps) {
   const screenSize = useScreenSizeContext();
-  const [roomListCollapsed] = useRoomListCollapsed();
+  const roomListCollapsed = useRoomListHidden();
   const desktop = screenSize !== ScreenSize.Mobile;
   const collapsed = collapsibleNav && desktop ? roomListCollapsed : undefined;
 

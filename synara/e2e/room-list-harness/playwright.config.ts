@@ -14,6 +14,7 @@ export default defineConfig({
     'room-list-collapse.spec.ts',
     'room-list-keyboard.spec.ts',
     'nav-pane.spec.ts',
+    'nav-pane-viewport.spec.ts',
   ],
   fullyParallel: false,
   retries: 0,

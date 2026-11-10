@@ -56,6 +56,8 @@ import { getSafeMyUserId } from '../../state/nativeIdentity';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { nameInitials } from '../../utils/common';
 import { stopPropagation } from '../../utils/keyboard';
+import { isLinuxOS, isMacOS } from '../../utils/user-agent';
+import { type AppShortcutAction, appShortcutHint } from '../desktop-keyboard/appShortcuts';
 import {
   BarBadge,
   accountBarState,
@@ -76,6 +78,10 @@ const menuTrapOptions = (close: () => void) => ({
   isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
   escapeDeactivates: stopPropagation,
 });
+
+/** A place's key from the shortcut registry (⌃1 on macOS, Alt+1 elsewhere). */
+const placeShortcut = (id: AppShortcutAction) =>
+  appShortcutHint(id, { macOS: isMacOS(), linux: isLinuxOS() });
 
 /** The badge on an item's icon; hidden from assistive tech, the item's name says it. */
 function BarBadgeView({ badge, title }: { badge: BarBadge; title?: string }) {
@@ -104,6 +110,8 @@ type BarItemProps = {
   /** Accessible name; defaults to `label`. Starts with the label (label in name). */
   name?: string;
   tooltip?: string;
+  /** The item's app shortcut: shown in the tooltip and announced. */
+  shortcut?: { label: string; ariaKeyShortcuts: string };
   icon: ReactNode;
   badge: BarBadge;
   badgeTitle?: string;
@@ -124,6 +132,7 @@ export const BarItem = forwardRef<HTMLButtonElement, BarItemProps>(
       label,
       name,
       tooltip,
+      shortcut,
       icon,
       badge,
       badgeTitle,
@@ -142,7 +151,11 @@ export const BarItem = forwardRef<HTMLButtonElement, BarItemProps>(
         if (typeof ref === 'function') ref(el);
         else if (ref) ref.current = el;
       };
-    const tip = tooltip ?? (showLabel ? undefined : label);
+    const baseTip = tooltip ?? (showLabel && !shortcut ? undefined : label);
+    const tip = baseTip && shortcut ? `${baseTip} (${shortcut.label})` : baseTip;
+    const ariaKeyShortcuts =
+      [shortcut?.ariaKeyShortcuts, aria['aria-keyshortcuts']].filter(Boolean).join(' ') ||
+      undefined;
     const render = (triggerRef: RefCallback<HTMLElement | SVGElement>) => (
       <button
         ref={assignRef(triggerRef)}
@@ -154,6 +167,7 @@ export const BarItem = forwardRef<HTMLButtonElement, BarItemProps>(
         onClick={onClick}
         onContextMenu={onContextMenu}
         {...aria}
+        aria-keyshortcuts={ariaKeyShortcuts}
       >
         <span className={css.BarIcon}>
           {icon}
@@ -249,6 +263,7 @@ export function HomeBarItem({ showLabel }: { showLabel: boolean }) {
         badge={badge}
         selected={selected}
         showLabel={showLabel}
+        shortcut={placeShortcut('go-home')}
         testId="nav-bar-home"
         onClick={openHome}
         onContextMenu={(evt) => {
@@ -299,6 +314,7 @@ export function ActivityBarItem({ showLabel }: { showLabel: boolean }) {
       badge={badge}
       selected={selected}
       showLabel={showLabel}
+      shortcut={placeShortcut('go-activity')}
       testId="nav-bar-activity"
       onClick={() => openActivity(inviteCount, later.active)}
     />
@@ -320,6 +336,7 @@ export function ApprovalsBarItem({ showLabel }: { showLabel: boolean }) {
       badgeTitle={coverageDescription}
       selected={selected}
       showLabel={showLabel}
+      shortcut={placeShortcut('go-approvals')}
       testId="nav-bar-approvals"
       onClick={navigateToApprovals}
     />
@@ -333,53 +350,66 @@ type AccountMenuProps = {
   onLogout: () => void;
 };
 const AccountMenu = forwardRef<HTMLDivElement, AccountMenuProps>(
-  ({ verify, onSettings, onVerify, onLogout }, ref) => (
-    <Menu ref={ref} aria-label="Account" style={{ maxWidth: toRem(240), width: '100vw' }}>
-      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-        <MenuItem
-          variant="Surface"
-          fill="None"
-          size="300"
-          radii="300"
-          after={<Icon size="100" src={Icons.Setting} />}
-          onClick={onSettings}
-        >
-          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Settings
-          </Text>
-        </MenuItem>
-        {verify && (
+  ({ verify, onSettings, onVerify, onLogout }, ref) => {
+    const settingsShortcut = placeShortcut('go-settings');
+    return (
+      <Menu ref={ref} aria-label="Account" style={{ maxWidth: toRem(240), width: '100vw' }}>
+        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
           <MenuItem
-            variant={verify === 'this-device' ? 'Critical' : 'Warning'}
+            variant="Surface"
             fill="None"
             size="300"
             radii="300"
-            after={<Icon size="100" src={Icons.ShieldUser} />}
-            onClick={onVerify}
+            after={
+              <Box as="span" alignItems="Center" gap="200">
+                {settingsShortcut && (
+                  <Text as="kbd" size="T200" priority="300">
+                    {settingsShortcut.label}
+                  </Text>
+                )}
+                <Icon size="100" src={Icons.Setting} />
+              </Box>
+            }
+            aria-keyshortcuts={settingsShortcut?.ariaKeyShortcuts}
+            onClick={onSettings}
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              {verify === 'this-device' ? 'Verify this device' : 'Review unverified devices'}
+              Settings
             </Text>
           </MenuItem>
-        )}
-      </Box>
-      <Line variant="Surface" size="300" />
-      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-        <MenuItem
-          variant="Critical"
-          fill="None"
-          size="300"
-          radii="300"
-          after={<Icon size="100" src={Icons.Power} />}
-          onClick={onLogout}
-        >
-          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Log out
-          </Text>
-        </MenuItem>
-      </Box>
-    </Menu>
-  )
+          {verify && (
+            <MenuItem
+              variant={verify === 'this-device' ? 'Critical' : 'Warning'}
+              fill="None"
+              size="300"
+              radii="300"
+              after={<Icon size="100" src={Icons.ShieldUser} />}
+              onClick={onVerify}
+            >
+              <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+                {verify === 'this-device' ? 'Verify this device' : 'Review unverified devices'}
+              </Text>
+            </MenuItem>
+          )}
+        </Box>
+        <Line variant="Surface" size="300" />
+        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+          <MenuItem
+            variant="Critical"
+            fill="None"
+            size="300"
+            radii="300"
+            after={<Icon size="100" src={Icons.Power} />}
+            onClick={onLogout}
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              Log out
+            </Text>
+          </MenuItem>
+        </Box>
+      </Menu>
+    );
+  }
 );
 
 function AccountBarItemView({

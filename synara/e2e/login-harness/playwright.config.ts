@@ -4,7 +4,7 @@ export default defineConfig({
   globalSetup: fileURLToPath(new URL('../warm-harness.ts', import.meta.url)),
   metadata: { warmPages: ['/e2e/login-harness/index.html'] },
   testDir: '..',
-  testMatch: ['login-screen.spec.ts'],
+  testMatch: ['login-screen.spec.ts', 'login-viewport-matrix.spec.ts'],
   workers: 2,
   retries: 0,
   timeout: 60000,

@@ -42,6 +42,8 @@ export const SwitcherTrigger = style([
 
 /** The leading mark: Synara logo for Home, the space's avatar in a space. */
 export const TriggerMark = style({
+  // folds' avatar fallback is absolutely positioned: keep it in the mark.
+  position: 'relative',
   flex: 'none',
   display: 'inline-flex',
   width: toRem(22),

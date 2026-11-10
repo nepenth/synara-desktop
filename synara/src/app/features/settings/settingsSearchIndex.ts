@@ -142,6 +142,12 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   },
   {
     page: SettingsPages.GeneralPage,
+    title: 'Vim-style list keys',
+    description: 'j and k move through the room list, g g goes to the top, G to the bottom.',
+    synonyms: ['vim', 'hjkl', 'keyboard', 'room list', 'tiling', 'navigation keys'],
+  },
+  {
+    page: SettingsPages.GeneralPage,
     title: 'Storage',
     synonyms: ['cache', 'disk', 'data'],
   },

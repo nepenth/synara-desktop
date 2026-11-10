@@ -11,7 +11,14 @@ import { MemoryRouter, Outlet, Route, Routes, useLocation, useParams } from 'rea
 import { configClass, varsClass } from 'folds';
 import { darkTheme } from '../../src/colors.css';
 import { presentationFor } from './presentation';
-import { ScreenSize, ScreenSizeProvider } from '../../src/app/hooks/useScreenSize';
+import {
+  ScreenSize,
+  ScreenSizeProvider,
+  useScreenSize,
+  useScreenSizeContext,
+} from '../../src/app/hooks/useScreenSize';
+import { MobileFriendlyPageNav } from '../../src/app/pages/MobileFriendly';
+import { useAutoHideRoomList } from '../../src/app/features/room-list-pane/useRoomListPane';
 import { NavToActivePathProvider } from '../../src/app/state/hooks/navToActivePath';
 import { makeNavToActivePathAtom } from '../../src/app/state/navToActivePath';
 import { createNativeSession, setNativeSessionForTests } from '../../src/app/native/nativeSession';
@@ -87,6 +94,10 @@ let rooms: RoomSummary[] = [...homeRooms, ...dms, designRoom, ...spaces];
 let spaceRollups: Record<string, { total: number; highlight: number }> = {};
 
 const params = new URLSearchParams(location.search);
+// `?viewport`: the layout follows the window's width, as in the app (Mobile
+// shows the list or a page, Tablet hides the list while a thread is open);
+// otherwise the fixture is always Desktop.
+const followViewport = params.has('viewport');
 let spacesContent: Record<string, unknown> | null = {
   sidebar: [
     spaceId('Design'),
@@ -212,9 +223,19 @@ const notificationPreferences = {
 };
 
 /** The page beside the list: its header's "Show room list" and the fixture controls. */
+/** Stands in for the room's thread pane: at Tablet width it hides the list while open (L2). */
+function ThreadPaneStandIn({ open }: { open: boolean }) {
+  useAutoHideRoomList(useScreenSizeContext() === ScreenSize.Tablet && open);
+  return open ? <output data-testid="thread-pane-open">Thread open</output> : null;
+}
+
 function ContentPage() {
   const location = useLocation();
   const [, rerender] = useState(0);
+  const [threadOpen, setThreadOpen] = useState(false);
+  const mobile = useScreenSizeContext() === ScreenSize.Mobile;
+  // As in the app: on Mobile the list's own route shows the list alone.
+  if (followViewport && mobile && location.pathname === '/home/') return null;
   const control = (label: string, action: () => void) => (
     <button
       type="button"
@@ -250,7 +271,9 @@ function ContentPage() {
           failSaves = true;
           document.body.dataset.failSaves = 'true';
         })}
+        {control(threadOpen ? 'Close thread' : 'Open thread', () => setThreadOpen((v) => !v))}
       </div>
+      <ThreadPaneStandIn open={threadOpen} />
     </Page>
   );
 }
@@ -270,11 +293,13 @@ function SpacePane() {
 
 function HomePane() {
   return (
-    <ClosedNavCategoriesProvider value={closedCategories}>
-      <RoomsNotificationPreferencesProvider value={notificationPreferences}>
-        <Home />
-      </RoomsNotificationPreferencesProvider>
-    </ClosedNavCategoriesProvider>
+    <MobileFriendlyPageNav path={['/home/', '/direct/']}>
+      <ClosedNavCategoriesProvider value={closedCategories}>
+        <RoomsNotificationPreferencesProvider value={notificationPreferences}>
+          <Home />
+        </RoomsNotificationPreferencesProvider>
+      </ClosedNavCategoriesProvider>
+    </MobileFriendlyPageNav>
   );
 }
 
@@ -318,10 +343,11 @@ function Client() {
 }
 
 export function NavPaneFixture() {
+  const liveScreenSize = useScreenSize();
   return (
     <Provider>
       <MemoryRouter initialEntries={['/home/']}>
-        <ScreenSizeProvider value={ScreenSize.Desktop}>
+        <ScreenSizeProvider value={followViewport ? liveScreenSize : ScreenSize.Desktop}>
           <NavToActivePathProvider value={nav}>
             <OpenedSidebarFolderProvider value={openedFolders}>
               <ApprovalInboxProvider>

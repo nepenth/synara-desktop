@@ -8,6 +8,7 @@ import {
   appShortcut,
   appShortcutAction,
   appShortcutHelp,
+  appShortcutHint,
   bindingAriaKeyShortcuts,
   bindingLabel,
   menuAccelerator,
@@ -257,6 +258,7 @@ test('the help sheet lists every bound shortcut once, by group, in sentence case
       ['Open activity', '⌃2'],
       ['Open approvals', '⌃3'],
       ['Open settings', '⌃4'],
+      ['Open space switcher', '⌘⇧S'],
       ['Previous room', '⌥↑'],
       ['Next room', '⌥↓'],
       ['Previous unread room', '⌥⇧↑'],
@@ -336,6 +338,28 @@ test('one dispatcher: the shortcuts are mounted for the signed-in app, no other 
   assert.ok(titleBar.includes("invokeDesktopWithAvailability('desktop_quit')"));
   assert.ok(titleBar.includes("appShortcutAction(evt, { macOS: false, linux: true }) !== 'quit'"));
   assert.ok(appShortcut('quit').external);
+});
+
+test('the space switcher is Cmd/Ctrl+Shift+S, apart from the composer strikethrough on Cmd/Ctrl+S', () => {
+  assert.equal(
+    appShortcutAction(key('S', { metaKey: true, shiftKey: true }), mac),
+    'open-space-switcher'
+  );
+  for (const platform of [linux, windows]) {
+    assert.equal(
+      appShortcutAction(key('S', { ctrlKey: true, shiftKey: true }), platform),
+      'open-space-switcher'
+    );
+    assert.equal(appShortcutAction(key('s', { ctrlKey: true }), platform), undefined);
+  }
+  assert.equal(appShortcutAction(key('s', { metaKey: true }), mac), undefined);
+  // Handled by the list header that owns the switcher, through the dispatcher.
+  const header = readFileSync('src/app/features/nav-pane/NavPaneHeader.tsx', 'utf8');
+  assert.ok(header.includes("useAppShortcutHandler(\n    'open-space-switcher'"));
+  assert.deepEqual(appShortcutHint('open-space-switcher', windows), {
+    label: 'Ctrl+Shift+S',
+    ariaKeyShortcuts: 'Control+Shift+S',
+  });
 });
 
 test('the places are Control+1-4 on macOS and Alt+1-4 elsewhere, clear of the composer', () => {

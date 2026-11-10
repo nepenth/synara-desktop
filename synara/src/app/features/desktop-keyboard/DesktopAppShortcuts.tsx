@@ -147,6 +147,7 @@ export function DesktopAppShortcuts() {
           if (portalOpen()) return false;
           return moveFocusRegion(document, action === 'focus-next-region' ? 'next' : 'previous');
         case 'close-thread':
+        case 'open-space-switcher':
           return runAppShortcutHandler(action);
         case 'toggle-room-list':
           toggleRoomList({ revealFocus: true });

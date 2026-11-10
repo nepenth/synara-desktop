@@ -17,6 +17,7 @@ export default defineConfig({
     'composer-formatting.spec.ts',
     'composer-mention.spec.ts',
     'question-cards.spec.ts',
+    'approvals-viewport-matrix.spec.ts',
   ],
   fullyParallel: true,
   // One dev server serves every page; bound concurrency so a loaded machine

@@ -1,8 +1,8 @@
-import React, { ReactNode, useMemo, useRef, useState } from 'react';
+import React, { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { Box, Icon, Icons, PopOut, RectCords } from 'folds';
 import { useAtomValue } from 'jotai';
 import FocusTrap from '../../components/FocusTrap';
-import { PageNavHeader } from '../../components/page';
+import { PageNavHeader, usePageNavCollapsed } from '../../components/page';
 import { NavPaneTitle } from '../../components/nav';
 import { UnreadBadge } from '../../components/unread-badge';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
@@ -14,6 +14,11 @@ import { useNavPaneNavigation } from './useNavPaneNavigation';
 import { SpaceSwitcherMenu } from './SpaceSwitcher';
 import { ManageSpacesDialog } from './ManageSpacesDialog';
 import { otherSpacesUnread } from './switcherUnread';
+import { portalOpen, useAppShortcutHandler } from '../desktop-keyboard/appShortcutHandlers';
+import { appShortcutHint } from '../desktop-keyboard/appShortcuts';
+import { useToggleRoomList } from '../room-list-pane/useRoomListPane';
+import { ROOM_LIST_PANE_ID } from '../room-list-pane/roomListPane';
+import { isLinuxOS, isMacOS } from '../../utils/user-agent';
 import * as css from './NavPane.css';
 
 type NavPaneHeaderProps = {
@@ -60,6 +65,47 @@ export function NavPaneHeader({ title, mark, titleAfter, actions }: NavPaneHeade
     setAnchor((current) => (current || !rect ? undefined : rect));
   };
 
+  // ⌘⇧S / Ctrl+Shift+S, from anywhere the list is mounted. A hidden list is
+  // shown first; the menu opens once the pane has slid back in, so it anchors
+  // to the title where it ends up.
+  const collapsed = usePageNavCollapsed();
+  const toggleRoomList = useToggleRoomList();
+  const shortcut = appShortcutHint('open-space-switcher', {
+    macOS: isMacOS(),
+    linux: isLinuxOS(),
+  });
+  useAppShortcutHandler(
+    'open-space-switcher',
+    useCallback(() => {
+      if (anchor) {
+        setAnchor(undefined);
+        return true;
+      }
+      if (portalOpen() || !triggerRef.current) return false;
+      if (!collapsed) {
+        setAnchor(triggerRef.current.getBoundingClientRect());
+        return true;
+      }
+      toggleRoomList();
+      // Settled: the pane is shown and has grown to its set width.
+      const openWhenSettled = (framesLeft: number) =>
+        requestAnimationFrame(() => {
+          const trigger = triggerRef.current;
+          if (!trigger) return;
+          const pane = document.getElementById(ROOM_LIST_PANE_ID);
+          const target = pane ? parseFloat(pane.style.width) : NaN;
+          const settled =
+            !!pane &&
+            !pane.hasAttribute('inert') &&
+            (!Number.isFinite(target) || pane.getBoundingClientRect().width >= target - 0.5);
+          if (settled || framesLeft === 0) setAnchor(trigger.getBoundingClientRect());
+          else openWhenSettled(framesLeft - 1);
+        });
+      openWhenSettled(60);
+      return true;
+    }, [anchor, collapsed, toggleRoomList])
+  );
+
   return (
     <>
       <PageNavHeader data-tauri-drag-region>
@@ -71,6 +117,8 @@ export function NavPaneHeader({ title, mark, titleAfter, actions }: NavPaneHeade
             aria-haspopup="dialog"
             aria-expanded={!!anchor}
             aria-label={`${title}, switch space${elsewhereText}`}
+            aria-keyshortcuts={shortcut?.ariaKeyShortcuts}
+            title={shortcut ? `Switch space (${shortcut.label})` : undefined}
             data-testid="space-switcher-trigger"
             onClick={toggle}
           >

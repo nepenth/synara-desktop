@@ -50,7 +50,13 @@ export function ShortcutHelpSheet({
             escapeDeactivates: stopPropagation,
           }}
         >
-          <Modal variant="Surface" size="300" data-shortcut-help="true">
+          <Modal
+            variant="Surface"
+            size="300"
+            data-shortcut-help="true"
+            // As tall as its list, never taller than a short window.
+            style={{ height: 'auto', maxHeight: `calc(100vh - ${toRem(32)})` }}
+          >
             <Box direction="Column" style={{ maxHeight: '85vh' }}>
               <Header
                 style={{ padding: `0 ${config.space.S200} 0 ${config.space.S400}` }}

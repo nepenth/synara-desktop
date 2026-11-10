@@ -40,6 +40,10 @@
       "type": "string",
       "enum": ["auto", "on", "off"]
     },
+    "vimListKeys": {
+      "type": "string",
+      "enum": ["auto", "on", "off"]
+    },
     "agentWidgetEntries": {
       "type": "array",
       "maxItems": 32,

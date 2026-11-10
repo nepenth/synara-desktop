@@ -9,6 +9,7 @@ import {
   type RoomListNavSource,
 } from '../roomListNavigation';
 import { registerAppShortcutHandler, runAppShortcutHandler } from '../appShortcutHandlers';
+import { VIM_G_TIMEOUT_MS, resolveVimListKeys, vimListKey } from '../vimListKeys';
 
 const rooms = (count: number, prefix = 'room') =>
   Array.from({ length: count }, (_, index) => `!${prefix}-${index}:example.test`);
@@ -149,4 +150,45 @@ test('component handlers: the latest mounted one runs; none means the key is not
   releaseA();
   assert.equal(runAppShortcutHandler('close-thread'), false);
   assert.deepEqual(calls, ['b', 'a']);
+});
+
+const vimKey = (
+  key: string,
+  modifiers: Partial<Record<'ctrlKey' | 'metaKey' | 'altKey', boolean>> = {}
+) => ({
+  key,
+  ctrlKey: false,
+  metaKey: false,
+  altKey: false,
+  isComposing: false,
+  ...modifiers,
+});
+
+test('vim list keys: j/k step, G goes to the bottom, g g to the top within a second', () => {
+  assert.deepEqual(vimListKey(vimKey('j'), undefined, 0), { move: 'down' });
+  assert.deepEqual(vimListKey(vimKey('k'), undefined, 0), { move: 'up' });
+  assert.deepEqual(vimListKey(vimKey('G'), undefined, 0), { move: 'bottom' });
+  // The first g waits; a second one in time goes to the top.
+  const first = vimListKey(vimKey('g'), undefined, 1000);
+  assert.deepEqual(first, { pendingG: 1000 });
+  assert.deepEqual(vimListKey(vimKey('g'), first.pendingG, 1500), { move: 'top' });
+  // Too late: the second g starts a new g g.
+  assert.deepEqual(vimListKey(vimKey('g'), first.pendingG, 1001 + VIM_G_TIMEOUT_MS), {
+    pendingG: 1001 + VIM_G_TIMEOUT_MS,
+  });
+  // Another key drops a pending g.
+  assert.deepEqual(vimListKey(vimKey('j'), first.pendingG, 1200), { move: 'down' });
+  // Never with a modifier (Cmd+K is search, Ctrl+J is the browser's), or while composing.
+  assert.deepEqual(vimListKey(vimKey('k', { metaKey: true }), undefined, 0), {});
+  assert.deepEqual(vimListKey(vimKey('j', { ctrlKey: true }), undefined, 0), {});
+  assert.deepEqual(vimListKey(vimKey('g', { altKey: true }), undefined, 0), {});
+  assert.deepEqual(vimListKey({ ...vimKey('j'), isComposing: true }, undefined, 0), {});
+  assert.deepEqual(vimListKey(vimKey('x'), undefined, 0), {});
+});
+
+test('vim list keys are on by default only in tiling mode, until the user chooses', () => {
+  assert.equal(resolveVimListKeys('auto', true), true);
+  assert.equal(resolveVimListKeys('auto', false), false);
+  assert.equal(resolveVimListKeys('off', true), false);
+  assert.equal(resolveVimListKeys('on', false), true);
 });
