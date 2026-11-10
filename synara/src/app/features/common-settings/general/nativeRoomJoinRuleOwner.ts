@@ -48,7 +48,7 @@ export type NativeRoomJoinRuleDependencies = {
 
 export const ROOM_JOIN_RULE_UPDATED_EVENT = 'matrix-room-join-rule-updated';
 const unavailableMessage = 'Native Matrix room join rule is unavailable.';
-const roomIdPattern = /^![^:\s]+:[^\s]+$/;
+const roomIdPattern = /^![^:\s]+(:[^\s]+)?$/;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

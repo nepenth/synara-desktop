@@ -41,7 +41,7 @@ const isSafeInteger = (value: unknown): value is number =>
 const isSafeGeneration = (value: unknown): value is number => isSafeInteger(value) && value >= 0;
 
 const isRoomId = (value: unknown): value is string =>
-  typeof value === 'string' && /^![^:\s]+:[^\s]+$/.test(value);
+  typeof value === 'string' && /^![^:\s]+(:[^\s]+)?$/.test(value);
 
 const isBoundedString = (value: unknown, required: boolean): value is string =>
   typeof value === 'string' &&
