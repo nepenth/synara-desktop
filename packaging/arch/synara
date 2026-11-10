@@ -1,9 +1,26 @@
 #!/bin/sh
 
+# How the web view draws on Wayland. SYNARA_RENDERING picks one:
+#   safe  (default) software compositing: slower, but known not to crash or
+#         blank the window on NVIDIA and KDE Plasma Wayland.
+#   gpu   WebKitGTK's GPU compositing and DMABUF presentation. On NVIDIA's
+#         driver explicit sync is turned off for this process, because GTK 3
+#         commits a buffer without an acquire point and the compositor ends
+#         the connection ("Missing acquire timeline", Error 71).
+# A variable already set in the environment always wins.
 if [ "${XDG_SESSION_TYPE:-}" = "wayland" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
   export GDK_BACKEND="${GDK_BACKEND:-wayland}"
-  export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-1}"
-  export WEBKIT_DISABLE_COMPOSITING_MODE="${WEBKIT_DISABLE_COMPOSITING_MODE:-1}"
+  case "${SYNARA_RENDERING:-safe}" in
+    gpu)
+      if [ -e /proc/driver/nvidia/version ]; then
+        export __NV_DISABLE_EXPLICIT_SYNC="${__NV_DISABLE_EXPLICIT_SYNC:-1}"
+      fi
+      ;;
+    *)
+      export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-1}"
+      export WEBKIT_DISABLE_COMPOSITING_MODE="${WEBKIT_DISABLE_COMPOSITING_MODE:-1}"
+      ;;
+  esac
 fi
 
 exec /usr/lib/synara/synara "$@"

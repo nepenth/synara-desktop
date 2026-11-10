@@ -274,13 +274,21 @@ The package installs:
 - `/usr/share/applications/Synara.desktop` desktop entry from `packaging/arch/synara.desktop`.
 - hicolor app icons (`Icon=synara` under `/usr/share/icons/hicolor/*/apps/`).
 
-The wrapper keeps the app on native Wayland and disables WebKitGTK DMABUF/compositing renderer paths that can crash or blank the WebKit web process on CachyOS/KDE Plasma Wayland, especially on NVIDIA systems:
+The wrapper keeps the app on native Wayland and, by default, disables WebKitGTK DMABUF/compositing renderer paths that can crash or blank the WebKit web process on CachyOS/KDE Plasma Wayland, especially on NVIDIA systems:
 
 ```sh
 GDK_BACKEND=wayland
 WEBKIT_DISABLE_DMABUF_RENDERER=1
 WEBKIT_DISABLE_COMPOSITING_MODE=1
 ```
+
+That default draws the interface on the CPU. To use the GPU instead, start Synara with `SYNARA_RENDERING=gpu` (for a launcher, put it in the session environment or the desktop entry's `Exec=env SYNARA_RENDERING=gpu synara %U`):
+
+```sh
+SYNARA_RENDERING=gpu synara
+```
+
+In that mode the wrapper leaves WebKitGTK's GPU compositing and DMABUF presentation on. With NVIDIA's driver it also sets `__NV_DISABLE_EXPLICIT_SYNC=1` for Synara only: without it the app exits at startup with `Error 71 (Protocol error)` (`wp_linux_drm_syncobj_surface_v1 … Missing acquire timeline`). Checked on Hyprland 0.56 with an RTX 4080 SUPER, driver 615 and WebKitGTK 2.54; other compositors and drivers are untested, which is why it is not the default. If the window blanks or the app exits, go back to the default.
 
 Keep `gst-plugins-good` installed so WebKitGTK can resolve the `autoaudiosink` GStreamer element during Matrix media setup.
 
