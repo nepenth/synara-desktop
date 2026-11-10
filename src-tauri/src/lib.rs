@@ -21,6 +21,8 @@ mod desktop_navigation;
 mod desktop_notification_sound;
 mod desktop_notifications;
 mod desktop_platform;
+mod desktop_rendering;
+mod desktop_rendering_host;
 mod desktop_sanitize;
 mod desktop_secret_store;
 mod desktop_shortcuts;
@@ -610,6 +612,10 @@ pub fn run_cli(args: &[String]) -> Option<i32> {
 
 pub fn run() {
     let context = tauri::generate_context!();
+    // First thing after the context exists (it carries the app identifier
+    // that names the config directory) and before anything starts a thread
+    // or GTK: the web view reads these variables when it initialises.
+    desktop_rendering_host::apply_at_startup(&context.config().identifier);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let updater_configured = updater_plugin_configured(&context);
     #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -681,6 +687,8 @@ pub fn run() {
             desktop_file_transfer::desktop_read_dropped_file_end,
             desktop::desktop_get_performance_capabilities,
             desktop_system_palette_host::desktop_system_palette,
+            desktop_rendering_host::desktop_rendering_mode,
+            desktop_rendering_host::desktop_set_rendering_mode,
             desktop_logging::desktop_append_log,
             desktop_logging::desktop_log_path,
             desktop_logging::desktop_record_diagnostic,

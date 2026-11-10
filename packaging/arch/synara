@@ -1,26 +1,17 @@
 #!/bin/sh
 
-# How the web view draws on Wayland. SYNARA_RENDERING picks one:
-#   safe  (default) software compositing: slower, but known not to crash or
-#         blank the window on NVIDIA and KDE Plasma Wayland.
-#   gpu   WebKitGTK's GPU compositing and DMABUF presentation. On NVIDIA's
-#         driver explicit sync is turned off for this process, because GTK 3
-#         commits a buffer without an acquire point and the compositor ends
-#         the connection ("Missing acquire timeline", Error 71).
-# A variable already set in the environment always wins.
+# Keep the app on native Wayland, and make this package's default drawing mode
+# "safe": the web view draws on the CPU, which is known not to crash or blank
+# the window on NVIDIA and KDE Plasma Wayland. The binary applies it at
+# startup. What decides, first match wins:
+#   SYNARA_RENDERING=safe|gpu   for this start; passes through here untouched
+#   the "Hardware acceleration" setting, once the user has chosen
+#   SYNARA_RENDERING_DEFAULT    this package's default, set below
+# A WEBKIT_DISABLE_* or __NV_DISABLE_EXPLICIT_SYNC variable already set in the
+# environment is left alone. See docs/linux.md.
 if [ "${XDG_SESSION_TYPE:-}" = "wayland" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
   export GDK_BACKEND="${GDK_BACKEND:-wayland}"
-  case "${SYNARA_RENDERING:-safe}" in
-    gpu)
-      if [ -e /proc/driver/nvidia/version ]; then
-        export __NV_DISABLE_EXPLICIT_SYNC="${__NV_DISABLE_EXPLICIT_SYNC:-1}"
-      fi
-      ;;
-    *)
-      export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-1}"
-      export WEBKIT_DISABLE_COMPOSITING_MODE="${WEBKIT_DISABLE_COMPOSITING_MODE:-1}"
-      ;;
-  esac
+  export SYNARA_RENDERING_DEFAULT="${SYNARA_RENDERING_DEFAULT:-safe}"
 fi
 
 exec /usr/lib/synara/synara "$@"

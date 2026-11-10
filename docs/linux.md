@@ -274,23 +274,43 @@ The package installs:
 - `/usr/share/applications/Synara.desktop` desktop entry from `packaging/arch/synara.desktop`.
 - hicolor app icons (`Icon=synara` under `/usr/share/icons/hicolor/*/apps/`).
 
-The wrapper keeps the app on native Wayland and, by default, disables WebKitGTK DMABUF/compositing renderer paths that can crash or blank the WebKit web process on CachyOS/KDE Plasma Wayland, especially on NVIDIA systems:
+The wrapper keeps the app on native Wayland (`GDK_BACKEND=wayland`) and makes CPU drawing this package's default (`SYNARA_RENDERING_DEFAULT=safe`). The Synara binary applies the drawing mode itself when it starts; see the next section.
+
+Keep `gst-plugins-good` installed so WebKitGTK can resolve the `autoaudiosink` GStreamer element during Matrix media setup.
+
+#### Hardware acceleration (`SYNARA_RENDERING`)
+
+On Wayland, the Arch-family package draws the interface on the CPU by default. Before the web view starts, Synara sets the two variables that turn off the WebKitGTK DMABUF and compositing paths, which can crash or blank the WebKit web process on CachyOS/KDE Plasma Wayland, especially on NVIDIA systems:
 
 ```sh
-GDK_BACKEND=wayland
 WEBKIT_DISABLE_DMABUF_RENDERER=1
 WEBKIT_DISABLE_COMPOSITING_MODE=1
 ```
 
-That default draws the interface on the CPU. To use the GPU instead, start Synara with `SYNARA_RENDERING=gpu` (for a launcher, put it in the session environment or the desktop entry's `Exec=env SYNARA_RENDERING=gpu synara %U`):
+The `.deb`, the AppImage and `tauri dev` have no wrapper and no such default: until you choose, Synara sets nothing and WebKitGTK draws with the graphics card.
+
+**Settings → Appearance → Window → Hardware acceleration** changes it; restart Synara afterwards. The switch is shown only on Linux under Wayland. Until you use it, it shows what is running and nothing is saved. Your choice is saved as one word (`gpu` or `safe`) in `~/.config/com.whylandcreative.synara.desktop/rendering-mode`; delete the file to return to the package's default.
+
+With hardware acceleration turned on by the setting or by `SYNARA_RENDERING=gpu`, Synara leaves WebKitGTK's GPU compositing and DMABUF presentation on. With NVIDIA's driver (when `/proc/driver/nvidia/version` exists) it also sets `__NV_DISABLE_EXPLICIT_SYNC=1` for Synara only: without it the app exits at startup with `Error 71 (Protocol error)` (`wp_linux_drm_syncobj_surface_v1 … Missing acquire timeline`). Checked on Hyprland 0.56 with an RTX 4080 SUPER, driver 615 and WebKitGTK 2.54; other compositors and drivers are untested, which is why the Arch-family package keeps it off by default.
+
+What decides, first match wins:
+
+1. `SYNARA_RENDERING`, when set: `gpu` turns hardware acceleration on, any other value turns it off. The switch in Settings is then disabled and says so.
+2. The saved setting, once you have chosen.
+3. `SYNARA_RENDERING_DEFAULT`, the package's default, read the same way. Only the Arch-family wrapper sets it (to `safe`).
+4. Otherwise Synara sets nothing.
+
+Whichever decides, any of the three variables above that is already set in the environment is left exactly as it is.
+
+`SYNARA_RENDERING` is the way to try a mode for one start, or to get back in when the window blanks or the app exits with hardware acceleration on:
 
 ```sh
-SYNARA_RENDERING=gpu synara
+SYNARA_RENDERING=safe synara
 ```
 
-In that mode the wrapper leaves WebKitGTK's GPU compositing and DMABUF presentation on. With NVIDIA's driver it also sets `__NV_DISABLE_EXPLICIT_SYNC=1` for Synara only: without it the app exits at startup with `Error 71 (Protocol error)` (`wp_linux_drm_syncobj_surface_v1 … Missing acquire timeline`). Checked on Hyprland 0.56 with an RTX 4080 SUPER, driver 615 and WebKitGTK 2.54; other compositors and drivers are untested, which is why it is not the default. If the window blanks or the app exits, go back to the default.
+Then turn the setting off. For a launcher, put the variable in the session environment or in the desktop entry (`Exec=env SYNARA_RENDERING=gpu synara %U`).
 
-Keep `gst-plugins-good` installed so WebKitGTK can resolve the `autoaudiosink` GStreamer element during Matrix media setup.
+If a `.deb` or AppImage build exits at startup on NVIDIA with the `Error 71` above and you have not chosen a mode, that is case 4: nothing was set, so explicit sync is still on. Start it once with `SYNARA_RENDERING=gpu` (which adds `__NV_DISABLE_EXPLICIT_SYNC=1`) or `SYNARA_RENDERING=safe`, then set the switch to match so the choice is saved.
 
 #### Updating an existing clone-built CachyOS install
 

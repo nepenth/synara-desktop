@@ -75,6 +75,12 @@ import { externalPaletteSourceLabel } from '../../../utils/themeExternalPalette'
 import { isLinuxDesktopShell } from '../../../hooks/useTilingMode';
 import { getDesktopWindowEnvironment } from '../../../utils/desktop';
 import {
+  DESKTOP_RENDERING_UNAVAILABLE,
+  getDesktopRenderingStatus,
+  hardwareAccelerationView,
+  setDesktopRenderingMode,
+} from '../../../utils/desktopRendering';
+import {
   InterfaceFontChoice,
   MonospaceFontChoice,
   sanitizeFontFamilyList,
@@ -1127,29 +1133,99 @@ function TilingModeTile() {
   }
 
   return (
-    <SettingsSection title="Window">
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-        <SettingTile
-          title="Tiling mode"
-          description={`For tiling window managers such as Hyprland or Sway: Synara leaves the window frame to them and draws no title bar of its own. Ctrl+Q still quits. Auto turns it on when Synara starts under one.${status}`}
-          after={
-            <SegmentedChoice
-              label="Tiling mode"
-              value={tilingMode}
-              options={TILING_MODE_OPTIONS}
-              onChange={setTilingMode}
-            />
-          }
-        />
-      </SequenceCard>
-    </SettingsSection>
+    <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+      <SettingTile
+        title="Tiling mode"
+        description={`For tiling window managers such as Hyprland or Sway: Synara leaves the window frame to them and draws no title bar of its own. Ctrl+Q still quits. Auto turns it on when Synara starts under one.${status}`}
+        after={
+          <SegmentedChoice
+            label="Tiling mode"
+            value={tilingMode}
+            options={TILING_MODE_OPTIONS}
+            onChange={setTilingMode}
+          />
+        }
+      />
+    </SequenceCard>
   );
 }
 
-/** The window chrome settings exist only in the borderless Linux shell. */
+/**
+ * GPU drawing for the Linux web view. The shell reads the choice when it
+ * starts, so a change waits for the next start. Shown only where the shell
+ * says it applies (Linux under Wayland).
+ */
+function HardwareAccelerationTile() {
+  const [status, setStatus] = useState(DESKTOP_RENDERING_UNAVAILABLE);
+  const [saveFailed, setSaveFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getDesktopRenderingStatus().then((next) => {
+      if (!cancelled) setStatus(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!status.available) return null;
+  const view = hardwareAccelerationView(status);
+
+  const handleChange = (enabled: boolean) => {
+    const previous = status;
+    setSaveFailed(false);
+    setStatus({ ...status, saved: enabled ? 'gpu' : 'safe' });
+    void setDesktopRenderingMode(enabled ? 'gpu' : 'safe').then((next) => {
+      setStatus(next ?? previous);
+      setSaveFailed(!next);
+    });
+  };
+
+  let note: string | undefined;
+  if (view.locked) {
+    note = `The SYNARA_RENDERING environment variable is deciding this (${
+      view.enabled ? 'on' : 'off'
+    }). Remove it to use this switch.`;
+  } else if (saveFailed) {
+    note = 'Synara could not save this setting.';
+  } else if (view.restartNeeded) {
+    note = 'Restart Synara to apply.';
+  }
+
+  return (
+    <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+      <SettingTile
+        title="Hardware acceleration"
+        description="Draw the interface with your graphics card. Turn this off if the window flickers, goes blank or the app closes on start. Applies after you restart Synara."
+        after={
+          <Switch
+            variant="Primary"
+            value={view.enabled}
+            onChange={handleChange}
+            disabled={view.locked}
+          />
+        }
+      >
+        {note && (
+          <Text size="T200" role="status">
+            {note}
+          </Text>
+        )}
+      </SettingTile>
+    </SequenceCard>
+  );
+}
+
+/** The window settings exist only in the borderless Linux shell. */
 function WindowSettings() {
   if (!isLinuxDesktopShell()) return null;
-  return <TilingModeTile />;
+  return (
+    <SettingsSection title="Window">
+      <TilingModeTile />
+      <HardwareAccelerationTile />
+    </SettingsSection>
+  );
 }
 
 type AppearancePageProps = {

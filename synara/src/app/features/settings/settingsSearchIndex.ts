@@ -320,6 +320,23 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
       'decorations',
     ],
   },
+  {
+    page: SettingsPages.AppearancePage,
+    title: 'Hardware acceleration',
+    description:
+      'Draw the interface with your graphics card. Linux on Wayland only; applies after a restart.',
+    synonyms: [
+      'gpu',
+      'graphics card',
+      'rendering',
+      'nvidia',
+      'wayland',
+      'flicker',
+      'blank window',
+      'performance',
+      'software rendering',
+    ],
+  },
 
   // Notifications
   {
