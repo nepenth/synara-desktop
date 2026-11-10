@@ -25,7 +25,7 @@ const EXIT_USAGE: i32 = 2;
 #[serde(rename_all = "camelCase", default)]
 pub struct DesktopStatus {
     pub running: bool,
-    /// Rooms with unread messages.
+    /// Unread messages across all rooms.
     pub unread: i64,
     /// Mentions and unread direct messages.
     pub highlights: i64,
@@ -150,7 +150,7 @@ fn count_phrase(count: i64, singular: &str, plural: &str) -> Option<String> {
     }
 }
 
-/// One line for a person: "2 mentions, 1 approval, 5 unread rooms".
+/// One line for a person: "2 mentions, 1 approval, 5 unread messages".
 pub fn render_text(status: &DesktopStatus) -> String {
     if !status.running {
         return "Synara is not running".to_owned();
@@ -159,7 +159,7 @@ pub fn render_text(status: &DesktopStatus) -> String {
         count_phrase(status.highlights, "mention", "mentions"),
         count_phrase(status.pending_approvals, "approval", "approvals"),
         count_phrase(status.invites, "invite", "invites"),
-        count_phrase(status.unread, "unread room", "unread rooms"),
+        count_phrase(status.unread, "unread message", "unread messages"),
     ]
     .into_iter()
     .flatten()
@@ -353,7 +353,7 @@ mod tests {
         });
         assert_eq!(
             render_text(&status),
-            "2 mentions, 1 approval, 5 unread rooms"
+            "2 mentions, 1 approval, 5 unread messages"
         );
         assert_eq!(
             render_text(&running(DesktopStatus::default())),
@@ -408,7 +408,10 @@ mod tests {
         assert_eq!(value["text"], "3");
         assert_eq!(value["alt"], "approval");
         assert_eq!(value["class"], serde_json::json!(["approval", "dnd"]));
-        assert_eq!(value["tooltip"], "2 mentions, 1 approval, 9 unread rooms");
+        assert_eq!(
+            value["tooltip"],
+            "2 mentions, 1 approval, 9 unread messages"
+        );
 
         let quiet: serde_json::Value =
             serde_json::from_str(&render_waybar(&running(DesktopStatus {

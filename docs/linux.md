@@ -427,7 +427,7 @@ The running app publishes its counts to `$XDG_RUNTIME_DIR/synara/status.json`. `
 that file without starting the app:
 
 ```sh
-synara status            # 2 mentions, 1 approval, 5 unread rooms
+synara status            # 2 mentions, 1 approval, 5 unread messages
 synara status --json     # the raw status
 synara status --waybar   # JSON for a Waybar custom module
 synara status --waybar --follow   # print a line whenever the status changes
