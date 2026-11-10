@@ -4,6 +4,10 @@ import {
   AGENT_APPROVAL_NOTIFICATION_KIND,
 } from '../../utils/agentApprovals';
 import { buildDesktopNotificationRoomRoute } from '../../utils/desktop';
+import {
+  MESSAGE_NOTIFICATION_ACTIONS,
+  MESSAGE_NOTIFICATION_KIND,
+} from '../../notifications/messageNotificationActions';
 import type { NativeNotificationCandidate } from './nativeNotificationDecision';
 
 /** Presentation follows the SDK-validated candidate, including late promotions.
@@ -20,6 +24,11 @@ export function buildNativeObservedNotificationPresentation(
      * it. Approvals always ask for the default (time-sensitive) sound.
      */
     messageSound?: 'default' | 'silent';
+    /**
+     * The user's read-receipt setting, for a message banner's Mark as read.
+     * Without it the shell sends a private receipt.
+     */
+    publicReadReceipt?: boolean;
   }
 ): PlatformNotificationPayload {
   if (
@@ -52,7 +61,19 @@ export function buildNativeObservedNotificationPresentation(
             eventId: source.eventId,
           },
         }
-      : {}),
+      : {
+          // Handled by the shell for this exact room and event, under the
+          // session the banner was posted for.
+          actions: MESSAGE_NOTIFICATION_ACTIONS,
+          actionContext: {
+            kind: MESSAGE_NOTIFICATION_KIND,
+            roomId: source.roomId,
+            eventId: source.eventId,
+          },
+          ...(source.publicReadReceipt !== undefined
+            ? { publicReadReceipt: source.publicReadReceipt }
+            : {}),
+        }),
   };
 }
 

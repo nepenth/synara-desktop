@@ -27,9 +27,12 @@ mod responses;
 #[path = "desktop_approval_alerts.rs"]
 mod approval_alerts;
 
+#[cfg(target_os = "macos")]
+use responses::response_for_action;
 use responses::{
-    admit, process_nonce, response_for_action, ActiveSession, Admission, NotificationBinding,
-    NotificationResponse, PendingResponses,
+    admit, is_message_action_id, process_nonce, response_for_banner_action, ActiveSession,
+    Admission, MessageTarget, NotificationBinding, NotificationResponse, PendingResponses,
+    MESSAGE_REPLY_ACTION,
 };
 
 #[cfg(target_os = "macos")]
@@ -99,6 +102,10 @@ pub struct DesktopNotificationPayload {
     pub action_context: Option<DesktopNotificationActionContext>,
     #[serde(default)]
     pub dismiss_keys: Option<Vec<String>>,
+    /// The user's read-receipt setting when the banner was posted. A banner's
+    /// Mark as read sends a private receipt unless this is `true`.
+    #[serde(default)]
+    pub public_read_receipt: Option<bool>,
 }
 
 fn sanitize_notification_payload(
@@ -133,6 +140,7 @@ fn sanitize_notification_payload(
         actions,
         action_context,
         dismiss_keys,
+        public_read_receipt: notification.public_read_receipt,
     })
 }
 
@@ -376,8 +384,13 @@ async fn deliver_notification_response<R: Runtime>(
             NotificationResponse::Open { route } => {
                 navigate_main_window(app, route).map_err(|error| error.to_string())
             }
-            NotificationResponse::Action { action_id, context } => app
-                .emit(
+            NotificationResponse::Action { action_id, context } => {
+                // Reply without banner text opens the composer, so the
+                // window comes forward even when hidden.
+                if action_id == MESSAGE_REPLY_ACTION {
+                    show_main_window(app).map_err(|error| error.to_string())?;
+                }
+                app.emit(
                     DESKTOP_NOTIFICATION_ACTION_EVENT,
                     DesktopNotificationActionEvent {
                         session_generation: generation,
@@ -385,16 +398,119 @@ async fn deliver_notification_response<R: Runtime>(
                         context: context.clone(),
                     },
                 )
-                .map_err(|error| error.to_string()),
+                .map_err(|error| error.to_string())
+            }
+            NotificationResponse::MarkRead { target } => mark_banner_room_read(app, target).await,
+            NotificationResponse::Reply {
+                target,
+                text,
+                route,
+            } => send_banner_reply(app, target, text, route.as_deref()).await,
         }
     };
     let Some(generation) = generation else {
+        if !response.needs_renderer() {
+            // Never reached through `admit`, which binds these to a session.
+            return Err("a message action needs the session it was posted for".to_owned());
+        }
         return deliver().await;
     };
     let auth = app.state::<crate::matrix::auth::MatrixAuthState>();
     auth.with_session_generation(generation, deliver)
         .await
         .unwrap_or_else(|| Err("the session changed before the response arrived".to_owned()))
+}
+
+/// A banner's mark-read or reply may not hold the session gate for longer.
+const BANNER_MESSAGE_ACTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+fn banner_core<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<std::sync::Arc<synara_core::Core>, String> {
+    app.try_state::<std::sync::Arc<synara_core::Core>>()
+        .map(|core| core.inner().clone())
+        .ok_or_else(|| "the Matrix core is not available".to_owned())
+}
+
+/// Mark as read from a banner: the same Core command as the room list's
+/// Mark as Read (fully-read marker plus a read receipt, private unless the
+/// banner was posted with public receipts). Runs under the session gate of
+/// `deliver_notification_response`, and only for the banner's own room.
+async fn mark_banner_room_read<R: Runtime>(
+    app: &AppHandle<R>,
+    target: &MessageTarget,
+) -> Result<(), String> {
+    let core = banner_core(app)?;
+    let readback = tokio::time::timeout(
+        BANNER_MESSAGE_ACTION_TIMEOUT,
+        crate::bridge::room_read_state::room_set_read_state(
+            core.as_ref(),
+            target.room_id.clone(),
+            synara_core::app::timeline::NativeTimelineReadAction::MarkRead,
+            target.public_receipt,
+        ),
+    )
+    .await
+    .map_err(|_| "mark as read from a notification timed out".to_owned())?
+    .map_err(|error| {
+        format!(
+            "mark as read from a notification failed: {}",
+            error.diagnostic_id
+        )
+    })?;
+    if !readback.receipt_sent && !readback.unread_flag_cleared {
+        return Err("mark as read from a notification changed nothing".to_owned());
+    }
+    // The room is read: its other banners go too.
+    let keys: Vec<String> = sanitize_dismiss_key(&format!("room:{}", target.room_id))
+        .into_iter()
+        .collect();
+    dismiss_notifications_now(&keys).await;
+    Ok(())
+}
+
+/// Send text typed into a banner through the composer's own Core command, as
+/// a plain message to the banner's room. If it cannot be sent the room is
+/// shown, so the user can see that and type it again.
+async fn send_banner_reply<R: Runtime>(
+    app: &AppHandle<R>,
+    target: &MessageTarget,
+    text: &str,
+    route: Option<&str>,
+) -> Result<(), String> {
+    let sent = match banner_core(app) {
+        Ok(core) => tokio::time::timeout(
+            BANNER_MESSAGE_ACTION_TIMEOUT,
+            crate::bridge::send_text::send_text(
+                core.as_ref(),
+                target.room_id.clone(),
+                text.to_owned(),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ),
+        )
+        .await
+        .map_err(|_| "reply from a notification timed out".to_owned())
+        .and_then(|result| {
+            result.map(|_| ()).map_err(|error| {
+                format!("reply from a notification failed: {}", error.diagnostic_id)
+            })
+        }),
+        Err(error) => Err(error),
+    };
+    if sent.is_err() {
+        if let Some(route) = route {
+            if let Err(error) = navigate_main_window(app, route) {
+                log_notification_error(app, &format!("failed to show the room: {error}"));
+            }
+        }
+    }
+    sent
 }
 
 /// Act on a banner click or action button: deliver it now, keep it until
@@ -421,7 +537,12 @@ fn handle_notification_response<R: Runtime>(
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let active = active_session(&app).await;
-        let ready = pending_responses().renderer_ready();
+        // Mark-read and a typed reply run in Rust: the session is enough.
+        let ready = if response.needs_renderer() {
+            pending_responses().renderer_ready()
+        } else {
+            active.as_ref().map(|active| active.generation)
+        };
         let result = match admit(&binding, critical, active.as_ref(), ready, process_nonce()) {
             Admission::Deliver { generation } => {
                 deliver_notification_response(&app, generation, response).await
@@ -450,15 +571,23 @@ fn is_time_sensitive_agent_approval(context: Option<&DesktopNotificationActionCo
     context.is_some_and(|context| context.kind == "agent-approval")
 }
 
-/// Approval banners: never delivered without a matching session or account.
+fn has_approval_actions(actions: &[DesktopNotificationAction]) -> bool {
+    actions
+        .iter()
+        .any(|action| action.id.starts_with("agent-approval."))
+}
+
+/// Approval banners, and message banners that can mark read or reply: never
+/// delivered without a matching session or account.
 fn is_critical_notification(
     context: Option<&DesktopNotificationActionContext>,
     actions: &[DesktopNotificationAction],
 ) -> bool {
     is_time_sensitive_agent_approval(context)
+        || has_approval_actions(actions)
         || actions
             .iter()
-            .any(|action| action.id.starts_with("agent-approval."))
+            .any(|action| is_message_action_id(&action.id))
 }
 
 fn show_notification_without_route_click_handler<R: Runtime>(
@@ -636,11 +765,12 @@ fn show_notification_with_route_click_handler<R: Runtime>(
 
     use notify_rust::{Notification, Urgency};
     let notification_payload_sound = notification.sound;
+    let notification_public_read_receipt = notification.public_read_receipt;
 
     // Some notification servers (for example mako, or dunst without a
     // context menu) do not render action buttons. Say where the decision can
     // be made instead of showing an approval that silently cannot be acted on.
-    let body = if !actions.is_empty() && !linux_server_supports_actions() {
+    let body = if has_approval_actions(actions) && !linux_server_supports_actions() {
         Some(match body {
             Some(body) => format!("{body}\n\nOpen Synara to approve or deny."),
             None => "Open Synara to approve or deny.".to_owned(),
@@ -681,6 +811,7 @@ fn show_notification_with_route_click_handler<R: Runtime>(
     let route = route.map(str::to_owned);
     let action_context = action_context.cloned();
     let binding = binding.clone();
+    let public_read_receipt = notification_public_read_receipt;
     let allowed_action_ids = actions
         .iter()
         .map(|action| action.id.clone())
@@ -705,16 +836,22 @@ fn show_notification_with_route_click_handler<R: Runtime>(
                 );
             }
             notify_rust::NotificationResponse::Action(action) => {
-                if allowed_action_ids
+                if !allowed_action_ids
                     .iter()
                     .any(|candidate| candidate == action)
                 {
-                    handle_notification_response(
-                        &app,
-                        binding.clone(),
-                        critical,
-                        response_for_action(action, route.as_deref(), action_context.clone()),
-                    );
+                    return;
+                }
+                // freedesktop servers return no text with an action, so
+                // Reply opens the room with the composer focused.
+                if let Some(response) = response_for_banner_action(
+                    action,
+                    route.as_deref(),
+                    action_context.clone(),
+                    public_read_receipt,
+                    None,
+                ) {
+                    handle_notification_response(&app, binding.clone(), critical, response);
                 }
             }
             notify_rust::NotificationResponse::Closed(_)
@@ -1451,11 +1588,12 @@ pub async fn desktop_take_notification_responses<R: Runtime>(
                     context,
                 });
             }
-            open @ NotificationResponse::Open { .. } => {
-                if let Err(error) = deliver_notification_response(&app, generation, open).await {
+            // Routes, and the message actions Rust handles itself.
+            native => {
+                if let Err(error) = deliver_notification_response(&app, generation, native).await {
                     log_notification_error(
                         &app,
-                        &format!("queued notification click not opened: {error}"),
+                        &format!("queued notification response not delivered: {error}"),
                     );
                 }
             }
@@ -1494,6 +1632,7 @@ mod tests {
             actions: None,
             action_context: None,
             dismiss_keys: None,
+            public_read_receipt: None,
         });
 
         assert!(result.is_err());
@@ -1510,6 +1649,7 @@ mod tests {
             actions: None,
             action_context: None,
             dismiss_keys: None,
+            public_read_receipt: None,
         })
         .expect("notification payload should pass");
 
@@ -1538,6 +1678,7 @@ mod tests {
             actions: None,
             action_context: None,
             dismiss_keys: None,
+            public_read_receipt: None,
         })
         .expect("notification payload should sanitize");
         let route = notification.route.expect("route should be present");
@@ -1557,6 +1698,7 @@ mod tests {
             actions: None,
             action_context: None,
             dismiss_keys: None,
+            public_read_receipt: None,
         })
         .expect("notification payload should pass");
         assert_eq!(payload.route, Some("/inbox/notifications/".to_string()));
@@ -1573,6 +1715,7 @@ mod tests {
             actions: None,
             action_context: None,
             dismiss_keys: None,
+            public_read_receipt: None,
         });
 
         assert!(result.is_err());
@@ -1610,6 +1753,7 @@ mod tests {
                 "event:$event:matrix.org".to_owned(),
                 "bad key".to_owned(),
             ]),
+            public_read_receipt: None,
         })
         .expect("notification payload should sanitize");
 
@@ -1878,6 +2022,104 @@ mod tests {
                 "actionId": "agent-approval.deny",
                 "context": {"kind": "agent-approval", "roomId": "!r:x", "eventId": "$e"}
             })
+        );
+    }
+
+    #[test]
+    fn message_banners_keep_their_actions_and_are_bound_to_a_session() {
+        let payload = sanitize_notification_payload(DesktopNotificationPayload {
+            session_generation: Some(4),
+            sound: None,
+            title: "Room".to_owned(),
+            body: Some("alice: hi".to_owned()),
+            route: Some("/home/!room:example.org/$event".to_owned()),
+            actions: Some(vec![
+                DesktopNotificationAction {
+                    id: "message.mark-read".to_owned(),
+                    label: "Mark as read".to_owned(),
+                },
+                DesktopNotificationAction {
+                    id: "message.reply".to_owned(),
+                    label: "Reply".to_owned(),
+                },
+            ]),
+            action_context: Some(DesktopNotificationActionContext {
+                kind: "message".to_owned(),
+                room_id: Some("!room:example.org".to_owned()),
+                event_id: Some("$event".to_owned()),
+            }),
+            dismiss_keys: None,
+            public_read_receipt: Some(true),
+        })
+        .expect("message payload should sanitize");
+        let actions = payload.actions.as_deref().unwrap();
+        assert_eq!(actions.len(), 2);
+        assert_eq!(payload.public_read_receipt, Some(true));
+        // Unbound or foreign-account responses are refused, as for approvals.
+        assert!(is_critical_notification(
+            payload.action_context.as_ref(),
+            actions
+        ));
+        assert!(!has_approval_actions(actions));
+        assert!(!is_critical_notification(
+            payload.action_context.as_ref(),
+            &[]
+        ));
+        assert_eq!(
+            response_for_banner_action(
+                "message.mark-read",
+                payload.route.as_deref(),
+                payload.action_context.clone(),
+                payload.public_read_receipt,
+                None,
+            ),
+            Some(NotificationResponse::MarkRead {
+                target: MessageTarget {
+                    room_id: "!room:example.org".to_owned(),
+                    event_id: "$event".to_owned(),
+                    public_receipt: true,
+                }
+            })
+        );
+        let wire: DesktopNotificationPayload =
+            serde_json::from_value(serde_json::json!({"title": "t", "publicReadReceipt": true}))
+                .unwrap();
+        assert_eq!(wire.public_read_receipt, Some(true));
+    }
+
+    #[test]
+    fn banner_message_actions_use_the_apps_own_read_and_send_owners_under_the_gate() {
+        let source = include_str!("desktop_notifications.rs")
+            .split("#[cfg(test)]\nmod tests")
+            .next()
+            .expect("production source");
+        let mark = source
+            .split("async fn mark_banner_room_read<")
+            .nth(1)
+            .and_then(|rest| rest.split("\nasync fn send_banner_reply<").next())
+            .expect("mark-read body");
+        assert!(mark.contains("crate::bridge::room_read_state::room_set_read_state("));
+        assert!(mark.contains("target.public_receipt"));
+        let reply = source
+            .split("async fn send_banner_reply<")
+            .nth(1)
+            .and_then(|rest| rest.split("\npub(crate) fn open_route_when_ready<").next())
+            .expect("reply body");
+        assert!(reply.contains("crate::bridge::send_text::send_text("));
+        // Both run only inside the generation-gated delivery.
+        let deliver = source
+            .split("async fn deliver_notification_response<")
+            .nth(1)
+            .and_then(|rest| rest.split("\nconst BANNER_MESSAGE_ACTION_TIMEOUT").next())
+            .expect("deliver body");
+        assert!(deliver.contains("mark_banner_room_read(app, target).await"));
+        assert!(deliver.contains("send_banner_reply(app, target, text, route.as_deref()).await"));
+        assert!(deliver.contains("auth.with_session_generation(generation, deliver)"));
+        assert_eq!(source.matches("mark_banner_room_read(").count(), 1);
+        assert_eq!(source.matches("send_banner_reply(").count(), 1);
+        // Linux hints at Synara only for approvals a server cannot show.
+        assert!(
+            source.contains("if has_approval_actions(actions) && !linux_server_supports_actions()")
         );
     }
 
