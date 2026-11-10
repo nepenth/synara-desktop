@@ -549,6 +549,12 @@
           "markdownDescription": "Enables the desktop_show command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_system_palette command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-system-palette",
+          "markdownDescription": "Enables the desktop_system_palette command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_take_notification_responses command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-take-notification-responses",
@@ -2191,6 +2197,12 @@
           "type": "string",
           "const": "deny-desktop-show",
           "markdownDescription": "Denies the desktop_show command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_system_palette command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-system-palette",
+          "markdownDescription": "Denies the desktop_system_palette command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_take_notification_responses command without any pre-configured scope.",

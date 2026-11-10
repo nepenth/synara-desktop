@@ -26,6 +26,8 @@ mod desktop_secret_store;
 mod desktop_shortcuts;
 mod desktop_spellcheck;
 mod desktop_status;
+mod desktop_system_palette;
+mod desktop_system_palette_host;
 mod desktop_tray;
 mod desktop_unread_badge;
 mod desktop_updater_macos;
@@ -636,7 +638,10 @@ pub fn run() {
             let window_state = tauri_plugin_window_state::Builder::default();
             #[cfg(target_os = "linux")]
             let window_state =
-                window_state.with_state_flags(desktop_window_drag::linux_window_state_flags());
+                window_state.with_state_flags(desktop_window_drag::linux_window_state_flags(
+                    desktop_environment::window_environment()
+                        == desktop_environment::WindowEnvironment::Tiling,
+                ));
             window_state.build()
         })
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -675,6 +680,7 @@ pub fn run() {
             desktop_file_transfer::desktop_read_dropped_file_chunk,
             desktop_file_transfer::desktop_read_dropped_file_end,
             desktop::desktop_get_performance_capabilities,
+            desktop_system_palette_host::desktop_system_palette,
             desktop_logging::desktop_append_log,
             desktop_logging::desktop_log_path,
             desktop_logging::desktop_record_diagnostic,
@@ -1120,6 +1126,7 @@ pub fn run() {
             app.manage(Arc::clone(&platform));
             app.manage(Arc::new(synara_core::Core::new(platform)));
             matrix::auth::product::spawn_suspend_resume_watch(app.handle().clone());
+            desktop_system_palette_host::watch_system_palette(app.handle());
             Ok(())
         })
         .build(context)

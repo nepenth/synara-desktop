@@ -237,10 +237,15 @@ fn button_mask(button: u32) -> u32 {
 
 /// Linux window-state restores geometry and visibility, not decorations.
 /// macOS and Windows keep `StateFlags::all()` via `Builder::default()`.
+/// Under a tiling window manager the compositor places and sizes the window,
+/// so a saved size or position would only fight it.
 #[cfg(any(target_os = "linux", test))]
-pub fn linux_window_state_flags() -> tauri_plugin_window_state::StateFlags {
+pub fn linux_window_state_flags(tiling: bool) -> tauri_plugin_window_state::StateFlags {
     use tauri_plugin_window_state::StateFlags;
 
+    if tiling {
+        return StateFlags::VISIBLE | StateFlags::FULLSCREEN;
+    }
     StateFlags::SIZE
         | StateFlags::POSITION
         | StateFlags::MAXIMIZED
@@ -989,7 +994,7 @@ mod tests {
 
     #[test]
     fn linux_window_state_keeps_geometry_and_drops_decorations() {
-        let flags = linux_window_state_flags();
+        let flags = linux_window_state_flags(false);
         let kept = StateFlags::SIZE
             | StateFlags::POSITION
             | StateFlags::MAXIMIZED
@@ -998,6 +1003,18 @@ mod tests {
         assert_eq!(flags.bits(), kept.bits());
         assert!(!flags.contains(StateFlags::DECORATIONS));
         assert_ne!(flags.bits(), StateFlags::all().bits());
+    }
+
+    #[test]
+    fn tiling_window_state_leaves_size_and_position_to_the_compositor() {
+        let flags = linux_window_state_flags(true);
+        assert_eq!(
+            flags.bits(),
+            (StateFlags::VISIBLE | StateFlags::FULLSCREEN).bits()
+        );
+        assert!(!flags.contains(StateFlags::SIZE));
+        assert!(!flags.contains(StateFlags::POSITION));
+        assert!(!flags.contains(StateFlags::DECORATIONS));
     }
 
     #[test]

@@ -35,6 +35,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_read_dropped_file_chunk",
     "desktop_read_dropped_file_end",
     "desktop_get_performance_capabilities",
+    "desktop_system_palette",
     "desktop_append_log",
     "desktop_log_path",
     "desktop_record_diagnostic",

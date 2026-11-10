@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-system-palette"
+description = "Enables the desktop_system_palette command without any pre-configured scope."
+commands.allow = ["desktop_system_palette"]
+
+[[permission]]
+identifier = "deny-desktop-system-palette"
+description = "Denies the desktop_system_palette command without any pre-configured scope."
+commands.deny = ["desktop_system_palette"]
