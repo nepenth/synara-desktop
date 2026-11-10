@@ -11,18 +11,34 @@ import {
 } from './themeBase';
 
 /**
- * A palette from outside Synara, such as the desktop's theme (Omarchy). The
- * colors are taken as the chat background, the body text and the accent;
+ * A whole palette from outside Synara, such as the desktop's theme (Omarchy).
+ * The colors are taken as the chat background, the body text and the accent;
  * everything else is derived the way `deriveThemeSurfaceRamp` derives the
  * built-in themes, and then held to WCAG AA whatever the input.
  */
-export type ExternalPalette = {
-  /** Where it came from, for the settings copy, e.g. "Omarchy". */
+export type ExternalSurfacePalette = {
+  /** The provider's id, for the settings copy, e.g. "omarchy". */
   source: string;
   background: string;
   foreground: string;
   accent?: string;
 };
+
+/**
+ * A desktop that shares an accent color and nothing else (macOS). Synara's
+ * own theme keeps its surfaces and text; the accent replaces the Accent
+ * color setting.
+ */
+export type ExternalAccentPalette = {
+  source: string;
+  accent: string;
+};
+
+export type ExternalPalette = ExternalSurfacePalette | ExternalAccentPalette;
+
+export const isExternalSurfacePalette = (
+  palette: ExternalPalette
+): palette is ExternalSurfacePalette => 'background' in palette;
 
 export type ExternalPaletteAccent = {
   /** `Primary.Main`: at least 3:1 against the chat surface. */
@@ -83,7 +99,10 @@ const normalizeSource = (value: unknown): string => {
 };
 
 /** Providers' `source` ids as people know them. */
-const SOURCE_DISPLAY_NAMES: ReadonlyMap<string, string> = new Map([['omarchy', 'Omarchy']]);
+const SOURCE_DISPLAY_NAMES: ReadonlyMap<string, string> = new Map([
+  ['omarchy', 'Omarchy'],
+  ['macos', 'macOS'],
+]);
 
 /**
  * How copy refers to a palette's origin: "your Omarchy theme" for a provider
@@ -96,21 +115,37 @@ export const externalPaletteSourceLabel = (source: string): string => {
 };
 
 /**
- * The shell's `desktop_system_palette` payload, checked. `null` when it is
- * not a palette: no object, or no usable background. A bad foreground falls
- * back to black or white; a bad accent is dropped.
+ * What the "Follow system theme colors" setting does with this palette, for
+ * its description: a whole theme reads "your Omarchy theme" (see
+ * `externalPaletteSourceLabel`), an accent alone "your macOS accent color".
+ */
+export const externalPaletteFollowDescription = (palette: ExternalPalette): string => {
+  if (isExternalSurfacePalette(palette)) {
+    return `Use the background, text and accent colors of ${externalPaletteSourceLabel(palette.source)}. Synara adjusts them where text would be hard to read.`;
+  }
+  const name = SOURCE_DISPLAY_NAMES.get(palette.source.trim().toLowerCase());
+  return `Use your ${name ?? 'desktop'} accent color in place of the Accent color below. The theme keeps its own background and text.`;
+};
+
+/**
+ * The shell's `desktop_system_palette` payload, checked. With a usable
+ * background it is a whole palette: a bad foreground falls back to black or
+ * white, a bad accent is dropped. Without one it is an accent-only palette
+ * when the accent is usable. `null` otherwise.
  */
 export const normalizeExternalPalette = (value: unknown): ExternalPalette | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
+  const source = normalizeSource(record.source);
+  const accent = normalizeExternalColor(record.accent);
   const background = normalizeExternalColor(record.background);
-  if (!background) return null;
+  if (!background) return accent ? { source, accent } : null;
   const kind = externalPaletteKind(background);
   return {
-    source: normalizeSource(record.source),
+    source,
     background,
     foreground: normalizeExternalColor(record.foreground) ?? (kind === 'dark' ? WHITE : BLACK),
-    accent: normalizeExternalColor(record.accent),
+    accent,
   };
 };
 
@@ -215,12 +250,28 @@ const deriveAccent = (
 };
 
 /**
+ * An accent-only palette as `Primary` tokens. The surfaces are the theme's
+ * own, so the accent is used as chosen, like the Accent color setting; only
+ * the text on it is picked, the better of black and white.
+ */
+export const deriveExternalAccent = (palette: ExternalAccentPalette): ExternalPaletteAccent => ({
+  main: palette.accent,
+  onMain:
+    chroma.contrast(WHITE, palette.accent) >= chroma.contrast(BLACK, palette.accent)
+      ? WHITE
+      : BLACK,
+  link: palette.accent,
+});
+
+/**
  * Surfaces, text roles, accent and message text for an external palette.
  * Light or dark follows the background's luminance. The chat surface is the
  * palette background (moved only as far as readable text needs); the rail,
  * room list and composer stack around it as in the built-in ramp.
  */
-export const deriveExternalPaletteTheme = (palette: ExternalPalette): ExternalPaletteTheme => {
+export const deriveExternalPaletteTheme = (
+  palette: ExternalSurfacePalette
+): ExternalPaletteTheme => {
   const kind = externalPaletteKind(palette.background);
   const dark = kind === 'dark';
   const extreme = dark ? WHITE : BLACK;

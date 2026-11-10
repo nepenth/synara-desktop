@@ -47,7 +47,8 @@ export interface SharedSettings {
   themeBaseColor?: string;
   /**
    * Take surfaces, text and accent from the desktop's theme (for example
-   * Omarchy) while the shell offers a palette; the theme above otherwise.
+   * Omarchy), or the accent alone where that is all the desktop shares
+   * (macOS), while the shell offers a palette; the theme above otherwise.
    */
   followSystemPalette: boolean;
   messageTextTone: MessageTextTone;

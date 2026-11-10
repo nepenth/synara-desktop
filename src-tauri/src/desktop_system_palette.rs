@@ -1,15 +1,21 @@
 //! The desktop's own colour palette, for "Follow system theme colors".
 //!
-//! One provider so far: Omarchy, which keeps the active theme as files under
-//! `~/.local/state/omarchy/current/theme` (`~/.config/omarchy/current/theme`
-//! on older installs) and replaces that directory when the user picks another
-//! theme. The renderer derives its surfaces and accent from the three
-//! colours here (`utils/themeExternalPalette.ts`) and re-themes on the change
-//! event. Where no provider applies the command answers `null` and the
-//! setting stays hidden.
+//! Two providers:
+//! - Omarchy (Linux) keeps the active theme as files under
+//!   `~/.local/state/omarchy/current/theme` (`~/.config/omarchy/current/theme`
+//!   on older installs) and replaces that directory when the user picks
+//!   another theme. It gives a background, a text colour and an accent, and
+//!   the renderer derives its surfaces from them
+//!   (`utils/themeExternalPalette.ts`).
+//! - macOS has no theme background or text colour to follow, only the accent
+//!   colour from System Settings. Its palette carries the accent alone and
+//!   the renderer keeps its own theme's surfaces.
+//!
+//! The renderer re-themes on the change event. Where no provider applies the
+//! command answers `null` and the setting stays hidden.
 
-// Only Linux has a provider so far; elsewhere the parsers are built for the
-// tests alone.
+// The theme-file parsers serve Linux alone; elsewhere they are built for the
+// tests.
 #![cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
 
 use serde::Serialize;
@@ -18,11 +24,15 @@ use std::collections::HashMap;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemPalette {
-    /// Which provider read it, e.g. `omarchy`.
+    /// Which provider read it: `omarchy` or `macos`.
     pub source: String,
+    /// `#rrggbb`. Absent, with `foreground`, when the desktop shares only an
+    /// accent (macOS): the app's own theme then keeps its surfaces and text.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foreground: Option<String>,
     /// `#rrggbb`.
-    pub background: String,
-    pub foreground: String,
     pub accent: String,
     /// The terminal colours 0–15 when the theme defines them all.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -162,10 +172,63 @@ pub fn palette_from_toml(source: &str, text: &str) -> Option<SystemPalette> {
     )?;
     Some(SystemPalette {
         source: source.to_owned(),
-        background,
-        foreground,
+        background: Some(background),
+        foreground: Some(foreground),
         accent,
         colors: terminal_colors(&pairs, &TERMINAL_COLOR_KEYS),
+    })
+}
+
+/// sRGB components (nominally 0–1) as `#rrggbb`. Values outside the range
+/// are clamped, as a wide-gamut accent converted to sRGB can overshoot;
+/// `None` for a component that is not a number.
+#[cfg(any(target_os = "macos", test))]
+fn srgb_hex(red: f64, green: f64, blue: f64) -> Option<String> {
+    let channel = |value: f64| -> Option<u8> {
+        if value.is_nan() {
+            return None;
+        }
+        // Clamped to 0–255 first, so the cast cannot truncate.
+        Some((value.clamp(0.0, 1.0) * 255.0).round() as u8)
+    };
+    Some(format!(
+        "#{:02x}{:02x}{:02x}",
+        channel(red)?,
+        channel(green)?,
+        channel(blue)?
+    ))
+}
+
+/// A palette that is an accent colour and nothing else.
+#[cfg(any(target_os = "macos", test))]
+fn accent_palette(source: &str, red: f64, green: f64, blue: f64) -> Option<SystemPalette> {
+    Some(SystemPalette {
+        source: source.to_owned(),
+        background: None,
+        foreground: None,
+        accent: srgb_hex(red, green, blue)?,
+        colors: Vec::new(),
+    })
+}
+
+/// The accent colour chosen in System Settings › Appearance
+/// (`NSColor.controlAccentColor`), converted to sRGB. The colour is dynamic:
+/// macOS gives a slightly different shade in light and dark appearance, so
+/// this also changes when the appearance does.
+#[cfg(target_os = "macos")]
+fn macos_accent_palette() -> Option<SystemPalette> {
+    use objc2_app_kit::{NSColor, NSColorSpace};
+
+    // The watch calls this from a plain thread, which has no pool of its own.
+    objc2::rc::autoreleasepool(|_| {
+        let accent =
+            NSColor::controlAccentColor().colorUsingColorSpace(&NSColorSpace::sRGBColorSpace())?;
+        accent_palette(
+            "macos",
+            accent.redComponent(),
+            accent.greenComponent(),
+            accent.blueComponent(),
+        )
     })
 }
 
@@ -187,7 +250,11 @@ pub fn provider_available() -> bool {
     {
         omarchy_theme_dir().is_some()
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        true
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         false
     }
@@ -221,7 +288,11 @@ pub fn current_system_palette() -> Option<SystemPalette> {
     {
         omarchy_theme_dir().and_then(|dir| omarchy_palette_in(&dir))
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        macos_accent_palette()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         None
     }
@@ -277,8 +348,8 @@ background = "#7aa2f7"
     fn an_alacritty_theme_gives_background_foreground_and_blue_as_accent() {
         let palette = palette_from_toml("omarchy", ALACRITTY).unwrap();
         assert_eq!(palette.source, "omarchy");
-        assert_eq!(palette.background, "#1a1b26");
-        assert_eq!(palette.foreground, "#a9b1d6");
+        assert_eq!(palette.background.as_deref(), Some("#1a1b26"));
+        assert_eq!(palette.foreground.as_deref(), Some("#a9b1d6"));
         assert_eq!(palette.accent, "#7aa2f7");
         assert_eq!(palette.colors.len(), 16);
         assert_eq!(palette.colors[0], "#32344a");
@@ -295,8 +366,8 @@ color4 = "#31748f"
 "##;
         let palette = palette_from_toml("omarchy", text).unwrap();
         assert_eq!(palette.accent, "#c4a7e7");
-        assert_eq!(palette.background, "#191724");
-        assert_eq!(palette.foreground, "#e0def4");
+        assert_eq!(palette.background.as_deref(), Some("#191724"));
+        assert_eq!(palette.foreground.as_deref(), Some("#e0def4"));
         // Fewer than sixteen terminal colours: none are reported.
         assert!(palette.colors.is_empty());
     }
@@ -331,8 +402,8 @@ bright_magenta = "#bb9af7"
 "##;
         let palette = palette_from_toml("omarchy", text).unwrap();
         assert_eq!(palette.accent, "#7aa2f7");
-        assert_eq!(palette.background, "#1a1b26");
-        assert_eq!(palette.foreground, "#a9b1d6");
+        assert_eq!(palette.background.as_deref(), Some("#1a1b26"));
+        assert_eq!(palette.foreground.as_deref(), Some("#a9b1d6"));
         assert_eq!(palette.colors.len(), 16);
         assert_eq!(palette.colors[0], "#1a1b26");
         assert_eq!(palette.colors[1], "#f7768e");
@@ -348,8 +419,8 @@ bright_magenta = "#bb9af7"
             "bg = \"#000000\"\nfg = \"#ffffff\"\nblue = \"#0000ff\"\n",
         )
         .unwrap();
-        assert_eq!(palette.background, "#000000");
-        assert_eq!(palette.foreground, "#ffffff");
+        assert_eq!(palette.background.as_deref(), Some("#000000"));
+        assert_eq!(palette.foreground.as_deref(), Some("#ffffff"));
         assert_eq!(palette.accent, "#0000ff");
     }
 
@@ -401,5 +472,36 @@ bright_magenta = "#bb9af7"
         assert_eq!(value["foreground"], "#a9b1d6");
         assert_eq!(value["accent"], "#7aa2f7");
         assert_eq!(value["colors"].as_array().unwrap().len(), 16);
+    }
+
+    #[test]
+    fn srgb_components_become_a_hex_colour() {
+        // The macOS blue accent in light appearance.
+        assert_eq!(srgb_hex(0.0, 0.478, 1.0).as_deref(), Some("#007aff"));
+        assert_eq!(srgb_hex(0.0, 0.0, 0.0).as_deref(), Some("#000000"));
+        assert_eq!(srgb_hex(1.0, 1.0, 1.0).as_deref(), Some("#ffffff"));
+        assert_eq!(srgb_hex(0.5, 0.25, 0.75).as_deref(), Some("#8040bf"));
+        // A wide-gamut colour can leave the sRGB range; it is clamped.
+        assert_eq!(srgb_hex(1.2, -0.1, 0.5).as_deref(), Some("#ff0080"));
+        assert_eq!(
+            srgb_hex(f64::INFINITY, f64::NEG_INFINITY, 0.0).as_deref(),
+            Some("#ff0000")
+        );
+        assert_eq!(srgb_hex(f64::NAN, 0.0, 0.0), None);
+        assert_eq!(srgb_hex(0.0, 0.0, f64::NAN), None);
+    }
+
+    #[test]
+    fn an_accent_only_palette_carries_no_background_or_text_colour() {
+        let palette = accent_palette("macos", 0.0, 0.478, 1.0).unwrap();
+        assert_eq!(palette.source, "macos");
+        assert_eq!(palette.accent, "#007aff");
+        assert_eq!(palette.background, None);
+        assert_eq!(palette.foreground, None);
+        assert_eq!(
+            serde_json::to_value(&palette).unwrap(),
+            serde_json::json!({ "source": "macos", "accent": "#007aff" })
+        );
+        assert_eq!(accent_palette("macos", f64::NAN, 0.0, 0.0), None);
     }
 }

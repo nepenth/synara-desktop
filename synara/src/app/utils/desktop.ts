@@ -23,9 +23,11 @@ type TauriInternals = {
  *   window manager (tiling under Hyprland, Sway, niri, i3, river, dwl; macOS
  *   and Windows always `'floating'`). Absent or any other value means
  *   `'floating'`; read it through `getDesktopWindowEnvironment()`.
- * - Command `desktop_system_palette` → `{ source: string, background: string,
- *   foreground: string, accent: string, colors?: string[] } | null`, colors as
- *   CSS hex. `null` means no palette right now; a rejected or missing command
+ * - Command `desktop_system_palette` → `{ source: string, background?: string,
+ *   foreground?: string, accent: string, colors?: string[] } | null`, colors as
+ *   CSS hex. Without `background` the desktop shares only its accent (macOS)
+ *   and Synara's own theme keeps its surfaces and text. `null` means no
+ *   palette right now; a rejected or missing command
  *   means no provider. Event `synara://system-palette-changed` carries the
  *   same payload whenever the desktop theme changes. See
  *   `getDesktopSystemPalette` and `listenDesktopSystemPalette`.
@@ -261,6 +263,7 @@ export type DesktopNotificationPayload = {
   actions?: DesktopNotificationAction[];
   actionContext?: DesktopNotificationActionContext;
   dismissKeys?: string[];
+  publicReadReceipt?: boolean;
 };
 
 export type DesktopNotificationActionEventPayload = {
@@ -1222,6 +1225,8 @@ export const showDesktopNotification = async (
   }
 
   if (notification.sound !== undefined) payload.sound = notification.sound;
+  if (notification.actions && notification.publicReadReceipt !== undefined)
+    payload.publicReadReceipt = notification.publicReadReceipt === true;
   if (notification.sessionGeneration !== undefined)
     payload.sessionGeneration = notification.sessionGeneration;
   const result = await invokeDesktop<boolean>('desktop_notify', {

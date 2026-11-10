@@ -271,7 +271,7 @@ The package installs:
 
 - `/usr/bin/synara` wrapper.
 - `/usr/lib/synara/synara` release binary.
-- `/usr/share/applications/Synara.desktop` desktop entry from `packaging/arch/synara.desktop`.
+- `/usr/share/applications/Synara.desktop` desktop entry from `packaging/arch/synara.desktop`. It registers Synara for `synara://` links (see "`synara://` links").
 - hicolor app icons (`Icon=synara` under `/usr/share/icons/hicolor/*/apps/`).
 
 The wrapper keeps the app on native Wayland (`GDK_BACKEND=wayland`) and makes CPU drawing this package's default (`SYNARA_RENDERING_DEFAULT=safe`). The Synara binary applies the drawing mode itself when it starts; see the next section.
@@ -341,6 +341,8 @@ The Arch `PKGBUILD` derives `pkgver` from `src-tauri/tauri.conf.json`, so a desk
 On CachyOS and other rolling Arch-family systems, `npm run tauri build -- --bundles appimage` can fail in Tauri's `linuxdeploy` step with errors like `unknown type [0x13] section .relr.dyn`. That failure is in the AppImage packaging tool's bundled `strip` binary handling newer system libraries; it does not mean the Synara binary failed to build.
 
 The Arch pacman package no longer depends on Tauri's `.deb` desktop entry output. `packaging/arch/synara.desktop` is installed directly, so `npm run tauri build` (release binary only) is sufficient before `makepkg -f`.
+
+The `.deb` (and an `.rpm`, which is not published) takes its desktop entry from `packaging/deb/synara.desktop`, set as `bundle.linux.deb.desktopTemplate` in `src-tauri/tauri.conf.json`. The bundler fills in the name, command and icon; the rest is the Arch entry line for line, and `scripts/__tests__/linux-desktop-entry.test.mjs` fails if the two drift apart. The bundler has no desktop template for AppImage, so an AppImage's entry would name the `synara` scheme but pass no link to the app.
 
 AppImage is not part of the current supported Linux update strategy. Revisit it
 only after the pacman repo path is stable and tested.
@@ -448,6 +450,77 @@ draw its own title strip, because the window manager frames and moves the window
 at once. Ctrl+Q quits in either mode.
 
 The window can be as small as 360×480; below 750px wide the app switches to its single-pane layout.
+
+### Window class and window rules
+
+On Wayland the window's app id is `synara` (the `class` and `initialClass` in `hyprctl clients`, the
+`app_id` in `swaymsg -t get_tree`), for the installed packages and for a development build alike.
+Nothing sets it in code: Tauri leaves the GTK application id unset (`app.enableGTKAppId` is off), so
+GTK uses the program name, which is the file name of the binary, `synara` (`mainBinaryName` in
+`src-tauri/tauri.conf.json`). It changes only if the binary is renamed or started through a
+differently named link. Both desktop entries carry `StartupWMClass=synara` to match.
+
+On X11 (including XWayland) GTK sets `WM_CLASS` from the same name: instance `synara`, class
+`Synara`, with a capital. That is how GTK 3 behaves; it has not been checked on an X11 session.
+
+Hyprland 0.55 and later (Lua configuration):
+
+```lua
+hl.window_rule({ match = { class = "^synara$" }, workspace = "3" })
+```
+
+Hyprland 0.53 and 0.54 (`hyprland.conf`):
+
+```ini
+windowrule = match:class ^synara$, workspace 3
+```
+
+Hyprland 0.52 and earlier:
+
+```ini
+windowrulev2 = workspace 3, class:^(synara)$
+```
+
+Sway:
+
+```
+for_window [app_id="synara"] move container to workspace number 3
+```
+
+i3 (X11; `class` is case-sensitive, so match the instance or the capitalised class):
+
+```
+for_window [instance="synara"] move container to workspace number 3
+```
+
+## `synara://` Links
+
+Synara opens `synara://` links from other apps, the terminal and scripts:
+
+```sh
+xdg-open synara://activity
+xdg-open 'synara://room/!roomid:example.org'
+```
+
+`synara://home`, `settings`, `approvals`, `later`, `activity` (also `inbox`, `notifications`, with
+`/later` or `/invites`) and `room/<room id or alias>[/<event id>]` are accepted; anything else is
+ignored. If Synara is already running, the link goes to that window.
+
+What registers the scheme:
+
+| Platform | Registration |
+| --- | --- |
+| Arch package | `MimeType=x-scheme-handler/synara;` and `Exec=synara %U` in `packaging/arch/synara.desktop` |
+| `.deb` | The same two lines in `packaging/deb/synara.desktop`, the bundler's desktop template |
+| macOS | `CFBundleURLTypes` in `src-tauri/Info.plist` |
+| Windows | Registry entries written by the NSIS and MSI installers (untested; see `docs/windows-support-spike.md`) |
+
+If links open in something else, make Synara the handler and check it:
+
+```sh
+xdg-mime default Synara.desktop x-scheme-handler/synara
+xdg-mime query default x-scheme-handler/synara
+```
 
 ## Status Command
 

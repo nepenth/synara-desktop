@@ -14,8 +14,9 @@ pub fn desktop_system_palette() -> Option<SystemPalette> {
 
 /// Tell the renderer when the desktop's theme changes. Omarchy swaps a
 /// symlink, which a file watch on the old target would miss, so this reads
-/// the palette every two seconds and emits only when it differs. Does nothing
-/// where no provider applies.
+/// the palette every two seconds and emits only when it differs; macOS's
+/// accent colour is followed the same way. Does nothing where no provider
+/// applies.
 pub fn watch_system_palette<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if !provider_available() {
         return;

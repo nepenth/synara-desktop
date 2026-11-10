@@ -19,16 +19,16 @@ a built app, and no Linux-only Rust path has been compiled** (the Linux workstat
 | F4 Rust-owned status aggregate | Partly: Rust publishes the counts, but the renderer still combines them |
 | N1–N6 bottom bar, space switcher, rail removed | Done; N7 review build not made (the Mac has no room for a release build) |
 | T1 no title strip in tiling mode | Done |
-| T2 explicit Wayland app id | Not done (needs a Linux session to confirm the class) |
+| T2 stable window identity | Done, no code needed: the class is `synara` under Hyprland (checked 2026-11-10 with `hyprctl clients`, installed package and a build with another product name). GTK takes it from the binary's file name, so nothing sets it explicitly. Class and window rules for Hyprland, Sway and i3 are in `docs/linux.md`. The X11 `WM_CLASS` (`synara`, `Synara`) is from GTK's behaviour, not seen on an X11 session |
 | T3 no size/position restore when tiling | Done; compiles and passes lint on Linux, not yet seen under Hyprland |
 | L1–L3 narrow layouts, overlay panels, zoom-aware breakpoints | Done |
 | K1–K4 keyboard | Done. Places are Alt+1–4 (Windows, Linux) and ⌃1–4 (macOS), not Ctrl/⌘+1–4, which are the composer's heading keys |
-| I1 deep links | macOS and Linux (Arch desktop entry). Not done: Windows scheme registration, the deb desktop entry |
+| I1 deep links | macOS and Linux (Arch and deb desktop entries; the deb's is `packaging/deb/synara.desktop`, kept equal to the Arch one by a test, not yet seen in a built deb). Windows: the NSIS and MSI installers register the scheme through the bundler (`plugins.deep-link` in `tauri.conf.json`), and the argument paths are not platform-gated, but **nothing on Windows has been built or run** |
 | I2 `synara status` | Done, with a Waybar example in `docs/linux.md`. On Windows release builds the command has no console to print to |
-| I3 notification mark-read and reply actions | Not started |
+| I3 notification mark-read and reply actions | Partly. Message banners carry `message.mark-read` and `message.reply`, handled in Rust under the session gate (unit-tested; Linux build, lint and tests pass). Mark as read is the room list's Mark as Read (the whole room, receipt private unless receipts are public). Linux: both buttons; Reply opens the room with the composer focused, because inline reply (`inline-reply`, a KDE extension `notify-rust` does not expose) is not done. macOS: Reply is a text-input action sent from the banner, **written but never compiled or run**. Windows unchanged. Nothing has been seen on a real notification server |
 | H1 palette engine, H2 fonts | Done |
 | H3 Omarchy provider | Reads `colors.toml` (else `alacritty.toml`) under `~/.local/state/omarchy/current/theme`, the layout confirmed on the Omarchy box on 2026-11-10, with the older `~/.config/omarchy/current/theme` as a fallback. Not yet seen in a running app |
-| H4 system accent on macOS and Windows | Not started |
+| H4 system accent on macOS and Windows | macOS: done. The provider reads `NSColor.controlAccentColor` and shares the accent alone, so the theme keeps its own background and text; the setting's description says so. Type-checked and unit-tested, not yet seen in a running app. Windows: not started (cannot be compiled or tested here) |
 | P pop-out windows | Deferred |
 
 Changes from the plan below: "Log out" (the app's existing wording) instead of "Sign out"; the list

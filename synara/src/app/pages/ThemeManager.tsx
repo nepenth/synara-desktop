@@ -16,7 +16,9 @@ import { normalizeAccentColor } from '../utils/themeAccent';
 import { messageTextForeground } from '../utils/messageTextTone';
 import { applyInterfaceFonts, type InterfaceFontSettings } from '../utils/interfaceFonts';
 import {
+  deriveExternalAccent,
   deriveExternalPaletteTheme,
+  isExternalSurfacePalette,
   type ExternalPalette,
   type ExternalPaletteAccent,
   type ExternalPaletteTheme,
@@ -220,11 +222,25 @@ const syncExternalPaletteRamp = (palette: ExternalPaletteTheme): string => {
 const externalPaletteBaseTheme = (palette: ExternalPaletteTheme): Theme =>
   palette.kind === 'dark' ? DarkTheme : LightTheme;
 
+type FollowedPalette = {
+  /** A whole desktop theme (Omarchy): its surfaces, text and accent apply. */
+  external?: ExternalPaletteTheme;
+  /** An accent alone (macOS): the user's theme stays, with this accent. */
+  accentOnly?: ExternalPaletteAccent;
+};
+
+const NOTHING_FOLLOWED: FollowedPalette = {};
+
 /** Follow the desktop palette while the setting is on and the shell has one. */
-const useFollowedPalette = (followSystemPalette: boolean): ExternalPaletteTheme | undefined => {
+const useFollowedPalette = (followSystemPalette: boolean): FollowedPalette => {
   const { palette } = useSystemPalette();
   const followed: ExternalPalette | null = followSystemPalette ? palette : null;
-  return useMemo(() => (followed ? deriveExternalPaletteTheme(followed) : undefined), [followed]);
+  return useMemo(() => {
+    if (!followed) return NOTHING_FOLLOWED;
+    return isExternalSurfacePalette(followed)
+      ? { external: deriveExternalPaletteTheme(followed) }
+      : { accentOnly: deriveExternalAccent(followed) };
+  }, [followed]);
 };
 
 const syncFonts = (settings: InterfaceFontSettings) => {
@@ -297,7 +313,7 @@ const syncAccentColor = (
 
 export function UnAuthRouteThemeManager() {
   const systemThemeKind = useSystemThemeKind();
-  const external = useFollowedPalette(getSharedSettings().followSystemPalette);
+  const { external, accentOnly } = useFollowedPalette(getSharedSettings().followSystemPalette);
   const followedPalette = useRef(false);
 
   useEffect(() => {
@@ -326,12 +342,15 @@ export function UnAuthRouteThemeManager() {
     const chrome = syncThemeBaseColor(storedBase, systemThemeKind, themeId);
     syncDocumentThemeChrome(systemThemeKind, chrome);
     syncMutedTextOpacity(systemThemeKind);
-    if (followedPalette.current) {
+    if (accentOnly) {
+      syncAccentColor(undefined, systemThemeKind, accentOnly);
+      followedPalette.current = true;
+    } else if (followedPalette.current) {
       // The palette went away: drop its accent, as this screen had none before.
       syncAccentColor(undefined, systemThemeKind);
       followedPalette.current = false;
     }
-  }, [systemThemeKind, external]);
+  }, [systemThemeKind, external, accentOnly]);
 
   return null;
 }
@@ -349,7 +368,7 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
   const [monospaceFontFamily] = useSetting(settingsAtom, 'monospaceFontFamily');
   // With no palette to follow (none yet, or the provider went away), the
   // user's own theme applies.
-  const external = useFollowedPalette(followSystemPalette);
+  const { external, accentOnly } = useFollowedPalette(followSystemPalette);
   const activeTheme = external ? externalPaletteBaseTheme(external) : userTheme;
 
   useEffect(() => {
@@ -366,7 +385,7 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
       : syncThemeBaseColor(themeBaseColor, activeTheme.kind, activeTheme.id);
     syncDocumentThemeChrome(activeTheme.kind, chrome);
     syncMutedTextOpacity(activeTheme.kind);
-    syncAccentColor(customAccentColor, activeTheme.kind, external?.accent);
+    syncAccentColor(customAccentColor, activeTheme.kind, external?.accent ?? accentOnly);
     document.body.style.setProperty(
       '--synara-message-foreground',
       external
@@ -382,7 +401,15 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
     } else {
       document.body.style.filter = '';
     }
-  }, [activeTheme, external, monochromeMode, customAccentColor, themeBaseColor, messageTextTone]);
+  }, [
+    activeTheme,
+    external,
+    accentOnly,
+    monochromeMode,
+    customAccentColor,
+    themeBaseColor,
+    messageTextTone,
+  ]);
 
   return <ThemeContextProvider value={activeTheme}>{children}</ThemeContextProvider>;
 }

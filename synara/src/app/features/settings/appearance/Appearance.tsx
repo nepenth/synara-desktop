@@ -71,7 +71,7 @@ import {
 } from '../../../utils/themeBase';
 import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 import { useSystemPalette } from '../../../hooks/useSystemPalette';
-import { externalPaletteSourceLabel } from '../../../utils/themeExternalPalette';
+import { externalPaletteFollowDescription } from '../../../utils/themeExternalPalette';
 import { isLinuxDesktopShell } from '../../../hooks/useTilingMode';
 import { getDesktopWindowEnvironment } from '../../../utils/desktop';
 import {
@@ -548,7 +548,7 @@ function FollowSystemPaletteSetting() {
     description =
       'Your desktop has no theme colors to share right now, so the theme above applies.';
   } else {
-    description = `Use the background, text and accent colors of ${externalPaletteSourceLabel(palette.source)}. Synara adjusts them where text would be hard to read.`;
+    description = externalPaletteFollowDescription(palette);
   }
 
   return (

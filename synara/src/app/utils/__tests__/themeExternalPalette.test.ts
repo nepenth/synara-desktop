@@ -4,11 +4,14 @@ import chroma from 'chroma-js';
 import { MESSAGE_TEXT_TONES } from '../messageTextTone';
 import { MUTED_TEXT_OPACITY, TEXT_CONTRAST_AA } from '../themeBase';
 import {
+  deriveExternalAccent,
   deriveExternalPaletteTheme,
+  externalPaletteFollowDescription,
   externalPaletteKind,
+  isExternalSurfacePalette,
   normalizeExternalColor,
   normalizeExternalPalette,
-  type ExternalPalette,
+  type ExternalSurfacePalette,
   externalPaletteSourceLabel,
 } from '../themeExternalPalette';
 
@@ -25,7 +28,7 @@ const textSurfaces = (theme: ReturnType<typeof deriveExternalPaletteTheme>): str
   ];
 };
 
-const assertReadable = (palette: ExternalPalette, label: string) => {
+const assertReadable = (palette: ExternalSurfacePalette, label: string) => {
   const theme = deriveExternalPaletteTheme(palette);
   const { ramp, kind } = theme;
   const chat = ramp.surfaceVariant.Container;
@@ -116,6 +119,46 @@ test('the shell payload is checked before use', () => {
   );
 });
 
+test('a payload with an accent and no background is an accent-only palette', () => {
+  const macos = normalizeExternalPalette({ source: 'macos', accent: '#007AFF' });
+  assert.deepEqual(macos, { source: 'macos', accent: '#007aff' });
+  assert.ok(macos && !isExternalSurfacePalette(macos));
+  // A foreground alone does not make it a theme.
+  assert.deepEqual(
+    normalizeExternalPalette({ source: 'macos', accent: '#007aff', foreground: '#ffffff' }),
+    { source: 'macos', accent: '#007aff' }
+  );
+  assert.equal(normalizeExternalPalette({ source: 'macos' }), null);
+  assert.equal(normalizeExternalPalette({ source: 'macos', accent: 'blue' }), null);
+
+  const omarchy = normalizeExternalPalette({ source: 'omarchy', background: '#1a1b26' });
+  assert.ok(omarchy && isExternalSurfacePalette(omarchy));
+});
+
+test('an accent-only palette is used as chosen, with readable text on it', () => {
+  // The macOS accents in light appearance, and the extremes.
+  for (const accent of [
+    '#007aff',
+    '#a550a7',
+    '#f74f9e',
+    '#ff5257',
+    '#f7821b',
+    '#ffc600',
+    '#62ba46',
+    '#8c8c8c',
+    '#000000',
+    '#ffffff',
+  ]) {
+    const derived = deriveExternalAccent({ source: 'macos', accent });
+    assert.equal(derived.main, accent);
+    assert.equal(derived.link, accent);
+    assert.ok(['#ffffff', '#000000'].includes(derived.onMain), accent);
+    assert.ok(contrast(derived.onMain, derived.main) >= TEXT_CONTRAST_AA, accent);
+  }
+  assert.equal(deriveExternalAccent({ source: 'macos', accent: '#ffc600' }).onMain, '#000000');
+  assert.equal(deriveExternalAccent({ source: 'macos', accent: '#1245a8' }).onMain, '#ffffff');
+});
+
 test('light or dark follows the background luminance', () => {
   assert.equal(externalPaletteKind('#000000'), 'dark');
   assert.equal(externalPaletteKind('#1a1b26'), 'dark');
@@ -155,7 +198,7 @@ test('ordinary desktop themes keep their own background and text', () => {
 });
 
 test('hostile palettes stay readable', () => {
-  const hostile: Array<[string, ExternalPalette]> = [
+  const hostile: Array<[string, ExternalSurfacePalette]> = [
     [
       'low contrast dark',
       { source: '', background: '#333333', foreground: '#3a3a3a', accent: '#404040' },
@@ -205,4 +248,33 @@ test('copy names a known provider properly and falls back to "your desktop theme
   assert.equal(externalPaletteSourceLabel('some-shell'), 'your desktop theme');
   assert.equal(externalPaletteSourceLabel('constructor'), 'your desktop theme');
   assert.equal(externalPaletteSourceLabel(''), 'your desktop theme');
+});
+
+test('the setting says what each provider shares', () => {
+  assert.equal(
+    externalPaletteFollowDescription({
+      source: 'omarchy',
+      background: '#1a1b26',
+      foreground: '#a9b1d6',
+      accent: '#7aa2f7',
+    }),
+    'Use the background, text and accent colors of your Omarchy theme. Synara adjusts them where text would be hard to read.'
+  );
+  assert.equal(
+    externalPaletteFollowDescription({
+      source: 'some-shell',
+      background: '#000000',
+      foreground: '#ffffff',
+    }),
+    'Use the background, text and accent colors of your desktop theme. Synara adjusts them where text would be hard to read.'
+  );
+  // An accent alone never promises a background or text color.
+  assert.equal(
+    externalPaletteFollowDescription({ source: 'macos', accent: '#007aff' }),
+    'Use your macOS accent color in place of the Accent color below. The theme keeps its own background and text.'
+  );
+  assert.equal(
+    externalPaletteFollowDescription({ source: 'some-shell', accent: '#007aff' }),
+    'Use your desktop accent color in place of the Accent color below. The theme keeps its own background and text.'
+  );
 });

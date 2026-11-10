@@ -208,9 +208,11 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   {
     page: SettingsPages.AppearancePage,
     title: 'Follow system theme colors',
-    description: 'Use the background, text and accent colors of your desktop theme, kept readable.',
+    description: 'Use the colors of your desktop theme, or your macOS accent color, kept readable.',
     synonyms: [
       'omarchy',
+      'macos accent',
+      'system accent',
       'desktop theme',
       'system colors',
       'palette',
