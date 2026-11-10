@@ -36,6 +36,10 @@
     "desktopDiagnosticsRoomState": { "type": "boolean" },
     "desktopDiagnosticsOverlay": { "type": "boolean" },
     "roomListCollapsed": { "type": "boolean" },
+    "tilingMode": {
+      "type": "string",
+      "enum": ["auto", "on", "off"]
+    },
     "agentWidgetEntries": {
       "type": "array",
       "maxItems": 32,

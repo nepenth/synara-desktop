@@ -22,7 +22,7 @@ const IOS_BUCKETS: [string, number][] = [
   ['!room:example.org', 0],
 ];
 
-test('Matrix ID colours pick the same palette slot as iOS (FNV-1a, lower-cased)', () => {
+test('Matrix ID colors pick the same palette slot as iOS (FNV-1a, lower-cased)', () => {
   for (const [userId, index] of IOS_BUCKETS) {
     assert.equal(mxidPaletteIndex(userId), index, userId);
     assert.equal(cssColorMXID(userId), `--mx-uc-${index + 1}`, userId);

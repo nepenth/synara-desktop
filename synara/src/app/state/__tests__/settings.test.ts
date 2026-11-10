@@ -52,6 +52,41 @@ test('the room list collapse is a per-device platform setting, shown by default'
   assert.equal(createLocalStorageSettingsStore(odd).getSettings().roomListCollapsed, false);
 });
 
+test('tiling mode is a per-device platform setting on Auto, and odd values read as Auto', () => {
+  const storage = createMemoryStorage();
+  const store = createLocalStorageSettingsStore(storage);
+  assert.equal(defaultDesktopPlatformSettings.tilingMode, 'auto');
+  assert.equal('tilingMode' in store.getSharedSettings(), false);
+  store.setSettings({ ...defaultSettings, tilingMode: 'off' });
+  assert.equal(storage.getObject('platformSettings')?.tilingMode, 'off');
+  assert.equal(createLocalStorageSettingsStore(storage).getSettings().tilingMode, 'off');
+  for (const stored of ['"yes"', 'true', '1', 'null']) {
+    const odd = createMemoryStorage({ platformSettings: `{"tilingMode":${stored}}` });
+    assert.equal(createLocalStorageSettingsStore(odd).getSettings().tilingMode, 'auto', stored);
+  }
+});
+
+test('font settings default to the platform fonts and store only sanitized families', () => {
+  assert.equal(defaultSharedSettings.interfaceFont, 'default');
+  assert.equal(defaultSharedSettings.monospaceFont, 'default');
+  assert.equal(defaultSharedSettings.followSystemPalette, false);
+  const storage = createMemoryStorage({
+    settings: JSON.stringify({
+      interfaceFont: 'comic',
+      interfaceFontFamily: 'Inter"; } body { display: none } /*',
+      monospaceFont: 'custom',
+      monospaceFontFamily: 'JetBrains Mono, url(x)',
+      followSystemPalette: 'yes',
+    }),
+  });
+  const shared = createLocalStorageSettingsStore(storage).getSharedSettings();
+  assert.equal(shared.interfaceFont, 'default');
+  assert.equal(shared.interfaceFontFamily, 'Inter body display none');
+  assert.equal(shared.monospaceFont, 'custom');
+  assert.equal(shared.monospaceFontFamily, 'JetBrains Mono, urlx');
+  assert.equal(shared.followSystemPalette, false);
+});
+
 test('modernization opt-in settings default off', () => {
   const store = createLocalStorageSettingsStore(createMemoryStorage());
 
@@ -213,6 +248,7 @@ test('settings store reads legacy desktop shortcuts from the shared settings blo
     desktopDiagnosticsOverlay: false,
     agentWidgetEntries: [],
     roomListCollapsed: false,
+    tilingMode: 'auto',
   });
   assert.equal(store.getSettings().desktopShortcutNotifications, 'CmdOrCtrl+3');
 });
@@ -250,6 +286,7 @@ test('settings store writes shared and desktop platform settings separately', ()
     desktopDiagnosticsOverlay: true,
     agentWidgetEntries: [],
     roomListCollapsed: false,
+    tilingMode: 'auto',
   });
 });
 

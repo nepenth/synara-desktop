@@ -5,7 +5,7 @@ import { Disabled, color, config } from 'folds';
  * App-wide focus indicators for folds text fields. folds removes the field's
  * own outline and marks focus with its resting border colour (~1.2:1), and its
  * TextArea draws nothing at all. An outline in Primary.Main reaches 3:1 on every
- * surface and, unlike a box-shadow, survives forced-colours mode.
+ * surface and, unlike a box-shadow, survives forced-colors mode.
  *
  * folds does not export its field classes; both fields carry its `Disabled`
  * class, which is the stable hook used here.

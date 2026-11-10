@@ -155,7 +155,7 @@ test('focus indicators: room list, text fields, Following bar, resize handle', (
   );
 });
 
-test('global CSS: high-contrast boosts reach body, forced colours keep focus and selection', () => {
+test('global CSS: high-contrast boosts reach body, forced colors keep focus and selection', () => {
   const css = source('src/index.css');
   const contrastBlock = css.slice(css.indexOf('@media (prefers-contrast: more)'));
   assert.match(contrastBlock, /^@media \(prefers-contrast: more\) \{[\s\S]*?:root,\s*body \{/);

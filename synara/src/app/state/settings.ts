@@ -7,6 +7,13 @@ import {
   type MessageTextTone,
 } from '../utils/messageTextTone';
 import {
+  normalizeInterfaceFont,
+  normalizeMonospaceFont,
+  sanitizeFontFamilyList,
+  type InterfaceFontChoice,
+  type MonospaceFontChoice,
+} from '../utils/interfaceFonts';
+import {
   DEFAULT_THREAD_DISPLAY,
   DEFAULT_THREAD_PANE_WIDTH,
   clampThreadPaneWidth,
@@ -38,7 +45,20 @@ export interface SharedSettings {
   monochromeMode?: boolean;
   customAccentColor?: string;
   themeBaseColor?: string;
+  /**
+   * Take surfaces, text and accent from the desktop's theme (for example
+   * Omarchy) while the shell offers a palette; the theme above otherwise.
+   */
+  followSystemPalette: boolean;
   messageTextTone: MessageTextTone;
+  /** Font for the interface: the platform default, the monospace font, or a family. */
+  interfaceFont: InterfaceFontChoice;
+  /** Family list for `interfaceFont: 'custom'`, already sanitized. */
+  interfaceFontFamily: string;
+  /** Font for code: the built-in stack or a family. */
+  monospaceFont: MonospaceFontChoice;
+  /** Family list for `monospaceFont: 'custom'`, already sanitized. */
+  monospaceFontFamily: string;
   /** How a desktop room opens threads. */
   threadDisplay: ThreadDisplayMode;
   /**
@@ -127,7 +147,19 @@ export interface DesktopPlatformSettings {
   agentWidgetEntries: AgentWidgetEntry[];
   /** The desktop room list pane is hidden (⌘⇧D / Ctrl+Shift+D). Per device. */
   roomListCollapsed: boolean;
+  /**
+   * Linux only: drop the in-app title strip for a tiling window manager.
+   * `auto` follows what the shell detected at startup.
+   */
+  tilingMode: TilingModeSetting;
 }
+
+export type TilingModeSetting = 'auto' | 'on' | 'off';
+
+export const TILING_MODE_SETTINGS: readonly TilingModeSetting[] = ['auto', 'on', 'off'];
+
+export const normalizeTilingModeSetting = (value: unknown): TilingModeSetting =>
+  TILING_MODE_SETTINGS.includes(value as TilingModeSetting) ? (value as TilingModeSetting) : 'auto';
 
 export type PlatformSettings = DesktopPlatformSettings;
 export type Settings = SharedSettings & DesktopPlatformSettings;
@@ -156,7 +188,12 @@ export const defaultSharedSettings: SharedSettings = {
   monochromeMode: false,
   customAccentColor: undefined,
   themeBaseColor: undefined,
+  followSystemPalette: false,
   messageTextTone: DEFAULT_MESSAGE_TEXT_TONE,
+  interfaceFont: 'default',
+  interfaceFontFamily: '',
+  monospaceFont: 'default',
+  monospaceFontFamily: '',
   threadDisplay: DEFAULT_THREAD_DISPLAY,
   threadDisplayChosen: false,
   threadPaneWidth: DEFAULT_THREAD_PANE_WIDTH,
@@ -231,6 +268,7 @@ const sanitizePlatformSettings = (settings: DesktopPlatformSettings): DesktopPla
   ...settings,
   agentWidgetEntries: sanitizeAgentWidgetEntries(settings.agentWidgetEntries),
   roomListCollapsed: settings.roomListCollapsed === true,
+  tilingMode: normalizeTilingModeSetting(settings.tilingMode),
 });
 
 /**
@@ -295,6 +333,7 @@ export const defaultDesktopPlatformSettings: DesktopPlatformSettings = {
   desktopDiagnosticsOverlay: false,
   agentWidgetEntries: [],
   roomListCollapsed: false,
+  tilingMode: 'auto',
 };
 
 export const defaultPlatformSettings: PlatformSettings = {
@@ -351,7 +390,12 @@ const sanitizeSharedSettings = (settings: SharedSettings): SharedSettings => ({
   themeBaseColor: normalizeThemeBaseColor(
     typeof settings.themeBaseColor === 'string' ? settings.themeBaseColor : undefined
   ),
+  followSystemPalette: settings.followSystemPalette === true,
   messageTextTone: normalizeMessageTextTone(settings.messageTextTone),
+  interfaceFont: normalizeInterfaceFont(settings.interfaceFont),
+  interfaceFontFamily: sanitizeFontFamilyList(settings.interfaceFontFamily),
+  monospaceFont: normalizeMonospaceFont(settings.monospaceFont),
+  monospaceFontFamily: sanitizeFontFamilyList(settings.monospaceFontFamily),
   threadDisplay:
     settings.threadDisplayChosen === true
       ? normalizeThreadDisplay(settings.threadDisplay)

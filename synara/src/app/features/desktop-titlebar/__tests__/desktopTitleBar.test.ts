@@ -134,6 +134,20 @@ test('custom titlebar renders only on Linux desktop', () => {
   assert.doesNotMatch(titlebar, /onDoubleClick/);
 });
 
+test('tiling mode hides the strip but Ctrl+Q keeps working', () => {
+  const titlebar = source('src/app/features/desktop-titlebar/DesktopTitleBar.tsx');
+  const app = source('src/app/pages/App.tsx');
+
+  assert.match(titlebar, /isSynaraDesktop\(\) && isLinuxOS\(\) && !tiling/);
+  // The quit listener follows the Linux shell, not the strip's visibility.
+  assert.match(
+    titlebar,
+    /if \(!linuxShell\) return undefined;[\s\S]*'quit'[\s\S]*desktop_quit[\s\S]*\}, \[linuxShell\]\);/
+  );
+  // The strip reads the setting from the app's own store, so a change applies live.
+  assert.match(app, /<JotaiProvider>\s*<DesktopTitleBar \/>/);
+});
+
 test('linux titlebar owns drag and the three window controls', () => {
   const titlebar = source('src/app/features/desktop-titlebar/DesktopTitleBar.tsx');
   const css = source('src/app/features/desktop-titlebar/DesktopTitleBar.css.ts');

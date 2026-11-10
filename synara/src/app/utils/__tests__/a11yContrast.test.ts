@@ -149,7 +149,7 @@ const hslVar = (block: string, name: string): Rgb => {
   return hslRgb(Number(match[1]), Number(match[2]), Number(match[3]));
 };
 
-test('links, user colours and avatar initials are AA on every surface', () => {
+test('links, user colors and avatar initials are AA on every surface', () => {
   const css = readFileSync('src/index.css', 'utf8');
   const blocks: Record<ThemeRampKind, string> = {
     light: cssBlock(css, ':root'),
@@ -177,7 +177,7 @@ const PRIMARY_CONTAINER: Record<ThemeRampKind, { fill: string; on: string }> = {
   dark: { fill: '#1F3A63', on: '#DCE7FB' },
 };
 
-test('the colours.css.ts Primary container pair is the one checked here', () => {
+test('the colors.css.ts Primary container pair is the one checked here', () => {
   const colors = readFileSync('src/colors.css.ts', 'utf8');
   KINDS.forEach((kind) => {
     const { fill, on } = PRIMARY_CONTAINER[kind];

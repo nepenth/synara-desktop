@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect } from 'react';
+import React, { ReactNode, useEffect, useMemo, useRef } from 'react';
 import { color, config, configClass, varsClass } from 'folds';
 import {
   DarkTheme,
@@ -7,11 +7,20 @@ import {
   ThemeKind,
   useActiveTheme,
   useSystemThemeKind,
+  type Theme,
 } from '../hooks/useTheme';
+import { useSystemPalette } from '../hooks/useSystemPalette';
 import { useSetting } from '../state/hooks/settings';
 import { getSharedSettings, settingsAtom } from '../state/settings';
 import { normalizeAccentColor } from '../utils/themeAccent';
 import { messageTextForeground } from '../utils/messageTextTone';
+import { applyInterfaceFonts, type InterfaceFontSettings } from '../utils/interfaceFonts';
+import {
+  deriveExternalPaletteTheme,
+  type ExternalPalette,
+  type ExternalPaletteAccent,
+  type ExternalPaletteTheme,
+} from '../utils/themeExternalPalette';
 import {
   deriveThemeSurfaceRamp,
   deriveThemeRichTextRoles,
@@ -188,15 +197,57 @@ const syncThemeBaseColor = (
   return ramp.chrome;
 };
 
+/**
+ * An external palette (H1): the same variables as the derived ramp above,
+ * from `deriveExternalPaletteTheme`, which already clamps them to AA.
+ */
+const syncExternalPaletteRamp = (palette: ExternalPaletteTheme): string => {
+  const target = document.body;
+  const { ramp } = palette;
+  syncContentRoles(target, ramp.content);
+  syncRichTextRoles(target, ramp.richText);
+  applyContainerScale(target, color.Background, ramp.background);
+  applyContainerScale(target, color.Surface, ramp.surface);
+  applyContainerScale(target, color.SurfaceVariant, ramp.surfaceVariant);
+  applyContainerScale(target, color.Secondary, ramp.secondaryContainer);
+  setColorVar(target, color.Other.FocusRing, ramp.focusRing);
+  setColorVar(target, color.Other.Shadow, ramp.shadow);
+  setColorVar(target, color.Other.Overlay, ramp.overlay);
+  return ramp.chrome;
+};
+
+/** The theme whose classes and kind an external palette runs under. */
+const externalPaletteBaseTheme = (palette: ExternalPaletteTheme): Theme =>
+  palette.kind === 'dark' ? DarkTheme : LightTheme;
+
+/** Follow the desktop palette while the setting is on and the shell has one. */
+const useFollowedPalette = (followSystemPalette: boolean): ExternalPaletteTheme | undefined => {
+  const { palette } = useSystemPalette();
+  const followed: ExternalPalette | null = followSystemPalette ? palette : null;
+  return useMemo(() => (followed ? deriveExternalPaletteTheme(followed) : undefined), [followed]);
+};
+
+const syncFonts = (settings: InterfaceFontSettings) => {
+  applyInterfaceFonts(document.documentElement, settings);
+};
+
 /** folds dims `priority="300"` text by opacity; keep it at AA on our surfaces. */
 const syncMutedTextOpacity = (themeKind: ThemeKind) => {
   const opacity = MUTED_TEXT_OPACITY[themeKind === ThemeKind.Dark ? 'dark' : 'light'];
   setColorVar(document.body, config.opacity.P300, String(opacity));
 };
 
-const syncAccentColor = (accentColor: string | undefined, themeKind: ThemeKind) => {
+const syncAccentColor = (
+  accentColor: string | undefined,
+  themeKind: ThemeKind,
+  external?: ExternalPaletteAccent
+) => {
   const target = document.body;
-  const normalized = normalizeAccentColor(accentColor);
+  const normalized = external?.main ?? normalizeAccentColor(accentColor);
+  // Only a palette accent is clamped and gets its own text colour; the
+  // accent setting keeps the theme's.
+  if (external) setColorVar(target, color.Primary.OnMain, external.onMain);
+  else clearColorVar(target, color.Primary.OnMain);
   const primaryTokens = [
     color.Primary.Main,
     color.Primary.MainHover,
@@ -241,50 +292,89 @@ const syncAccentColor = (accentColor: string | undefined, themeKind: ThemeKind) 
     `color-mix(in srgb, ${normalized} ${dark ? '48%' : '42%'}, ${dark ? 'black' : 'white'})`
   );
   setColorVar(target, color.Primary.OnContainer, dark ? '#f7fffb' : '#10251f');
-  document.documentElement.style.setProperty('--tc-link', normalized);
+  document.documentElement.style.setProperty('--tc-link', external?.link ?? normalized);
 };
 
 export function UnAuthRouteThemeManager() {
   const systemThemeKind = useSystemThemeKind();
+  const external = useFollowedPalette(getSharedSettings().followSystemPalette);
+  const followedPalette = useRef(false);
 
   useEffect(() => {
+    const stored = getSharedSettings();
+    syncFonts(stored);
     document.body.className = '';
     document.body.classList.add(configClass, varsClass);
+    if (external) {
+      const theme = externalPaletteBaseTheme(external);
+      document.body.classList.add(...theme.classNames);
+      const chrome = syncExternalPaletteRamp(external);
+      syncDocumentThemeChrome(theme.kind, chrome);
+      syncMutedTextOpacity(theme.kind);
+      syncAccentColor(undefined, theme.kind, external.accent);
+      followedPalette.current = true;
+      return;
+    }
     if (systemThemeKind === ThemeKind.Dark) {
       document.body.classList.add(...DarkTheme.classNames);
     }
     if (systemThemeKind === ThemeKind.Light) {
       document.body.classList.add(...LightTheme.classNames);
     }
-    const storedBase = getSharedSettings().themeBaseColor;
+    const storedBase = stored.themeBaseColor;
     const themeId = systemThemeKind === ThemeKind.Dark ? DarkTheme.id : LightTheme.id;
     const chrome = syncThemeBaseColor(storedBase, systemThemeKind, themeId);
     syncDocumentThemeChrome(systemThemeKind, chrome);
     syncMutedTextOpacity(systemThemeKind);
-  }, [systemThemeKind]);
+    if (followedPalette.current) {
+      // The palette went away: drop its accent, as this screen had none before.
+      syncAccentColor(undefined, systemThemeKind);
+      followedPalette.current = false;
+    }
+  }, [systemThemeKind, external]);
 
   return null;
 }
 
 export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
-  const activeTheme = useActiveTheme();
+  const userTheme = useActiveTheme();
   const [monochromeMode] = useSetting(settingsAtom, 'monochromeMode');
   const [customAccentColor] = useSetting(settingsAtom, 'customAccentColor');
   const [themeBaseColor] = useSetting(settingsAtom, 'themeBaseColor');
   const [messageTextTone] = useSetting(settingsAtom, 'messageTextTone');
+  const [followSystemPalette] = useSetting(settingsAtom, 'followSystemPalette');
+  const [interfaceFont] = useSetting(settingsAtom, 'interfaceFont');
+  const [interfaceFontFamily] = useSetting(settingsAtom, 'interfaceFontFamily');
+  const [monospaceFont] = useSetting(settingsAtom, 'monospaceFont');
+  const [monospaceFontFamily] = useSetting(settingsAtom, 'monospaceFontFamily');
+  // With no palette to follow (none yet, or the provider went away), the
+  // user's own theme applies.
+  const external = useFollowedPalette(followSystemPalette);
+  const activeTheme = external ? externalPaletteBaseTheme(external) : userTheme;
+
+  useEffect(() => {
+    syncFonts({ interfaceFont, interfaceFontFamily, monospaceFont, monospaceFontFamily });
+  }, [interfaceFont, interfaceFontFamily, monospaceFont, monospaceFontFamily]);
 
   useEffect(() => {
     document.body.className = '';
     document.body.classList.add(configClass, varsClass);
 
     document.body.classList.add(...activeTheme.classNames);
-    const chrome = syncThemeBaseColor(themeBaseColor, activeTheme.kind, activeTheme.id);
+    const chrome = external
+      ? syncExternalPaletteRamp(external)
+      : syncThemeBaseColor(themeBaseColor, activeTheme.kind, activeTheme.id);
     syncDocumentThemeChrome(activeTheme.kind, chrome);
     syncMutedTextOpacity(activeTheme.kind);
-    syncAccentColor(customAccentColor, activeTheme.kind);
+    syncAccentColor(customAccentColor, activeTheme.kind, external?.accent);
     document.body.style.setProperty(
       '--synara-message-foreground',
-      messageTextForeground(messageTextTone, activeTheme.kind === ThemeKind.Dark ? 'dark' : 'light')
+      external
+        ? external.messageText[messageTextTone]
+        : messageTextForeground(
+            messageTextTone,
+            activeTheme.kind === ThemeKind.Dark ? 'dark' : 'light'
+          )
     );
 
     if (monochromeMode) {
@@ -292,7 +382,7 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
     } else {
       document.body.style.filter = '';
     }
-  }, [activeTheme, monochromeMode, customAccentColor, themeBaseColor, messageTextTone]);
+  }, [activeTheme, external, monochromeMode, customAccentColor, themeBaseColor, messageTextTone]);
 
   return <ThemeContextProvider value={activeTheme}>{children}</ThemeContextProvider>;
 }

@@ -201,6 +201,21 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   },
   {
     page: SettingsPages.AppearancePage,
+    title: 'Follow system theme colors',
+    description:
+      'Use the background, text and accent colors of your desktop theme, kept readable.',
+    synonyms: [
+      'omarchy',
+      'desktop theme',
+      'system colors',
+      'palette',
+      'wallpaper',
+      'colour scheme',
+      'color scheme',
+    ],
+  },
+  {
+    page: SettingsPages.AppearancePage,
     title: 'Monochrome mode',
     description: 'Render the interface in greyscale, keeping only the accent color.',
     synonyms: ['greyscale', 'grayscale', 'black and white'],
@@ -238,6 +253,18 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   },
   {
     page: SettingsPages.AppearancePage,
+    title: 'Interface font',
+    description: 'The font for menus, lists and messages: default, monospace or a custom family.',
+    synonyms: ['font', 'typeface', 'typography', 'family', 'ui font', 'sans'],
+  },
+  {
+    page: SettingsPages.AppearancePage,
+    title: 'Monospace font',
+    description: 'The font for code and other fixed-width text.',
+    synonyms: ['font', 'code font', 'fixed width', 'mono', 'typeface', 'programming'],
+  },
+  {
+    page: SettingsPages.AppearancePage,
     title: 'Page zoom',
     description: 'Scale the whole interface, from 75% to 200%.',
     synonyms: ['zoom', 'scale', 'size', 'bigger', 'smaller', 'font size'],
@@ -264,6 +291,29 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
     title: 'Legacy username color',
     description: 'Color sender names with the legacy per-user palette instead of the theme accent.',
     synonyms: ['username', 'name color', 'sender', 'colour'],
+  },
+  {
+    page: SettingsPages.AppearancePage,
+    title: 'Window',
+    synonyms: ['title bar', 'window manager', 'linux'],
+  },
+  {
+    page: SettingsPages.AppearancePage,
+    title: 'Tiling mode',
+    description:
+      'For tiling window managers such as Hyprland or Sway: no in-app title bar. Linux only.',
+    synonyms: [
+      'hyprland',
+      'sway',
+      'i3',
+      'niri',
+      'omarchy',
+      'tiling',
+      'title bar',
+      'titlebar',
+      'window manager',
+      'decorations',
+    ],
   },
 
   // Notifications

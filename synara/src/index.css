@@ -40,7 +40,7 @@
      the composer and rail included (utils/__tests__/a11yContrast.test.ts). */
   --tc-link: hsl(213deg 100% 35%);
 
-  /* User colours: the iOS SynaraAvatarPalette hues in iOS order, so util/colorMXID's
+  /* User colors: the iOS SynaraAvatarPalette hues in iOS order, so util/colorMXID's
      FNV-1a bucket gives a person the same colour on every device. iOS saturation
      (34 %) and lightness (37 %), darkened per hue only as far as AA needs. */
   --mx-uc-1: hsl(212, 34%, 34%);
@@ -55,13 +55,14 @@
   --font-emoji: 'Twemoji_DISABLED';
   /* The platform UI font: San Francisco, then Segoe UI Variable (WebView2's
      system-ui is classic Segoe UI), then the desktop's own. Every theme
-     inherits these from :root. */
+     inherits these from :root. The leading var() slots take the Appearance
+     font choices (utils/interfaceFonts.ts); unset, they add nothing. */
   --font-secondary:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', system-ui,
-    'Synara Inter', 'Noto Sans', Ubuntu, Cantarell, sans-serif;
+    var(--synara-font-ui-custom,) -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text',
+    'Segoe UI', system-ui, 'Synara Inter', 'Noto Sans', Ubuntu, Cantarell, sans-serif;
   --font-mono:
-    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono',
-    'Liberation Mono', 'Noto Sans Mono', monospace;
+    var(--synara-font-mono-custom,) ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'Cascadia Mono',
+    Consolas, 'DejaVu Sans Mono', 'Liberation Mono', 'Noto Sans Mono', monospace;
 
   /* Opaque reading roles. ThemeManager derives these against the active chat surface. */
   --synara-content-heading: #111318;
@@ -179,7 +180,8 @@ html {
    No theme block redeclares the variable, so body inherits this. */
 html[data-synara-os='linux'] {
   --font-secondary:
-    'Synara Inter', system-ui, 'Noto Sans', Ubuntu, Cantarell, 'DejaVu Sans', sans-serif;
+    var(--synara-font-ui-custom,) 'Synara Inter', system-ui, 'Noto Sans', Ubuntu, Cantarell,
+    'DejaVu Sans', sans-serif;
 }
 
 body {
@@ -255,7 +257,7 @@ a:hover {
     forced-color-adjust: auto;
   }
 
-  /* Forced colours drop box-shadows and background tints, which carry most
+  /* Forced colors drop box-shadows and background tints, which carry most
      focus and selection states here; draw them with system-colour outlines. */
   :focus-visible {
     outline: 2px solid Highlight !important;

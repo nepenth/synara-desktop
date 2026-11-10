@@ -2,6 +2,7 @@ import React, {
   ChangeEventHandler,
   KeyboardEventHandler,
   MouseEventHandler,
+  useEffect,
   useState,
 } from 'react';
 import {
@@ -26,7 +27,13 @@ import FocusTrap from '../../../components/FocusTrap';
 import { useTranslation } from 'react-i18next';
 import { SequenceCard } from '../../../components/sequence-card';
 import { useSetting } from '../../../state/hooks/settings';
-import { MessageLayout, MessageSpacing, settingsAtom } from '../../../state/settings';
+import {
+  desktopPlatformSettingsAtom,
+  MessageLayout,
+  MessageSpacing,
+  settingsAtom,
+  TilingModeSetting,
+} from '../../../state/settings';
 import { SettingTile } from '../../../components/setting-tile';
 import {
   DarkTheme,
@@ -63,6 +70,14 @@ import {
   THEME_BASE_PRESETS,
 } from '../../../utils/themeBase';
 import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
+import { useSystemPalette } from '../../../hooks/useSystemPalette';
+import { isLinuxDesktopShell } from '../../../hooks/useTilingMode';
+import { getDesktopWindowEnvironment } from '../../../utils/desktop';
+import {
+  InterfaceFontChoice,
+  MonospaceFontChoice,
+  sanitizeFontFamilyList,
+} from '../../../utils/interfaceFonts';
 
 type ThemeSelectorProps = {
   themeNames: Record<string, string>;
@@ -508,6 +523,42 @@ function ColorControls({
   );
 }
 
+/**
+ * Offered while the desktop shares a palette, and kept while it is on so it
+ * can be turned off after the palette goes away.
+ */
+function FollowSystemPaletteSetting() {
+  const { palette } = useSystemPalette();
+  const [followSystemPalette, setFollowSystemPalette] = useSetting(
+    settingsAtom,
+    'followSystemPalette'
+  );
+  if (!palette && !followSystemPalette) return null;
+
+  let description: string;
+  if (!palette) {
+    description =
+      'Your desktop has no theme colors to share right now, so the theme above applies.';
+  } else if (palette.source) {
+    description = `Use the background, text and accent colors of your ${palette.source} theme. Synara adjusts them where text would be hard to read.`;
+  } else {
+    description =
+      'Use the background, text and accent colors of your desktop theme. Synara adjusts them where text would be hard to read.';
+  }
+
+  return (
+    <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+      <SettingTile
+        title="Follow system theme colors"
+        description={description}
+        after={
+          <Switch variant="Primary" value={followSystemPalette} onChange={setFollowSystemPalette} />
+        }
+      />
+    </SequenceCard>
+  );
+}
+
 function Appearance() {
   const { t } = useTranslation();
   const activeTheme = useTheme();
@@ -575,6 +626,7 @@ function Appearance() {
           />
         )}
       </SequenceCard>
+      <FollowSystemPaletteSetting />
 
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
@@ -685,6 +737,132 @@ function ThreadDisplaySetting() {
   );
 }
 
+/** A family list, applied on Enter or when the field loses focus; Escape restores. */
+function FontFamilyField({
+  value,
+  onCommit,
+  label,
+  placeholder,
+}: {
+  value: string;
+  onCommit: (family: string) => void;
+  label: string;
+  placeholder: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+
+  const commit = () => {
+    const next = sanitizeFontFamilyList(draft);
+    setDraft(next);
+    if (next !== value) onCommit(next);
+  };
+
+  return (
+    <Input
+      size="300"
+      radii="300"
+      variant="Secondary"
+      outlined
+      value={draft}
+      aria-label={label}
+      placeholder={placeholder}
+      spellCheck={false}
+      autoComplete="off"
+      maxLength={280}
+      onChange={(evt) => setDraft(evt.currentTarget.value)}
+      onBlur={commit}
+      onKeyDown={(evt) => {
+        if (isKeyHotkey('escape', evt)) {
+          evt.stopPropagation();
+          setDraft(value);
+        }
+        if (isKeyHotkey('enter', evt)) commit();
+      }}
+      style={{ width: toRem(280) }}
+    />
+  );
+}
+
+const INTERFACE_FONT_OPTIONS: Array<{ value: InterfaceFontChoice; label: string }> = [
+  { value: 'default', label: 'Default' },
+  { value: 'monospace', label: 'Monospace' },
+  { value: 'custom', label: 'Custom' },
+];
+
+const MONOSPACE_FONT_OPTIONS: Array<{ value: MonospaceFontChoice; label: string }> = [
+  { value: 'default', label: 'Default' },
+  { value: 'custom', label: 'Custom' },
+];
+
+function FontSettings() {
+  const [interfaceFont, setInterfaceFont] = useSetting(settingsAtom, 'interfaceFont');
+  const [interfaceFontFamily, setInterfaceFontFamily] = useSetting(
+    settingsAtom,
+    'interfaceFontFamily'
+  );
+  const [monospaceFont, setMonospaceFont] = useSetting(settingsAtom, 'monospaceFont');
+  const [monospaceFontFamily, setMonospaceFontFamily] = useSetting(
+    settingsAtom,
+    'monospaceFontFamily'
+  );
+
+  return (
+    <>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Interface font"
+          description="The font for menus, lists and messages. Custom takes font families installed on this device, separated by commas; the default font covers anything they lack."
+          after={
+            <SegmentedChoice
+              label="Interface font"
+              value={interfaceFont}
+              options={INTERFACE_FONT_OPTIONS}
+              onChange={setInterfaceFont}
+            />
+          }
+        >
+          {interfaceFont === 'custom' && (
+            <Box style={{ paddingTop: config.space.S100 }}>
+              <FontFamilyField
+                value={interfaceFontFamily}
+                onCommit={setInterfaceFontFamily}
+                label="Interface font family"
+                placeholder="For example: Inter, Noto Sans"
+              />
+            </Box>
+          )}
+        </SettingTile>
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Monospace font"
+          description="The font for code and other fixed-width text. Custom takes font families installed on this device, separated by commas."
+          after={
+            <SegmentedChoice
+              label="Monospace font"
+              value={monospaceFont}
+              options={MONOSPACE_FONT_OPTIONS}
+              onChange={setMonospaceFont}
+            />
+          }
+        >
+          {monospaceFont === 'custom' && (
+            <Box style={{ paddingTop: config.space.S100 }}>
+              <FontFamilyField
+                value={monospaceFontFamily}
+                onCommit={setMonospaceFontFamily}
+                label="Monospace font family"
+                placeholder="For example: JetBrains Mono"
+              />
+            </Box>
+          )}
+        </SettingTile>
+      </SequenceCard>
+    </>
+  );
+}
+
 function TextAndZoom() {
   const [messageTextTone, setMessageTextTone] = useSetting(settingsAtom, 'messageTextTone');
 
@@ -724,6 +902,8 @@ function TextAndZoom() {
           }
         />
       </SequenceCard>
+
+      <FontSettings />
 
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <ThreadDisplaySetting />
@@ -931,6 +1111,48 @@ function MessageDisplay() {
   );
 }
 
+const TILING_MODE_OPTIONS: Array<{ value: TilingModeSetting; label: string }> = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'on', label: 'On' },
+  { value: 'off', label: 'Off' },
+];
+
+function TilingModeTile() {
+  const [tilingMode, setTilingMode] = useSetting(desktopPlatformSettingsAtom, 'tilingMode');
+  const detected = getDesktopWindowEnvironment() === 'tiling';
+  let status = '';
+  if (tilingMode === 'auto') {
+    status = detected
+      ? ' A tiling window manager was detected, so it is on.'
+      : ' No tiling window manager was detected, so it is off.';
+  }
+
+  return (
+    <SettingsSection title="Window">
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Tiling mode"
+          description={`For tiling window managers such as Hyprland or Sway: Synara leaves the window frame to them and draws no title bar of its own. Ctrl+Q still quits. Auto turns it on when Synara starts under one.${status}`}
+          after={
+            <SegmentedChoice
+              label="Tiling mode"
+              value={tilingMode}
+              options={TILING_MODE_OPTIONS}
+              onChange={setTilingMode}
+            />
+          }
+        />
+      </SequenceCard>
+    </SettingsSection>
+  );
+}
+
+/** The window chrome settings exist only in the borderless Linux shell. */
+function WindowSettings() {
+  if (!isLinuxDesktopShell()) return null;
+  return <TilingModeTile />;
+}
+
 type AppearancePageProps = {
   requestClose: () => void;
 };
@@ -944,6 +1166,7 @@ export function AppearancePage({ requestClose }: AppearancePageProps) {
       <Appearance />
       <TextAndZoom />
       <MessageDisplay />
+      <WindowSettings />
     </SettingsPage>
   );
 }

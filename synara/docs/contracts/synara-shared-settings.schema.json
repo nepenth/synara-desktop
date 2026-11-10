@@ -81,6 +81,25 @@
       "type": "string",
       "enum": ["soft", "balanced", "bright"]
     },
+    "followSystemPalette": { "type": "boolean" },
+    "interfaceFont": {
+      "type": "string",
+      "enum": ["default", "monospace", "custom"]
+    },
+    "interfaceFontFamily": {
+      "type": "string",
+      "maxLength": 280,
+      "pattern": "^[\\p{L}\\p{N} ._,-]*$"
+    },
+    "monospaceFont": {
+      "type": "string",
+      "enum": ["default", "custom"]
+    },
+    "monospaceFontFamily": {
+      "type": "string",
+      "maxLength": 280,
+      "pattern": "^[\\p{L}\\p{N} ._,-]*$"
+    },
     "threadDisplay": {
       "type": "string",
       "enum": ["full", "side", "inline"]

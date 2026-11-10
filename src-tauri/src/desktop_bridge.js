@@ -18,6 +18,8 @@
     supportsSpellcheck: true,
     desktopEnvironment: "unknown",
     sessionType: "unknown",
+    // "floating" | "tiling"; the shell overrides it at startup (F1).
+    windowEnvironment: "floating",
     routes: Object.freeze({
       later: "/inbox/later/",
       notifications: "/inbox/notifications/",
