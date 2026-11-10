@@ -20,14 +20,14 @@ a built app, and no Linux-only Rust path has been compiled** (the Linux workstat
 | N1–N6 bottom bar, space switcher, rail removed | Done; N7 review build not made (the Mac has no room for a release build) |
 | T1 no title strip in tiling mode | Done |
 | T2 explicit Wayland app id | Not done (needs a Linux session to confirm the class) |
-| T3 no size/position restore when tiling | Done, not compiled (Linux-only) |
+| T3 no size/position restore when tiling | Done; compiles and passes lint on Linux, not yet seen under Hyprland |
 | L1–L3 narrow layouts, overlay panels, zoom-aware breakpoints | Done |
 | K1–K4 keyboard | Done. Places are Alt+1–4 (Windows, Linux) and ⌃1–4 (macOS), not Ctrl/⌘+1–4, which are the composer's heading keys |
 | I1 deep links | macOS and Linux (Arch desktop entry). Not done: Windows scheme registration, the deb desktop entry |
 | I2 `synara status` | Done, with a Waybar example in `docs/linux.md`. On Windows release builds the command has no console to print to |
 | I3 notification mark-read and reply actions | Not started |
 | H1 palette engine, H2 fonts | Done |
-| H3 Omarchy provider | Written against an assumed theme layout (`colors.toml`, else `alacritty.toml`, under `~/.config/omarchy/current/theme`); unconfirmed |
+| H3 Omarchy provider | Reads `colors.toml` (else `alacritty.toml`) under `~/.local/state/omarchy/current/theme`, the layout confirmed on the Omarchy box on 2026-11-10, with the older `~/.config/omarchy/current/theme` as a fallback. Not yet seen in a running app |
 | H4 system accent on macOS and Windows | Not started |
 | P pop-out windows | Deferred |
 
@@ -335,8 +335,12 @@ workspace. Kept here so the design is not lost. Universal. Depends on N5 and D5.
 
 **H3. Omarchy provider** · Provider · M
 - **Spike first:** confirm on the Omarchy box where the active theme lives and its format (expected
-  under `~/.config/omarchy/current/`), and how the current font is exposed. The workstation was
-  unreachable while this plan was written.
+  under `~/.config/omarchy/current/`), and how the current font is exposed. Found on 2026-11-10:
+  the theme is a directory at `~/.local/state/omarchy/current/theme`, replaced whole on a switch,
+  with a flat `colors.toml` of semantic names (`accent`, `background`, `red`, `bright_red`, …);
+  `omarchy-font-current` prints the font. This Omarchy has no Waybar: its bar is a Quickshell
+  process (`omarchy-shell`) that takes QML plugins, so a Synara indicator there is a plugin, not
+  the Waybar module in `docs/linux.md`.
 - Read the palette, watch for theme switches (add the `notify` crate; watch the parent directory,
   since a theme switch swaps a symlink), and offer "Follow Omarchy theme" in Appearance only when
   the provider is available.

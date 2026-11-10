@@ -1,8 +1,9 @@
 //! The desktop's own colour palette, for "Follow system theme colors".
 //!
 //! One provider so far: Omarchy, which keeps the active theme as files under
-//! `~/.config/omarchy/current/theme` and swaps that link when the user picks
-//! another theme. The renderer derives its surfaces and accent from the three
+//! `~/.local/state/omarchy/current/theme` (`~/.config/omarchy/current/theme`
+//! on older installs) and replaces that directory when the user picks another
+//! theme. The renderer derives its surfaces and accent from the three
 //! colours here (`utils/themeExternalPalette.ts`) and re-themes on the change
 //! event. Where no provider applies the command answers `null` and the
 //! setting stays hidden.
@@ -98,7 +99,7 @@ fn first_color(pairs: &HashMap<String, String>, keys: &[&str]) -> Option<String>
         .find_map(|value| normalize_hex(value))
 }
 
-fn terminal_colors(pairs: &HashMap<String, String>, keys: &[[&str; 2]; 16]) -> Vec<String> {
+fn terminal_colors(pairs: &HashMap<String, String>, keys: &[[&str; 3]; 16]) -> Vec<String> {
     let colors: Vec<String> = keys
         .iter()
         .filter_map(|candidates| first_color(pairs, candidates))
@@ -110,37 +111,49 @@ fn terminal_colors(pairs: &HashMap<String, String>, keys: &[[&str; 2]; 16]) -> V
     }
 }
 
-const ALACRITTY_COLOR_KEYS: [[&str; 2]; 16] = [
-    ["colors.normal.black", "color0"],
-    ["colors.normal.red", "color1"],
-    ["colors.normal.green", "color2"],
-    ["colors.normal.yellow", "color3"],
-    ["colors.normal.blue", "color4"],
-    ["colors.normal.magenta", "color5"],
-    ["colors.normal.cyan", "color6"],
-    ["colors.normal.white", "color7"],
-    ["colors.bright.black", "color8"],
-    ["colors.bright.red", "color9"],
-    ["colors.bright.green", "color10"],
-    ["colors.bright.yellow", "color11"],
-    ["colors.bright.blue", "color12"],
-    ["colors.bright.magenta", "color13"],
-    ["colors.bright.cyan", "color14"],
-    ["colors.bright.white", "color15"],
+/// Each terminal colour under its Alacritty name, its ANSI name and the
+/// semantic name Omarchy's `colors.toml` uses (which has no black or white:
+/// the background, foreground and muted colours stand in, as Omarchy's own
+/// `omarchy-theme-color` resolves them).
+const TERMINAL_COLOR_KEYS: [[&str; 3]; 16] = [
+    ["colors.normal.black", "color0", "background"],
+    ["colors.normal.red", "color1", "red"],
+    ["colors.normal.green", "color2", "green"],
+    ["colors.normal.yellow", "color3", "yellow"],
+    ["colors.normal.blue", "color4", "blue"],
+    ["colors.normal.magenta", "color5", "magenta"],
+    ["colors.normal.cyan", "color6", "cyan"],
+    ["colors.normal.white", "color7", "foreground"],
+    ["colors.bright.black", "color8", "muted"],
+    ["colors.bright.red", "color9", "bright_red"],
+    ["colors.bright.green", "color10", "bright_green"],
+    ["colors.bright.yellow", "color11", "bright_yellow"],
+    ["colors.bright.blue", "color12", "bright_blue"],
+    ["colors.bright.magenta", "color13", "bright_magenta"],
+    ["colors.bright.cyan", "color14", "bright_cyan"],
+    ["colors.bright.white", "color15", "bright_foreground"],
 ];
 
 /// A palette from a theme's colour file: either a flat `colors.toml`
-/// (`background`, `foreground`, `accent`, `color0`…`color15`) or a terminal
-/// theme in Alacritty's layout (`[colors.primary]`, `[colors.normal]`).
-/// The accent falls back to the terminal's blue.
+/// (`background`, `foreground`, `accent`, then `red`, `bright_red`… or
+/// `color0`…`color15`) or a terminal theme in Alacritty's layout
+/// (`[colors.primary]`, `[colors.normal]`). The accent falls back to the
+/// terminal's blue.
 pub fn palette_from_toml(source: &str, text: &str) -> Option<SystemPalette> {
     let pairs = toml_pairs(text);
-    let background = first_color(&pairs, &["background", "colors.primary.background"])?;
-    let foreground = first_color(&pairs, &["foreground", "colors.primary.foreground"])?;
+    let background = first_color(
+        &pairs,
+        &["background", "bg", "colors.primary.background", "color0"],
+    )?;
+    let foreground = first_color(
+        &pairs,
+        &["foreground", "fg", "colors.primary.foreground", "color7"],
+    )?;
     let accent = first_color(
         &pairs,
         &[
             "accent",
+            "blue",
             "colors.normal.blue",
             "color4",
             "colors.bright.blue",
@@ -152,7 +165,7 @@ pub fn palette_from_toml(source: &str, text: &str) -> Option<SystemPalette> {
         background,
         foreground,
         accent,
-        colors: terminal_colors(&pairs, &ALACRITTY_COLOR_KEYS),
+        colors: terminal_colors(&pairs, &TERMINAL_COLOR_KEYS),
     })
 }
 
@@ -180,14 +193,26 @@ pub fn provider_available() -> bool {
     }
 }
 
+/// Where Omarchy keeps the theme in use. It moved from the config directory
+/// to the state directory (`~/.local/state/omarchy/current/theme`), so both
+/// are looked at, the current place first.
 #[cfg(target_os = "linux")]
 fn omarchy_theme_dir() -> Option<std::path::PathBuf> {
-    let config = std::env::var_os("XDG_CONFIG_HOME")
-        .filter(|dir| !dir.is_empty())
-        .map(std::path::PathBuf::from)
-        .or_else(dirs::config_dir)?;
-    let current = config.join("omarchy").join("current");
-    current.is_dir().then(|| current.join("theme"))
+    let from_env = |name: &str| {
+        std::env::var_os(name)
+            .filter(|dir| !dir.is_empty())
+            .map(std::path::PathBuf::from)
+    };
+    let roots = [
+        from_env("XDG_STATE_HOME").or_else(dirs::state_dir),
+        from_env("XDG_CONFIG_HOME").or_else(dirs::config_dir),
+    ];
+    roots
+        .into_iter()
+        .flatten()
+        .map(|root| root.join("omarchy").join("current"))
+        .find(|current| current.is_dir())
+        .map(|current| current.join("theme"))
 }
 
 /// The palette of the desktop the app runs on, if a provider knows it.
@@ -274,6 +299,58 @@ color4 = "#31748f"
         assert_eq!(palette.foreground, "#e0def4");
         // Fewer than sixteen terminal colours: none are reported.
         assert!(palette.colors.is_empty());
+    }
+
+    /// The `colors.toml` Omarchy writes: semantic names, no `colorN` keys.
+    #[test]
+    fn an_omarchy_semantic_colors_file_gives_all_sixteen_terminal_colours() {
+        let text = r##"
+mode = "dark"
+
+accent = "#7aa2f7"
+selection = "#292e42"
+muted = "#414868"
+
+background = "#1a1b26"
+foreground = "#a9b1d6"
+bright_foreground = "#c0caf5"
+
+red = "#f7768e"
+yellow = "#e0af68"
+green = "#9ece6a"
+cyan = "#449dab"
+blue = "#7aa2f7"
+magenta = "#ad8ee6"
+
+bright_red = "#ff7a93"
+bright_yellow = "#ff9e64"
+bright_green = "#b9f27c"
+bright_cyan = "#0db9d7"
+bright_blue = "#7da6ff"
+bright_magenta = "#bb9af7"
+"##;
+        let palette = palette_from_toml("omarchy", text).unwrap();
+        assert_eq!(palette.accent, "#7aa2f7");
+        assert_eq!(palette.background, "#1a1b26");
+        assert_eq!(palette.foreground, "#a9b1d6");
+        assert_eq!(palette.colors.len(), 16);
+        assert_eq!(palette.colors[0], "#1a1b26");
+        assert_eq!(palette.colors[1], "#f7768e");
+        assert_eq!(palette.colors[7], "#a9b1d6");
+        assert_eq!(palette.colors[8], "#414868");
+        assert_eq!(palette.colors[15], "#c0caf5");
+    }
+
+    #[test]
+    fn short_and_ansi_names_stand_in_for_background_and_foreground() {
+        let palette = palette_from_toml(
+            "omarchy",
+            "bg = \"#000000\"\nfg = \"#ffffff\"\nblue = \"#0000ff\"\n",
+        )
+        .unwrap();
+        assert_eq!(palette.background, "#000000");
+        assert_eq!(palette.foreground, "#ffffff");
+        assert_eq!(palette.accent, "#0000ff");
     }
 
     #[test]
