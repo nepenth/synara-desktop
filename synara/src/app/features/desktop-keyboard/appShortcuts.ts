@@ -71,6 +71,11 @@ export type AppShortcut = {
   /** Listed in the macOS menu with this binding as its accelerator. */
   menu?: boolean;
   /**
+   * A second binding for that shortcut's action: the help sheet lists these
+   * keys on that shortcut's row rather than repeating the label.
+   */
+  alsoFor?: AppShortcutAction;
+  /**
    * Handled by its own component rather than the dispatcher (listed in the
    * help sheet only). Quit lives on the Linux title strip, which is mounted
    * on every screen, sign-in included.
@@ -132,7 +137,13 @@ export const APP_SHORTCUTS: readonly AppShortcut[] = [
   { id: 'go-home', label: 'Open home', scope: 'navigation', ...place('1') },
   { id: 'go-activity', label: 'Open activity', scope: 'navigation', ...place('2') },
   { id: 'go-approvals', label: 'Open approvals', scope: 'navigation', ...place('3') },
-  { id: 'go-settings', label: 'Open settings', scope: 'navigation', ...place('4') },
+  {
+    id: 'go-settings',
+    label: 'Open settings',
+    scope: 'navigation',
+    alsoFor: 'settings',
+    ...place('4'),
+  },
   {
     // Cmd/Ctrl+S alone is the composer's strikethrough; with Shift it is free
     // (no composer, menu or global default takes it).
@@ -344,7 +355,14 @@ export const menuAccelerator = (shortcut: AppShortcut): string | undefined => {
 export type AppShortcutHelpGroup = {
   scope: AppShortcutScope;
   label: string;
-  items: { id: AppShortcutAction; label: string; keys: string; ariaKeyShortcuts: string }[];
+  items: {
+    id: AppShortcutAction;
+    label: string;
+    /** Every combination that reaches the action, the row's own first. */
+    keys: string[];
+    /** The same combinations as an `aria-keyshortcuts` value (space-separated). */
+    ariaKeyShortcuts: string;
+  }[];
 };
 
 /** A shortcut's binding on this platform as shown (`⌃1`) and announced (`Control+1`). */
@@ -360,25 +378,34 @@ export const appShortcutHint = (
   };
 };
 
-/** The help sheet's contents for this platform: every bound shortcut, by group. */
-export const appShortcutHelp = (platform: AppShortcutPlatform): AppShortcutHelpGroup[] =>
-  APP_SHORTCUT_SCOPES.map(({ scope, label }) => ({
+/**
+ * The help sheet's contents for this platform: every bound action once, by
+ * group, with all of its key combinations on the one row.
+ */
+export const appShortcutHelp = (platform: AppShortcutPlatform): AppShortcutHelpGroup[] => {
+  const boundHere = (shortcut: AppShortcut) => shortcutBinding(shortcut, platform) !== undefined;
+  return APP_SHORTCUT_SCOPES.map(({ scope, label }) => ({
     scope,
     label,
     items: APP_SHORTCUTS.flatMap((shortcut) => {
-      if (shortcut.scope !== scope) return [];
-      const binding = shortcutBinding(shortcut, platform);
-      if (!binding) return [];
+      if (shortcut.scope !== scope || !boundHere(shortcut)) return [];
+      // Listed on the other shortcut's row, unless that one has no binding here.
+      if (shortcut.alsoFor && boundHere(appShortcut(shortcut.alsoFor))) return [];
+      const bindings = [
+        shortcut,
+        ...APP_SHORTCUTS.filter((other) => other.alsoFor === shortcut.id),
+      ].flatMap((entry) => shortcutBinding(entry, platform) ?? []);
       return [
         {
           id: shortcut.id,
           label: shortcut.label,
-          keys: bindingLabel(binding, platform.macOS),
-          ariaKeyShortcuts: bindingAriaKeyShortcuts(binding),
+          keys: bindings.map((binding) => bindingLabel(binding, platform.macOS)),
+          ariaKeyShortcuts: bindings.map(bindingAriaKeyShortcuts).join(' '),
         },
       ];
     }),
   })).filter((group) => group.items.length > 0);
+};
 
 /** Zoom levels the shortcuts step through; the Appearance field allows 75–200. */
 export const PAGE_ZOOM_STEPS = [75, 80, 90, 100, 110, 125, 150, 175, 200] as const;

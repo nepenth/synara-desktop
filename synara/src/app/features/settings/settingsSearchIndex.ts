@@ -228,7 +228,7 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   {
     page: SettingsPages.AppearancePage,
     title: 'Base color',
-    description: 'Tints the rail, room list and chat.',
+    description: 'Tints the side panels, room list and chat.',
     synonyms: ['background', 'tint', 'colour'],
   },
   {

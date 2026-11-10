@@ -22,7 +22,7 @@ import { isLinuxOS, isMacOS } from '../../utils/user-agent';
 import * as css from './NavPane.css';
 
 type NavPaneHeaderProps = {
-  /** The pane's title: the homeserver, a space, "Activity" or "Explore". */
+  /** The pane's title: "Home", a space, "Activity" or "Explore". */
   title: string;
   /** Leading mark: the Synara logo on Home, the space avatar in a space. */
   mark?: ReactNode;
@@ -109,7 +109,8 @@ export function NavPaneHeader({ title, mark, titleAfter, actions }: NavPaneHeade
   return (
     <>
       <PageNavHeader data-tauri-drag-region>
-        <Box alignItems="Center" grow="Yes" gap="200" data-tauri-drag-region>
+        {/* Tight gaps: at the default list width every pixel here is title. */}
+        <Box alignItems="Center" grow="Yes" gap="100" data-tauri-drag-region>
           <button
             ref={triggerRef}
             type="button"

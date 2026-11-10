@@ -9,6 +9,7 @@ import {
   normalizeExternalColor,
   normalizeExternalPalette,
   type ExternalPalette,
+  externalPaletteSourceLabel,
 } from '../themeExternalPalette';
 
 const contrast = (a: string, b: string) => chroma.contrast(a, b);
@@ -195,4 +196,13 @@ test('every background on a coarse sRGB grid stays readable', () => {
       }
     }
   }
+});
+
+test('copy names a known provider properly and falls back to "your desktop theme"', () => {
+  assert.equal(externalPaletteSourceLabel('omarchy'), 'your Omarchy theme');
+  assert.equal(externalPaletteSourceLabel('Omarchy'), 'your Omarchy theme');
+  // An unknown id is not shown, capitalised or otherwise.
+  assert.equal(externalPaletteSourceLabel('some-shell'), 'your desktop theme');
+  assert.equal(externalPaletteSourceLabel('constructor'), 'your desktop theme');
+  assert.equal(externalPaletteSourceLabel(''), 'your desktop theme');
 });

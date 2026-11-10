@@ -82,6 +82,19 @@ const normalizeSource = (value: unknown): string => {
     .trim();
 };
 
+/** Providers' `source` ids as people know them. */
+const SOURCE_DISPLAY_NAMES: ReadonlyMap<string, string> = new Map([['omarchy', 'Omarchy']]);
+
+/**
+ * How copy refers to a palette's origin: "your Omarchy theme" for a provider
+ * we know, "your desktop theme" otherwise. An unknown `source` is an id from
+ * the shell, not a name to show.
+ */
+export const externalPaletteSourceLabel = (source: string): string => {
+  const name = SOURCE_DISPLAY_NAMES.get(source.trim().toLowerCase());
+  return name ? `your ${name} theme` : 'your desktop theme';
+};
+
 /**
  * The shell's `desktop_system_palette` payload, checked. `null` when it is
  * not a palette: no object, or no usable background. A bad foreground falls

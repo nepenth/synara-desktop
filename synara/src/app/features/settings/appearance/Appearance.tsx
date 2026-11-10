@@ -71,6 +71,7 @@ import {
 } from '../../../utils/themeBase';
 import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 import { useSystemPalette } from '../../../hooks/useSystemPalette';
+import { externalPaletteSourceLabel } from '../../../utils/themeExternalPalette';
 import { isLinuxDesktopShell } from '../../../hooks/useTilingMode';
 import { getDesktopWindowEnvironment } from '../../../utils/desktop';
 import {
@@ -367,7 +368,8 @@ function ThemeRampPreview({ baseColor, kind }: { baseColor: string; kind: ThemeK
     <Box gap="200" alignItems="Center">
       {(
         [
-          ['Rail', chrome.rail],
+          // The former rail's token: now the thread, members and other side panels.
+          ['Panels', chrome.rail],
           ['List', chrome.roomList],
           ['Chat', chrome.chat],
         ] as const
@@ -539,11 +541,8 @@ function FollowSystemPaletteSetting() {
   if (!palette) {
     description =
       'Your desktop has no theme colors to share right now, so the theme above applies.';
-  } else if (palette.source) {
-    description = `Use the background, text and accent colors of your ${palette.source} theme. Synara adjusts them where text would be hard to read.`;
   } else {
-    description =
-      'Use the background, text and accent colors of your desktop theme. Synara adjusts them where text would be hard to read.';
+    description = `Use the background, text and accent colors of ${externalPaletteSourceLabel(palette.source)}. Synara adjusts them where text would be hard to read.`;
   }
 
   return (
@@ -640,7 +639,7 @@ function Appearance() {
           title={t('modernization.settings.base_color.title', 'Base color')}
           description={t(
             'modernization.settings.base_color.description',
-            'Tints the rail, room list and chat. Lightness is mapped to the stacked greys, not used as a fill.'
+            'Tints the side panels, room list and chat. Lightness is mapped to the stacked greys, not used as a fill.'
           )}
           after={<ThemeRampPreview baseColor={baseColor} kind={activeTheme.kind} />}
         >

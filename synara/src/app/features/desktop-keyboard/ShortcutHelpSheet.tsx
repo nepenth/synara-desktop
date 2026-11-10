@@ -95,8 +95,12 @@ export function ShortcutHelpSheet({
                             <Text as="dt" size="T300">
                               {item.label}
                             </Text>
-                            <dd style={{ margin: 0 }}>
-                              <kbd style={kbdStyle}>{item.keys}</kbd>
+                            <dd style={{ margin: 0, display: 'flex', gap: config.space.S100 }}>
+                              {item.keys.map((keys) => (
+                                <kbd key={keys} style={kbdStyle}>
+                                  {keys}
+                                </kbd>
+                              ))}
                             </dd>
                           </Box>
                         ))}

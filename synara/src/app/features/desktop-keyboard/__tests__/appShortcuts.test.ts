@@ -242,6 +242,15 @@ test('the help sheet lists every bound shortcut once, by group, in sentence case
     assert.equal(new Set(ids).size, ids.length);
     assert.equal(ids.includes('quit'), platform.linux, name);
     assert.ok(ids.includes('shortcut-help'));
+    // One row per action: no label twice, and no binding dropped.
+    const items = groups.flatMap((group) => group.items);
+    const labels = items.map((item) => item.label);
+    assert.equal(new Set(labels).size, labels.length, name);
+    assert.equal(
+      items.flatMap((item) => item.keys).length,
+      APP_SHORTCUTS.filter((shortcut) => shortcutBinding(shortcut, platform)).length,
+      name
+    );
     for (const text of [
       ...groups.map((group) => group.label),
       ...groups.flatMap((group) => group.items.map((item) => item.label)),
@@ -254,19 +263,28 @@ test('the help sheet lists every bound shortcut once, by group, in sentence case
   assert.deepEqual(
     navigation.items.map((item) => [item.label, item.keys]),
     [
-      ['Open home', '⌃1'],
-      ['Open activity', '⌃2'],
-      ['Open approvals', '⌃3'],
-      ['Open settings', '⌃4'],
-      ['Open space switcher', '⌘⇧S'],
-      ['Previous room', '⌥↑'],
-      ['Next room', '⌥↓'],
-      ['Previous unread room', '⌥⇧↑'],
-      ['Next unread room', '⌥⇧↓'],
-      ['Move focus to the next area', 'F6'],
-      ['Move focus to the previous area', '⇧F6'],
+      ['Open home', ['⌃1']],
+      ['Open activity', ['⌃2']],
+      ['Open approvals', ['⌃3']],
+      ['Open space switcher', ['⌘⇧S']],
+      ['Previous room', ['⌥↑']],
+      ['Next room', ['⌥↓']],
+      ['Previous unread room', ['⌥⇧↑']],
+      ['Next unread room', ['⌥⇧↓']],
+      ['Move focus to the next area', ['F6']],
+      ['Move focus to the previous area', ['⇧F6']],
     ]
   );
+  // "Open settings" is one row, under General, with the place key beside ⌘,.
+  for (const [platform, keys, aria] of [
+    [mac, ['⌘,', '⌃4'], 'Meta+, Control+4'],
+    [linux, ['Ctrl+,', 'Alt+4'], 'Control+, Alt+4'],
+  ] as const) {
+    const general = appShortcutHelp(platform).find((group) => group.scope === 'general')!;
+    const settings = general.items.find((item) => item.id === 'settings')!;
+    assert.deepEqual([settings.label, settings.keys], ['Open settings', keys]);
+    assert.equal(settings.ariaKeyShortcuts, aria);
+  }
 });
 
 test('page zoom steps stay within the Appearance range', () => {

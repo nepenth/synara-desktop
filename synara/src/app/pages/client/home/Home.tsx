@@ -88,8 +88,6 @@ import {
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
 import * as depthCss from '../../../styles/Depth.css';
-import { getActiveSession } from '../../../state/sessionBootstrap';
-import { homeserverDisplayName } from './homeIdentity';
 
 import { getNativeRoom } from '../../../native/nativeSession';
 import {
@@ -240,8 +238,6 @@ function HomeHeader() {
   const { t } = useTranslation();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const [addAnchor, setAddAnchor] = useState<RectCords>();
-  const session = getActiveSession();
-  const serverName = homeserverDisplayName(session?.baseUrl, session?.userId);
   const createRoomSelected = useHomeCreateSelected();
   const joinSelected = useHomeJoinSelected();
   const createDirectSelected = useDirectCreateSelected();
@@ -266,7 +262,8 @@ function HomeHeader() {
 
   return (
     <NavPaneHeader
-      title={serverName}
+      // The switcher's own name for this list, not the homeserver's host name.
+      title="Home"
       mark={<img src={SynaraPNG} alt="" width={22} height={22} style={{ display: 'block' }} />}
       actions={
         <>
@@ -277,6 +274,8 @@ function HomeHeader() {
             aria-haspopup="menu"
             aria-expanded={!!addAnchor}
             aria-pressed={!!addAnchor || createRoomSelected || joinSelected || createDirectSelected}
+            size="300"
+            radii="300"
             variant="Surface"
             onClick={toggle(setAddAnchor)}
           >
@@ -285,6 +284,8 @@ function HomeHeader() {
           <IconButton
             aria-label={t('modernization.nav.home_options', 'Home options')}
             aria-pressed={!!menuAnchor}
+            size="300"
+            radii="300"
             variant="Surface"
             onClick={toggle(setMenuAnchor)}
           >

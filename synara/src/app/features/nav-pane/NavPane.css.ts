@@ -22,7 +22,7 @@ export const SwitcherTrigger = style([
     minWidth: 0,
     display: 'inline-flex',
     alignItems: 'center',
-    gap: config.space.S200,
+    gap: config.space.S100,
     height: toRem(32),
     padding: `0 ${config.space.S100}`,
     marginLeft: `calc(-1 * ${config.space.S100})`,
@@ -50,6 +50,8 @@ export const TriggerMark = style({
   height: toRem(22),
   borderRadius: toRem(6),
   overflow: 'hidden',
+  // With the trigger's gap, 8px between the mark and the title.
+  marginRight: config.space.S100,
 });
 
 export const TriggerChevron = style({
@@ -70,9 +72,11 @@ export const TriggerDot = style({
 
 /** The rest of the header row drags the window, as the header itself does. */
 export const HeaderDragSpace = style({
+  // No minimum of its own: the gaps either side of it already drag, and the
+  // title needs the width.
   flexGrow: 1,
   alignSelf: 'stretch',
-  minWidth: toRem(8),
+  minWidth: 0,
 });
 
 /* ---------- Switcher menu ---------- */

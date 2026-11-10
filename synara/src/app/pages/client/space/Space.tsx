@@ -330,6 +330,8 @@ function SpaceHeader() {
           <IconButton
             aria-label={`${spaceName} options`}
             aria-pressed={!!menuAnchor}
+            size="300"
+            radii="300"
             variant="Surface"
             onClick={handleOpenMenu}
           >
