@@ -1,33 +1,344 @@
 /**
- * Window-level keyboard shortcuts of the desktop app: page zoom, Settings,
- * previous/next room, show/hide the room list and (Linux) Quit. macOS also
- * lists the zoom, Settings and room list items in its menus; the webview sees
- * the key first, so a handled key never reaches the menu as well.
+ * The app's one shortcut registry: every window-level keyboard shortcut, its
+ * default binding on macOS and on Windows/Linux, its label and the group it is
+ * listed under in the shortcut help sheet. `DesktopAppShortcuts` is the only
+ * dispatcher. macOS also lists some items in its menus (`menu.rs`); the
+ * webview sees the key first, so a handled key never reaches the menu as
+ * well, and a unit test keeps the menu accelerators equal to these bindings.
+ *
+ * Not app shortcuts, and so not here: the composer's formatting and send
+ * keys, autocomplete and menu navigation, and arrow keys inside a list.
  */
 
 export type AppShortcutAction =
-  | 'zoom-in'
-  | 'zoom-out'
-  | 'zoom-reset'
+  | 'search'
+  | 'shortcut-help'
   | 'settings'
+  | 'quit'
   | 'previous-room'
   | 'next-room'
+  | 'previous-unread-room'
+  | 'next-unread-room'
+  | 'focus-next-region'
+  | 'focus-previous-region'
+  | 'close-thread'
   | 'toggle-room-list'
-  | 'quit';
+  | 'zoom-in'
+  | 'zoom-out'
+  | 'zoom-reset';
 
-export const APP_SHORTCUT_ACTIONS: readonly AppShortcutAction[] = [
-  'zoom-in',
-  'zoom-out',
-  'zoom-reset',
-  'settings',
-  'previous-room',
-  'next-room',
-  'toggle-room-list',
-  'quit',
+/** Help sheet groups, in the order the sheet lists them. */
+export type AppShortcutScope = 'general' | 'navigation' | 'room' | 'view';
+
+export const APP_SHORTCUT_SCOPES: readonly { scope: AppShortcutScope; label: string }[] = [
+  { scope: 'general', label: 'General' },
+  { scope: 'navigation', label: 'Navigation' },
+  { scope: 'room', label: 'Rooms and threads' },
+  { scope: 'view', label: 'View' },
 ];
+
+/**
+ * One key combination. Modifiers not named must be up, except Shift when it
+ * is `'any'` (a key such as `+` or `/` that some layouts type with Shift).
+ */
+export type KeyBinding = {
+  /** `KeyboardEvent.key` values; single characters compare case-insensitively. */
+  keys: readonly string[];
+  ctrl?: boolean;
+  meta?: boolean;
+  alt?: boolean;
+  shift?: boolean | 'any';
+};
+
+export type AppShortcut = {
+  id: AppShortcutAction;
+  /** Sentence case, as the help sheet lists it. */
+  label: string;
+  scope: AppShortcutScope;
+  /** Default binding on macOS; absent when the shortcut does not exist there. */
+  mac?: KeyBinding;
+  /** Default binding on Windows and Linux. Never the Super key. */
+  windowsLinux?: KeyBinding;
+  /** Only on Linux (no app menu there). */
+  linuxOnly?: boolean;
+  /** Needs the desktop shell; the dispatcher ignores it in a plain browser. */
+  desktopOnly?: boolean;
+  /** Listed in the macOS menu with this binding as its accelerator. */
+  menu?: boolean;
+  /**
+   * Handled by its own component rather than the dispatcher (listed in the
+   * help sheet only). Quit lives on the Linux title strip, which is mounted
+   * on every screen, sign-in included.
+   */
+  external?: boolean;
+};
+
+/** Cmd on macOS, Ctrl on Windows and Linux. */
+const primary = (
+  keys: readonly string[],
+  extra: Pick<KeyBinding, 'alt' | 'shift'> = {}
+): Pick<AppShortcut, 'mac' | 'windowsLinux'> => ({
+  mac: { keys, meta: true, ...extra },
+  windowsLinux: { keys, ctrl: true, ...extra },
+});
+
+/** The same keys on every platform. */
+const everywhere = (binding: KeyBinding): Pick<AppShortcut, 'mac' | 'windowsLinux'> => ({
+  mac: binding,
+  windowsLinux: binding,
+});
+
+export const APP_SHORTCUTS: readonly AppShortcut[] = [
+  // General
+  { id: 'search', label: 'Search and jump to', scope: 'general', ...primary(['k']) },
+  {
+    id: 'shortcut-help',
+    label: 'Show keyboard shortcuts',
+    scope: 'general',
+    ...primary(['/'], { shift: 'any' }),
+  },
+  {
+    id: 'settings',
+    label: 'Open settings',
+    scope: 'general',
+    desktopOnly: true,
+    menu: true,
+    ...primary([',']),
+  },
+  {
+    id: 'quit',
+    label: 'Quit Synara',
+    scope: 'general',
+    linuxOnly: true,
+    external: true,
+    windowsLinux: { keys: ['q'], ctrl: true },
+  },
+  // Navigation
+  {
+    id: 'previous-room',
+    label: 'Previous room',
+    scope: 'navigation',
+    desktopOnly: true,
+    ...everywhere({ keys: ['ArrowUp'], alt: true }),
+  },
+  {
+    id: 'next-room',
+    label: 'Next room',
+    scope: 'navigation',
+    desktopOnly: true,
+    ...everywhere({ keys: ['ArrowDown'], alt: true }),
+  },
+  {
+    id: 'previous-unread-room',
+    label: 'Previous unread room',
+    scope: 'navigation',
+    desktopOnly: true,
+    ...everywhere({ keys: ['ArrowUp'], alt: true, shift: true }),
+  },
+  {
+    id: 'next-unread-room',
+    label: 'Next unread room',
+    scope: 'navigation',
+    desktopOnly: true,
+    ...everywhere({ keys: ['ArrowDown'], alt: true, shift: true }),
+  },
+  {
+    id: 'focus-next-region',
+    label: 'Move focus to the next area',
+    scope: 'navigation',
+    ...everywhere({ keys: ['F6'] }),
+  },
+  {
+    id: 'focus-previous-region',
+    label: 'Move focus to the previous area',
+    scope: 'navigation',
+    ...everywhere({ keys: ['F6'], shift: true }),
+  },
+  // Rooms and threads
+  {
+    id: 'close-thread',
+    label: 'Close the thread pane',
+    scope: 'room',
+    ...everywhere({ keys: ['Escape'] }),
+  },
+  // View
+  {
+    id: 'toggle-room-list',
+    label: 'Show or hide the room list',
+    scope: 'view',
+    desktopOnly: true,
+    menu: true,
+    // Slack's "toggle sidebar".
+    ...primary(['d'], { shift: true }),
+  },
+  {
+    id: 'zoom-in',
+    label: 'Zoom in',
+    scope: 'view',
+    desktopOnly: true,
+    menu: true,
+    // `+` is Shift+= on most layouts; accept both.
+    ...primary(['=', '+'], { shift: 'any' }),
+  },
+  {
+    id: 'zoom-out',
+    label: 'Zoom out',
+    scope: 'view',
+    desktopOnly: true,
+    menu: true,
+    ...primary(['-']),
+  },
+  {
+    id: 'zoom-reset',
+    label: 'Actual size',
+    scope: 'view',
+    desktopOnly: true,
+    menu: true,
+    ...primary(['0']),
+  },
+];
+
+export const APP_SHORTCUT_ACTIONS: readonly AppShortcutAction[] = APP_SHORTCUTS.map(
+  (shortcut) => shortcut.id
+);
 
 /** Menu clicks arrive as this event with an `AppShortcutAction` payload. */
 export const APP_SHORTCUT_MENU_EVENT = 'synara://app-shortcut';
+
+export type AppShortcutPlatform = {
+  /** Cmd is the primary modifier. */
+  macOS: boolean;
+  /** Ctrl+Q quits (no app menu there). */
+  linux: boolean;
+};
+
+export const appShortcut = (id: AppShortcutAction): AppShortcut => {
+  const shortcut = APP_SHORTCUTS.find((candidate) => candidate.id === id);
+  if (!shortcut) throw new Error(`Unknown app shortcut ${id}`);
+  return shortcut;
+};
+
+/** The shortcut's binding on this platform, if it has one here. */
+export const shortcutBinding = (
+  shortcut: AppShortcut,
+  platform: AppShortcutPlatform
+): KeyBinding | undefined => {
+  if (shortcut.linuxOnly && !platform.linux) return undefined;
+  return platform.macOS ? shortcut.mac : shortcut.windowsLinux;
+};
+
+type ShortcutKeyEvent = Pick<
+  KeyboardEvent,
+  'key' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey' | 'isComposing'
+>;
+
+const sameKey = (pressed: string, bound: string): boolean =>
+  bound.length === 1 ? pressed.toLowerCase() === bound.toLowerCase() : pressed === bound;
+
+export const bindingMatches = (evt: ShortcutKeyEvent, binding: KeyBinding): boolean =>
+  evt.ctrlKey === !!binding.ctrl &&
+  evt.metaKey === !!binding.meta &&
+  evt.altKey === !!binding.alt &&
+  (binding.shift === 'any' || evt.shiftKey === !!binding.shift) &&
+  binding.keys.some((bound) => sameKey(evt.key, bound));
+
+export const appShortcutAction = (
+  evt: ShortcutKeyEvent,
+  platform: AppShortcutPlatform
+): AppShortcutAction | undefined => {
+  if (evt.isComposing) return undefined;
+  return APP_SHORTCUTS.find((shortcut) => {
+    const binding = shortcutBinding(shortcut, platform);
+    return binding !== undefined && bindingMatches(evt, binding);
+  })?.id;
+};
+
+const KEY_NAMES: Record<string, string> = {
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+  ArrowLeft: '←',
+  ArrowRight: '→',
+  Escape: 'Esc',
+};
+
+const keyName = (key: string): string =>
+  KEY_NAMES[key] ?? (key.length === 1 ? key.toUpperCase() : key);
+
+/** How the binding is written for people: `⌘⇧D` on macOS, `Ctrl+Shift+D` elsewhere. */
+export const bindingLabel = (binding: KeyBinding, macOS: boolean): string => {
+  const key = keyName(binding.keys[0]);
+  const shift = binding.shift === true;
+  if (macOS) {
+    return `${binding.ctrl ? '⌃' : ''}${binding.meta ? '⌘' : ''}${binding.alt ? '⌥' : ''}${
+      shift ? '⇧' : ''
+    }${key}`;
+  }
+  return [
+    binding.ctrl && 'Ctrl',
+    binding.meta && 'Meta',
+    binding.alt && 'Alt',
+    shift && 'Shift',
+    key,
+  ]
+    .filter(Boolean)
+    .join('+');
+};
+
+/** The binding as an `aria-keyshortcuts` value, such as `Meta+Shift+D`. */
+export const bindingAriaKeyShortcuts = (binding: KeyBinding): string =>
+  [
+    binding.ctrl && 'Control',
+    binding.meta && 'Meta',
+    binding.alt && 'Alt',
+    binding.shift === true && 'Shift',
+    binding.keys[0].length === 1 ? binding.keys[0].toUpperCase() : binding.keys[0],
+  ]
+    .filter(Boolean)
+    .join('+');
+
+/**
+ * The macOS menu accelerator (Tauri syntax) for a menu shortcut, derived from
+ * its macOS binding: `CmdOrCtrl+Shift+D`.
+ */
+export const menuAccelerator = (shortcut: AppShortcut): string | undefined => {
+  const binding = shortcut.mac;
+  if (!shortcut.menu || !binding) return undefined;
+  return [
+    binding.meta && 'CmdOrCtrl',
+    binding.ctrl && 'Ctrl',
+    binding.alt && 'Alt',
+    binding.shift === true && 'Shift',
+    binding.keys[0].length === 1 ? binding.keys[0].toUpperCase() : binding.keys[0],
+  ]
+    .filter(Boolean)
+    .join('+');
+};
+
+export type AppShortcutHelpGroup = {
+  scope: AppShortcutScope;
+  label: string;
+  items: { id: AppShortcutAction; label: string; keys: string; ariaKeyShortcuts: string }[];
+};
+
+/** The help sheet's contents for this platform: every bound shortcut, by group. */
+export const appShortcutHelp = (platform: AppShortcutPlatform): AppShortcutHelpGroup[] =>
+  APP_SHORTCUT_SCOPES.map(({ scope, label }) => ({
+    scope,
+    label,
+    items: APP_SHORTCUTS.flatMap((shortcut) => {
+      if (shortcut.scope !== scope) return [];
+      const binding = shortcutBinding(shortcut, platform);
+      if (!binding) return [];
+      return [
+        {
+          id: shortcut.id,
+          label: shortcut.label,
+          keys: bindingLabel(binding, platform.macOS),
+          ariaKeyShortcuts: bindingAriaKeyShortcuts(binding),
+        },
+      ];
+    }),
+  })).filter((group) => group.items.length > 0);
 
 /** Zoom levels the shortcuts step through; the Appearance field allows 75–200. */
 export const PAGE_ZOOM_STEPS = [75, 80, 90, 100, 110, 125, 150, 175, 200] as const;
@@ -41,58 +352,4 @@ export const nextPageZoom = (
     return PAGE_ZOOM_STEPS.find((step) => step > current) ?? PAGE_ZOOM_STEPS.at(-1) ?? current;
   }
   return [...PAGE_ZOOM_STEPS].reverse().find((step) => step < current) ?? PAGE_ZOOM_STEPS[0];
-};
-
-type ShortcutKeyEvent = Pick<
-  KeyboardEvent,
-  'key' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey' | 'isComposing'
->;
-
-export type AppShortcutPlatform = {
-  /** Cmd is the primary modifier. */
-  macOS: boolean;
-  /** Ctrl+Q quits (no app menu there). */
-  linux: boolean;
-};
-
-export const appShortcutAction = (
-  evt: ShortcutKeyEvent,
-  platform: AppShortcutPlatform
-): AppShortcutAction | undefined => {
-  if (evt.isComposing) return undefined;
-  const primary = platform.macOS ? evt.metaKey : evt.ctrlKey;
-  const otherPrimary = platform.macOS ? evt.ctrlKey : evt.metaKey;
-  if (primary && !otherPrimary && !evt.altKey) {
-    // `+` is Shift+= on most layouts; accept both.
-    if (evt.key === '=' || evt.key === '+') return 'zoom-in';
-    // Slack's "toggle sidebar". Cmd+Shift reports `d` in WebKit and `D` in Chromium.
-    if (evt.shiftKey && evt.key.toLowerCase() === 'd') return 'toggle-room-list';
-    if (evt.shiftKey) return undefined;
-    if (evt.key === '-') return 'zoom-out';
-    if (evt.key === '0') return 'zoom-reset';
-    if (evt.key === ',') return 'settings';
-    if (platform.linux && evt.key.toLowerCase() === 'q') return 'quit';
-    return undefined;
-  }
-  if (evt.altKey && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey) {
-    if (evt.key === 'ArrowUp') return 'previous-room';
-    if (evt.key === 'ArrowDown') return 'next-room';
-  }
-  return undefined;
-};
-
-/**
- * The room link one step from the open room in sidebar order. The list is
- * virtual, so only rows on screen are candidates (the open room's
- * neighbours normally are). Without an open room, the first or last row.
- */
-export const adjacentRoomLink = <T extends { getAttribute: (name: string) => string | null }>(
-  links: readonly T[],
-  direction: 'previous-room' | 'next-room'
-): T | undefined => {
-  if (links.length === 0) return undefined;
-  const current = links.findIndex((link) => link.getAttribute('aria-current') === 'page');
-  if (current < 0) return direction === 'next-room' ? links[0] : links[links.length - 1];
-  const next = direction === 'next-room' ? current + 1 : current - 1;
-  return links[next];
 };

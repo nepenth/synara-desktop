@@ -83,6 +83,10 @@ import { getActiveSession } from '../../../state/sessionBootstrap';
 import { homeserverDisplayName } from './homeIdentity';
 
 import { getNativeRoom } from '../../../native/nativeSession';
+import {
+  useRoomListNavSource,
+  type RoomListNavSource,
+} from '../../../features/desktop-keyboard/roomListNavigation';
 
 /** Sort options shared by every room-list section (Home, Direct, spaces). */
 export const useRoomListSortOptions = () => {
@@ -510,6 +514,45 @@ export function Home() {
     listRef: directListRef,
     scrollMargin: directScrollMargin,
   } = useSharedScrollVirtualizer(scrollRef, sortedDirectIds.length, getDirectKey, 10, 32);
+
+  // Previous/next (unread) room walk these rows, not the rendered ones.
+  useRoomListNavSource(
+    useMemo<RoomListNavSource>(
+      () => ({
+        selectedRoomId,
+        sections: [
+          {
+            rows: sortedFavoriteRoomIds,
+            pathFor: (roomId) => {
+              const idOrAlias = getCanonicalAliasOrRoomId(roomId);
+              return directIdSet.has(roomId)
+                ? getDirectRoomPath(idOrAlias)
+                : getHomeRoomPath(idOrAlias);
+            },
+          },
+          {
+            rows: mainRoomIds,
+            pathFor: (roomId) => getHomeRoomPath(getCanonicalAliasOrRoomId(roomId)),
+            reveal: (index) => virtualizer.scrollToIndex(index, { align: 'auto' }),
+          },
+          {
+            rows: sortedDirectIds,
+            pathFor: (roomId) => getDirectRoomPath(getCanonicalAliasOrRoomId(roomId)),
+            reveal: (index) => directVirtualizer.scrollToIndex(index, { align: 'auto' }),
+          },
+        ],
+      }),
+      [
+        selectedRoomId,
+        sortedFavoriteRoomIds,
+        directIdSet,
+        mainRoomIds,
+        virtualizer,
+        sortedDirectIds,
+        directVirtualizer,
+      ]
+    )
+  );
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
     closedCategories.has(categoryId)

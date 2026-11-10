@@ -7,6 +7,8 @@ import 'folds/dist/style.css';
 import { darkTheme } from '../../src/colors.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
 import { ThreadSidePanel } from '../../src/app/features/room/ThreadSidePanel';
+import { MemoryRouter } from 'react-router-dom';
+import { DesktopAppShortcuts } from '../../src/app/features/desktop-keyboard/DesktopAppShortcuts';
 import { normalizeThreadDisplay } from '../../src/app/utils/threadDisplay';
 import { setNativeIdentity } from '../../src/app/state/nativeIdentity';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
@@ -1239,6 +1241,10 @@ function App() {
   const [paneWidth, setPaneWidth] = useState(360);
   return (
     <>
+      {/* The app's one shortcut dispatcher (Escape closes the thread pane). */}
+      <MemoryRouter>
+        <DesktopAppShortcuts />
+      </MemoryRouter>
       <button onClick={() => setMounted((value) => !value)}>Toggle room</button>
       <button onClick={() => setFocusedEventId('$30')}>Focus middle</button>
       <button onClick={() => setFocusedEventId('$t3')}>Focus thread reply</button>

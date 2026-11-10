@@ -110,6 +110,10 @@ import * as depthCss from '../../../styles/Depth.css';
 
 import { getNativeRoom } from '../../../native/nativeSession';
 import { composerErrorMessage } from '../../../features/room/composerSendError';
+import {
+  useRoomListNavSource,
+  type RoomListNavSource,
+} from '../../../features/desktop-keyboard/roomListNavigation';
 type SpaceMenuProps = {
   room: EventedRoomReading;
   requestClose: () => void;
@@ -570,6 +574,26 @@ export function Space() {
     10,
     // Room rows (`RoomSurface`) are 32px.
     32
+  );
+
+  // Previous/next (unread) room walk these rows, not the rendered ones.
+  useRoomListNavSource(
+    useMemo<RoomListNavSource>(() => {
+      const pathFor = (roomId: string) =>
+        getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(roomId));
+      return {
+        selectedRoomId,
+        sections: [
+          { rows: visibleFavoriteRoomIds, pathFor },
+          {
+            // Sub-space headers are rows of the same virtual list.
+            rows: hierarchy.map((item) => ('space' in item ? undefined : item.roomId)),
+            pathFor,
+            reveal: (index) => virtualizer.scrollToIndex(index, { align: 'auto' }),
+          },
+        ],
+      };
+    }, [selectedRoomId, spaceIdOrAlias, visibleFavoriteRoomIds, hierarchy, virtualizer])
   );
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>

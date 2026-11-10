@@ -175,6 +175,7 @@ const tests = [
   'src/app/features/room/__tests__/nativeTimelineFollowLive.test.ts',
   'src/app/features/desktop-titlebar/__tests__/desktopTitleBar.test.ts',
   'src/app/features/desktop-keyboard/__tests__/appShortcuts.test.ts',
+  'src/app/features/desktop-keyboard/__tests__/roomListNavigation.test.ts',
   'src/app/features/room-list-pane/__tests__/roomListPane.test.ts',
   'src/app/platform/__tests__/shortcutHelp.test.ts',
   'src/app/components/uia-stages/__tests__/recaptchaFallback.test.ts',

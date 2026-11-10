@@ -422,6 +422,7 @@ function RoomNavItemImpl({
         to={linkPath}
         ref={linkRef}
         data-room-nav-link
+        data-room-nav-id={room.roomId}
         aria-current={selected ? 'page' : undefined}
         onKeyDown={handleLinkKeyDown}
       >

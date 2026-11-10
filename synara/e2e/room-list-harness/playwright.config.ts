@@ -12,6 +12,7 @@ export default defineConfig({
     'room-list-name.spec.ts',
     'gif-picker.spec.ts',
     'room-list-collapse.spec.ts',
+    'room-list-keyboard.spec.ts',
   ],
   fullyParallel: false,
   retries: 0,

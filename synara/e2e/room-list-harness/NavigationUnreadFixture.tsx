@@ -57,9 +57,19 @@ const home = '!home:example.test';
 const params = new URLSearchParams(location.search);
 const collapsible = params.has('collapsible');
 const homePane = params.has('homePane') || collapsible;
+// `manyRooms`: 400 Home rooms (named in list order), far more than the
+// virtual list renders, with one unread room deep in the list.
+const manyRooms = params.has('manyRooms');
+const fillerName = (index: number) =>
+  manyRooms
+    ? `!filler-${String(index).padStart(3, '0')}:example.test`
+    : `!filler-${index}:example.test`;
 // Enough Home rooms that the Direct messages section starts below the fold.
 const filler = homePane
-  ? Array.from({ length: 30 }, (_, index) => room(`!filler-${index}:example.test`, false))
+  ? Array.from({ length: manyRooms ? 400 : 30 }, (_, index) => ({
+      ...room(fillerName(index), false),
+      unreadCount: manyRooms && index === 350 ? 3 : 0,
+    }))
   : [];
 let rooms = [room(dm, true), room(otherDM, true), room(home, false), ...filler];
 const mdirectLagging = params.has('laggingMDirect');
@@ -185,9 +195,19 @@ function DestinationMembership() {
 /** The room page beside the pane: a composer and the fixture's unread controls. */
 function RoomPage() {
   return (
-    <Page style={{ padding: 16, gap: 8 }}>
+    <Page style={{ padding: 16, gap: 8 }} data-file-drop-region="room">
+      {/* The app's timeline scroller and Slate composer, for F6. */}
+      <div id="native-timeline-history" role="region" aria-label="Messages" style={{ height: 80 }}>
+        Messages
+      </div>
       <textarea aria-label="Composer" />
-      <div contentEditable suppressContentEditableWarning aria-label="Rich composer" role="textbox">
+      <div
+        contentEditable
+        suppressContentEditableWarning
+        aria-label="Rich composer"
+        role="textbox"
+        data-slate-editor="true"
+      >
         Draft
       </div>
       <button type="button" onClick={() => update(home, { unreadCount: 4 })}>
@@ -244,6 +264,7 @@ function CollapsibleClient() {
         >
           <Route path="/home/" element={<RoomPage />} />
           <Route path="/home/:roomIdOrAlias/*" element={<RoomPage />} />
+          <Route path="/direct/:roomIdOrAlias/*" element={<RoomPage />} />
         </Route>
       </Routes>
       <DesktopAppShortcuts />

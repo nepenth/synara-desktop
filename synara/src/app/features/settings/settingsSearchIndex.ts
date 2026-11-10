@@ -202,8 +202,7 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
   {
     page: SettingsPages.AppearancePage,
     title: 'Follow system theme colors',
-    description:
-      'Use the background, text and accent colors of your desktop theme, kept readable.',
+    description: 'Use the background, text and accent colors of your desktop theme, kept readable.',
     synonyms: [
       'omarchy',
       'desktop theme',

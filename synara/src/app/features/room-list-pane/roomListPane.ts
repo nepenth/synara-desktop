@@ -3,16 +3,26 @@
  * macOS View menu) to give the room the window's width. The pane stays
  * mounted, so its scroll position, sections and search survive.
  */
+import {
+  appShortcut,
+  bindingAriaKeyShortcuts,
+  bindingLabel,
+  type KeyBinding,
+} from '../desktop-keyboard/appShortcuts';
 
 /** The pane `PageRoot` collapses; the rail toggle's `aria-controls`. */
 export const ROOM_LIST_PANE_ID = 'synara-room-list-pane';
 export const ROOM_LIST_TOGGLE_ID = 'synara-room-list-toggle';
 
-/** Matches `appShortcutAction`'s `toggle-room-list` and the macOS menu accelerator. */
-export const roomListShortcut = (macOS: boolean) =>
-  macOS
-    ? { label: '⌘⇧D', ariaKeyShortcuts: 'Meta+Shift+D' }
-    : { label: 'Ctrl+Shift+D', ariaKeyShortcuts: 'Control+Shift+D' };
+/** The `toggle-room-list` binding from the shortcut registry, as shown and announced. */
+export const roomListShortcut = (macOS: boolean) => {
+  const shortcut = appShortcut('toggle-room-list');
+  const binding = (macOS ? shortcut.mac : shortcut.windowsLinux) as KeyBinding;
+  return {
+    label: bindingLabel(binding, macOS),
+    ariaKeyShortcuts: bindingAriaKeyShortcuts(binding),
+  };
+};
 
 export const roomListToggleTitle = (collapsed: boolean): string =>
   collapsed ? 'Show room list' : 'Hide room list';
