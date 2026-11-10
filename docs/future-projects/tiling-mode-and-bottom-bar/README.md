@@ -13,22 +13,24 @@ a built app, and no Linux-only Rust path has been compiled** (the Linux workstat
 
 | Task | State |
 | --- | --- |
-| F1 environment detection and Tiling mode setting | Done; detection not exercised on a real tiling session |
+| F1 environment detection and Tiling mode setting | Done; seen under Hyprland on the Omarchy box (2026-11-10): tiled window, no title strip |
 | F2 smaller minimum window (360×480) | Done |
 | F3 shortcut registry | Done; the macOS menu keeps its own accelerator list, checked against the registry by a test |
 | F4 Rust-owned status aggregate | Partly: Rust publishes the counts, but the renderer still combines them |
-| N1–N6 bottom bar, space switcher, rail removed | Done; N7 review build not made (the Mac has no room for a release build) |
+| N1–N6 bottom bar, space switcher, rail removed | Done. N7: reviewed in a build on the Omarchy box (isolated identifier, throwaway homeserver); no macOS review build (the Mac has no room for one) |
 | T1 no title strip in tiling mode | Done |
 | T2 stable window identity | Done, no code needed: the class is `synara` under Hyprland (checked 2026-11-10 with `hyprctl clients`, installed package and a build with another product name). GTK takes it from the binary's file name, so nothing sets it explicitly. Class and window rules for Hyprland, Sway and i3 are in `docs/linux.md`. The X11 `WM_CLASS` (`synara`, `Synara`) is from GTK's behaviour, not seen on an X11 session |
-| T3 no size/position restore when tiling | Done; compiles and passes lint on Linux, not yet seen under Hyprland |
+| T3 no size/position restore when tiling | Done; the build runs tiled under Hyprland, but restore-skipping itself was not checked across restarts |
 | L1–L3 narrow layouts, overlay panels, zoom-aware breakpoints | Done |
 | K1–K4 keyboard | Done. Places are Alt+1–4 (Windows, Linux) and ⌃1–4 (macOS), not Ctrl/⌘+1–4, which are the composer's heading keys |
 | I1 deep links | macOS and Linux (Arch and deb desktop entries; the deb's is `packaging/deb/synara.desktop`, kept equal to the Arch one by a test, not yet seen in a built deb). Windows: the NSIS and MSI installers register the scheme through the bundler (`plugins.deep-link` in `tauri.conf.json`), and the argument paths are not platform-gated, but **nothing on Windows has been built or run** |
 | I2 `synara status` | Done, with a Waybar example in `docs/linux.md`. On Windows release builds the command has no console to print to |
 | I3 notification mark-read and reply actions | Partly. Message banners carry `message.mark-read` and `message.reply`, handled in Rust under the session gate (unit-tested; Linux build, lint and tests pass). Mark as read is the room list's Mark as Read (the whole room, receipt private unless receipts are public). Linux: both buttons; Reply opens the room with the composer focused, because inline reply (`inline-reply`, a KDE extension `notify-rust` does not expose) is not done. macOS: Reply is a text-input action sent from the banner, **written but never compiled or run**. Windows unchanged. Nothing has been seen on a real notification server |
 | H1 palette engine, H2 fonts | Done |
-| H3 Omarchy provider | Reads `colors.toml` (else `alacritty.toml`) under `~/.local/state/omarchy/current/theme`, the layout confirmed on the Omarchy box on 2026-11-10, with the older `~/.config/omarchy/current/theme` as a fallback. Not yet seen in a running app |
+| H3 Omarchy provider | Reads `colors.toml` (else `alacritty.toml`) under `~/.local/state/omarchy/current/theme`, the layout confirmed on the Omarchy box on 2026-11-10, with the older `~/.config/omarchy/current/theme` as a fallback. Seen in the review build on that box: Tokyo Night's background and accent applied |
 | H4 system accent on macOS and Windows | macOS: done. The provider reads `NSColor.controlAccentColor` and shares the accent alone, so the theme keeps its own background and text; the setting's description says so. Type-checked and unit-tested, not yet seen in a running app. Windows: not started (cannot be compiled or tested here) |
+| Hardware acceleration (added 2026-11-10) | Linux Wayland: a switch in Settings > Appearance > Window, read by the binary before GTK starts; `SYNARA_RENDERING` overrides it; a chosen GPU mode turns NVIDIA explicit sync off. Runs on the Omarchy box (RTX 4080 SUPER); not soak-tested, no lock/unlock check, other compositors untested |
+| One Synara mark (added 2026-11-10) | The simplified mark replaces the detailed one in the app and in every app icon (macOS, Windows, Linux, iOS), favicon, tray and installer art |
 | P pop-out windows | Deferred |
 
 Changes from the plan below: "Log out" (the app's existing wording) instead of "Sign out"; the list
