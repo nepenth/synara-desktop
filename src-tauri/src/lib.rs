@@ -11,6 +11,7 @@ mod bridge;
 mod build_info;
 mod desktop;
 mod desktop_agent_actions;
+mod desktop_environment;
 mod desktop_file_transfer;
 mod desktop_integration;
 mod desktop_link_preview;
@@ -47,6 +48,9 @@ use tauri::{
 use tauri_plugin_opener::OpenerExt;
 
 const SYNARA_MEDIA_PROTOCOL: &str = "synara-media";
+/// Smallest main window, in logical pixels.
+const MIN_WINDOW_WIDTH: f64 = 360.0;
+const MIN_WINDOW_HEIGHT: f64 = 480.0;
 const INVITE_AVATAR_MAX_BYTES: usize = 1_048_576;
 const TIMELINE_MEDIA_MAX_BYTES: usize = 64 * 1_048_576;
 
@@ -1014,17 +1018,23 @@ pub fn run() {
             // `desktop_secret_store_status`, which the warm-up below caches.
             desktop::warm_secret_store_status();
             let bridge_script = format!(
-                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = false; window.__SYNARA_DESKTOP__.os = {}; }}",
+                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = false; window.__SYNARA_DESKTOP__.os = {}; window.__SYNARA_DESKTOP__.windowEnvironment = {}; }}",
                 include_str!("desktop_bridge.js"),
                 updater_configured,
                 // WebKitGTK may present a macOS user agent; the renderer
                 // reads the real OS from here instead.
                 serde_json::to_string(std::env::consts::OS).unwrap_or_else(|_| "\"\"".to_owned()),
+                // Whether a tiling window manager owns the window; the
+                // renderer drops its own title strip when it does.
+                serde_json::to_string(desktop_environment::window_environment().as_str())
+                    .unwrap_or_else(|_| "\"floating\"".to_owned()),
             );
             let window_builder = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Synara")
                 .inner_size(1280.0, 900.0)
-                .min_inner_size(960.0, 720.0);
+                // Narrow enough for a quarter-screen tile: the renderer has a
+                // single-pane layout below 750px.
+                .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
             // Keep the native macOS titlebar: the OS owns window movement and
             // traffic lights without requiring an asynchronous WebView drag.
             // Linux uses the in-app strip and its explicit window controls.
@@ -1066,7 +1076,9 @@ pub fn run() {
             }
 
             if let Ok(size) = window.inner_size() {
-                if size.width < 960 || size.height < 720 {
+                if f64::from(size.width) < MIN_WINDOW_WIDTH
+                    || f64::from(size.height) < MIN_WINDOW_HEIGHT
+                {
                     window.set_size(Size::Logical(LogicalSize::new(1280.0, 900.0)))?;
                     let _ = window.center();
                 }
