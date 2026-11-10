@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The Synara mark, colour. Same geometry as synara-symbolic.svg and the
+     in-app component synara/src/app/pages/auth/SynaraMark.tsx. The viewBox is
+     a square centred on the drawing; place it on the dark tile #03050F for
+     app-icon use. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 4 250 250">
+  <defs>
+    <linearGradient id="line" x1="40" y1="40" x2="150" y2="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8BF6FF"/>
+      <stop offset="1" stop-color="#3FA0FF"/>
+    </linearGradient>
+    <linearGradient id="wing" x1="240" y1="28" x2="130" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6FB0FF"/>
+      <stop offset="1" stop-color="#2F6BFF"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#line)" stroke-linecap="round" stroke-width="18">
+    <path d="M112 44A88 88 0 0 0 78 214"/>
+    <circle cx="108" cy="132" r="26"/>
+  </g>
+  <g fill="url(#line)">
+    <circle cx="40" cy="100" r="17"/>
+    <circle cx="42" cy="170" r="17"/>
+  </g>
+  <g fill="url(#wing)">
+    <path d="M136 104C162 72 205 66 238 28c-2 44-26 76-88 100-8 3-18-14-14-24Z"/>
+    <path d="M146 148c30-27 64-32 86-64-4 38-30 62-78 76-9 2-14-6-8-12Z"/>
+    <path d="M146 186c26-20 50-20 70-48-8 32-28 50-64 60-9 2-12-6-6-12Z"/>
+  </g>
+</svg>

@@ -82,7 +82,7 @@ import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread'
 import { useMarkRoomsAsRead } from '../../../hooks/useMarkRoomsAsRead';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
 import { stopPropagation } from '../../../utils/keyboard';
-import { SynaraMarkSmall } from '../../auth/SynaraMarkSmall';
+import { SynaraMark } from '../../auth/SynaraMark';
 import {
   getRoomNotificationMode,
   useRoomsNotificationPreferencesContext,
@@ -264,7 +264,7 @@ function HomeHeader() {
     <NavPaneHeader
       // The switcher's own name for this list, not the homeserver's host name.
       title="Home"
-      mark={<SynaraMarkSmall size={22} />}
+      mark={<SynaraMark size={22} decorative />}
       actions={
         <>
           <HideRoomListButton />

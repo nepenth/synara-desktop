@@ -36,7 +36,7 @@ import { useOpenedSidebarFolderAtom } from '../../state/hooks/openedSidebarFolde
 import { listNavigationIndex } from '../../utils/keyboard';
 import { getNativeRoom } from '../../native/nativeSession';
 import type { ISidebarFolder } from '../../hooks/useSidebarItems';
-import { SynaraMarkSmall } from '../../pages/auth/SynaraMarkSmall';
+import { SynaraMark } from '../../pages/auth/SynaraMark';
 import { SpaceRowMenu } from './SpaceRowMenu';
 import type { SpaceOrder } from './useSpaceOrder';
 import {
@@ -334,7 +334,7 @@ function HomeRow({
         onClick={onOpen}
       >
         <span className={css.SwitcherAvatar}>
-          <SynaraMarkSmall size={24} />
+          <SynaraMark size={24} decorative />
         </span>
         <span className={`${css.SwitcherRowName} ${unread ? css.SwitcherRowUnread : ''}`}>
           Home

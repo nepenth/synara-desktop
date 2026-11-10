@@ -91,6 +91,27 @@ remain design-history evidence rather than alternate product identities.
 - `scripts/check-app-icons.mjs` validates dimensions, color types, alpha rules,
   container contents, symbolic safety, and a reviewed SHA-256 manifest.
 
+## Simplified mark (November 2026)
+
+The detailed mark (thin spokes, four ringed nodes, glow) was replaced by one
+flat drawing used at every size: a heavy orbit arc, a ring core, two solid
+nodes, and three separated feathers. The sections above describe the earlier
+artwork and remain as design history; the pipeline is unchanged.
+
+- `assets/branding/synara-mark.svg` is the colour source, and
+  `assets/branding/synara-symbolic.svg` is the same geometry in one colour.
+  The in-app component `synara/src/app/pages/auth/SynaraMark.tsx` draws the
+  same paths.
+- Both PNG masters are that drawing on the existing dark tile (`#030510`),
+  rasterised from the SVG at 1254 px. The mark spans 80% of the tile width in
+  `synara-app-icon-master.png` and 84% in `synara-app-icon-small.png`.
+- Not covered by the generator, and redrawn from the same SVG by hand:
+  `synara/public/res/png/synara*.png` and the matching iOS `SynaraLogo*`
+  image sets (transparent mark; the unread and highlight variants add a
+  white-ringed dot at the top right), `synara/public/favicon.ico`,
+  `src-tauri/icons/tray-template.png`, and the WiX installer bitmaps in
+  `src-tauri/wix/`.
+
 ## Release strategy
 
 An icon-only release still runs packaging, signing/notarization, updater
