@@ -49,6 +49,7 @@ import {
   readNativeRoomDirectorySession,
 } from './nativeRoomDirectoryOwner';
 import type { DirectoryProtocolInstance, DirectoryRoomType } from '../../../features/matrix-dto';
+import { ShowRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 
 const useServerSearchParams = (searchParams: URLSearchParams): ExploreServerPathSearchParams =>
   useMemo(
@@ -580,6 +581,7 @@ export function PublicRooms() {
                   )}
                 </BackRouteHandler>
               )}
+              <ShowRoomListButton />
             </Box>
             <Box grow="Yes" justifyContent="Center" alignItems="Center" gap="200">
               {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Server} />}

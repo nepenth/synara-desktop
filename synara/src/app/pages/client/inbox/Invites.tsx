@@ -54,6 +54,7 @@ import {
   type BulkFailureCopy,
 } from '../../../utils/bulkActions';
 import { composerErrorMessage } from '../../../features/room/composerSendError';
+import { ShowRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 
 const COMPACT_CARD_WIDTH = 548;
 
@@ -764,6 +765,7 @@ export function Invites() {
                 )}
               </BackRouteHandler>
             )}
+            <ShowRoomListButton />
           </Box>
           <Box alignItems="Center" gap="200">
             {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Mail} />}

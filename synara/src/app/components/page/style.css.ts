@@ -33,10 +33,16 @@ export type PageNavVariants = RecipeVariants<typeof PageNav>;
 /** Collapse timing: the pane's width and the slide share it. */
 const NAV_COLLAPSE = '200ms cubic-bezier(0.2, 0, 0, 1)';
 
+/** The list between the pane's pinned header and footer; it alone scrolls. */
+export const PageNavBody = style({
+  minHeight: 0,
+  position: 'relative',
+});
+
 /**
- * The client navigation pane can collapse into the rail. Its width animates
- * to 0 while the content, pinned to the pane's right edge, slides left under
- * the rail. Once collapsed the pane (and its divider) stops painting.
+ * The client navigation pane can collapse to the window's edge. Its width
+ * animates to 0 while the content, pinned to the pane's right edge, slides
+ * left out of view. Once collapsed the pane (and its divider) stops painting.
  */
 export const PageNavCollapsible = style({
   transition: `width ${NAV_COLLAPSE}, visibility 0s`,

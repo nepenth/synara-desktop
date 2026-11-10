@@ -250,14 +250,14 @@ test('linux strip drag is owned natively and fails closed', () => {
 });
 
 test('native macOS chrome needs no sidebar spacer and headers retain optional drag', () => {
-  const sidebar = source('src/app/pages/client/SidebarNav.tsx');
-  const home = source('src/app/pages/client/home/Home.tsx');
+  // The list column's header (Home, spaces, Activity, Explore) since the rail went.
+  const navPane = source('src/app/features/nav-pane/NavPaneHeader.tsx');
   const header = source('src/app/features/room/RoomViewHeader.tsx');
   const sidePanel = source('src/app/features/room/RoomSidePanel.tsx');
   const members = source('src/app/features/room/MembersDrawer.tsx');
 
-  assert.doesNotMatch(sidebar, /overlaySpacer/);
-  for (const [name, component] of Object.entries({ home, header, sidePanel, members })) {
+  assert.doesNotMatch(navPane, /overlaySpacer/);
+  for (const [name, component] of Object.entries({ navPane, header, sidePanel, members })) {
     assert.match(component, /data-tauri-drag-region/, `${name} header must drag the window`);
   }
 });

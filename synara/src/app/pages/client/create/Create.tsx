@@ -9,12 +9,14 @@ import {
 } from '../../../components/page';
 import { CreateSpaceForm } from '../../../features/create-space';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
+import { ShowRoomListHeader } from '../../../features/room-list-pane/RoomListToggleButton';
 
 export function Create() {
   const { navigateSpace } = useRoomNavigate();
 
   return (
     <Page>
+      <ShowRoomListHeader />
       <Box grow="Yes">
         <Scroll hideTrack visibility="Hover">
           <PageContent>

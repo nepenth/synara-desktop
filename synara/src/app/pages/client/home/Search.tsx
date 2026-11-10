@@ -5,6 +5,7 @@ import { MessageSearch } from '../../../features/message-search';
 import { useHomeRooms } from './useHomeRooms';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
+import { ShowRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 
 export function HomeSearch() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -25,6 +26,7 @@ export function HomeSearch() {
                 )}
               </BackRouteHandler>
             )}
+            <ShowRoomListButton />
           </Box>
           <Box justifyContent="Center" alignItems="Center" gap="200">
             {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Search} />}

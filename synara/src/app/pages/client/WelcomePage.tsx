@@ -10,6 +10,7 @@ import {
   SYNARA_SUPPORT_URL,
   openExternalUrlFromClick,
 } from '../../utils/appLinks';
+import { ShowRoomListHeader } from '../../features/room-list-pane/RoomListToggleButton';
 
 function ExternalLink({
   href,
@@ -30,6 +31,7 @@ function ExternalLink({
 export function WelcomePage() {
   return (
     <Page>
+      <ShowRoomListHeader />
       <Box
         grow="Yes"
         alignItems="Center"

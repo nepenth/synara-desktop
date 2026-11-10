@@ -2,14 +2,12 @@ import React, { ReactNode } from 'react';
 import { Box } from 'folds';
 
 type ClientLayoutProps = {
-  nav: ReactNode;
   children: ReactNode;
 };
-export function ClientLayout({ nav, children }: ClientLayoutProps) {
-  return (
-    <Box grow="Yes">
-      <Box shrink="No">{nav}</Box>
-      <Box grow="Yes">{children}</Box>
-    </Box>
-  );
+/**
+ * The signed-in client's frame. Navigation lives in each route's list column
+ * (its header switcher and bottom bar), so there is no rail beside it.
+ */
+export function ClientLayout({ children }: ClientLayoutProps) {
+  return <Box grow="Yes">{children}</Box>;
 }

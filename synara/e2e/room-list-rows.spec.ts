@@ -213,9 +213,9 @@ test('the selected row is anchored: Primary container fill, on-container name, s
   await hoverTarget.hover();
   await expect(hoverTarget).toHaveCSS('box-shadow', 'none');
   await expect(hoverTarget).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
-  const hoverBg = await hoverTarget.evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(hoverBg).not.toBe('rgb(31, 58, 99)');
-  expect(hoverBg).not.toBe('rgba(0, 0, 0, 0)');
+  // Retrying assertions: the tint arrives a frame or two after the pointer.
+  await expect(hoverTarget).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(hoverTarget).not.toHaveCSS('background-color', 'rgb(31, 58, 99)');
 
   // Selected + hover keeps the selected fill.
   await item.hover();

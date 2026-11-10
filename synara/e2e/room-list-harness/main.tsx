@@ -10,6 +10,7 @@ import { useSharedScrollVirtualizer } from '../../src/app/hooks/useSharedScrollV
 import { NotificationsFixture } from './NotificationsFixture';
 import { LiveCallFixture } from './LiveCallFixture';
 import { NavigationUnreadFixture } from './NavigationUnreadFixture';
+import { NavPaneFixture } from './NavPaneFixture';
 import { RoomGlyphFixture } from './RoomGlyphFixture';
 import { RoomNameFixture } from './RoomNameFixture';
 import { RoomRowsFixture } from './RoomRowsFixture';
@@ -99,7 +100,9 @@ function RoomListFixture() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  new URLSearchParams(window.location.search).has('navigationUnread') ? (
+  new URLSearchParams(window.location.search).has('navPane') ? (
+    <NavPaneFixture />
+  ) : new URLSearchParams(window.location.search).has('navigationUnread') ? (
     <NavigationUnreadFixture />
   ) : new URLSearchParams(window.location.search).has('notifications') ? (
     <NotificationsFixture />

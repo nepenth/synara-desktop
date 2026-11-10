@@ -16,6 +16,7 @@ import {
 } from '../../../components/page';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
 import { CreateChat } from '../../../features/create-chat';
+import { ShowRoomListHeader } from '../../../features/room-list-pane/RoomListToggleButton';
 
 export function DirectCreate() {
   const screenSize = useScreenSizeContext();
@@ -37,6 +38,7 @@ export function DirectCreate() {
 
   return (
     <Page>
+      <ShowRoomListHeader />
       {screenSize === ScreenSize.Mobile && (
         <PageHeader balance outlined={false}>
           <Box grow="Yes" alignItems="Center" gap="200">

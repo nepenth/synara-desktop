@@ -31,7 +31,6 @@ import {
   NavEmptyCenter,
   NavLoading,
   NavEmptyLayout,
-  NavPaneTitle,
   NavSearchField,
   NavSectionHeader,
 } from '../../../components/nav';
@@ -46,10 +45,17 @@ import {
 } from '../../pathUtils';
 import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
-import { useHomeCreateSelected, useHomeJoinSelected } from '../../../hooks/router/useHomeSelected';
+import {
+  useHomeCreateSelected,
+  useHomeJoinSelected,
+  useHomeSelected,
+} from '../../../hooks/router/useHomeSelected';
 import { useHomeRooms } from './useHomeRooms';
 import { useDirectRooms } from '../direct/useDirectRooms';
-import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
+import {
+  useDirectCreateSelected,
+  useDirectSelected,
+} from '../../../hooks/router/useDirectSelected';
 import {
   favoriteRoomIdSet,
   partitionHomeRooms,
@@ -68,7 +74,10 @@ import { makeNavCategoryId } from '../../../state/closedNavCategories';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
-import { PageNav, PageNavHeader, PageNavContent } from '../../../components/page';
+import { PageNav, PageNavContent } from '../../../components/page';
+import { NavPaneHeader } from '../../../features/nav-pane/NavPaneHeader';
+import { NavBottomBar } from '../../../features/nav-pane/NavBottomBar';
+import { HideRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
 import { useMarkRoomsAsRead } from '../../../hooks/useMarkRoomsAsRead';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
@@ -256,67 +265,56 @@ function HomeHeader() {
   });
 
   return (
-    <>
-      <PageNavHeader data-tauri-drag-region>
-        <Box alignItems="Center" grow="Yes" gap="300">
-          <Box grow="Yes" alignItems="Center" gap="200">
-            <img
-              src={SynaraPNG}
-              alt=""
-              width={22}
-              height={22}
-              style={{ borderRadius: 6, display: 'block' }}
-            />
-            <NavPaneTitle text={serverName} />
-          </Box>
-          <Box shrink="No" gap="100">
-            <IconButton
-              className={depthCss.quietInteractiveSurface}
-              aria-label={t('modernization.nav.add_room', 'Add room')}
-              aria-haspopup="menu"
-              aria-expanded={!!addAnchor}
-              aria-pressed={
-                !!addAnchor || createRoomSelected || joinSelected || createDirectSelected
-              }
-              variant="Surface"
-              onClick={toggle(setAddAnchor)}
-            >
-              <Icon src={Icons.Plus} size="200" />
-            </IconButton>
-            <IconButton
-              aria-label={t('modernization.nav.home_options', 'Home options')}
-              aria-pressed={!!menuAnchor}
-              variant="Surface"
-              onClick={toggle(setMenuAnchor)}
-            >
-              <Icon src={Icons.VerticalDots} size="200" />
-            </IconButton>
-          </Box>
-        </Box>
-      </PageNavHeader>
-      <PopOut
-        anchor={addAnchor}
-        position="Bottom"
-        align="End"
-        offset={6}
-        content={
-          <FocusTrap focusTrapOptions={trapOptions(() => setAddAnchor(undefined))}>
-            <HomeAddMenu requestClose={() => setAddAnchor(undefined)} />
-          </FocusTrap>
-        }
-      />
-      <PopOut
-        anchor={menuAnchor}
-        position="Bottom"
-        align="End"
-        offset={6}
-        content={
-          <FocusTrap focusTrapOptions={trapOptions(() => setMenuAnchor(undefined))}>
-            <HomeMenu requestClose={() => setMenuAnchor(undefined)} />
-          </FocusTrap>
-        }
-      />
-    </>
+    <NavPaneHeader
+      title={serverName}
+      mark={<img src={SynaraPNG} alt="" width={22} height={22} style={{ display: 'block' }} />}
+      actions={
+        <>
+          <HideRoomListButton />
+          <IconButton
+            className={depthCss.quietInteractiveSurface}
+            aria-label={t('modernization.nav.add_room', 'Add room')}
+            aria-haspopup="menu"
+            aria-expanded={!!addAnchor}
+            aria-pressed={!!addAnchor || createRoomSelected || joinSelected || createDirectSelected}
+            variant="Surface"
+            onClick={toggle(setAddAnchor)}
+          >
+            <Icon src={Icons.Plus} size="200" />
+          </IconButton>
+          <IconButton
+            aria-label={t('modernization.nav.home_options', 'Home options')}
+            aria-pressed={!!menuAnchor}
+            variant="Surface"
+            onClick={toggle(setMenuAnchor)}
+          >
+            <Icon src={Icons.VerticalDots} size="200" />
+          </IconButton>
+          <PopOut
+            anchor={addAnchor}
+            position="Bottom"
+            align="End"
+            offset={6}
+            content={
+              <FocusTrap focusTrapOptions={trapOptions(() => setAddAnchor(undefined))}>
+                <HomeAddMenu requestClose={() => setAddAnchor(undefined)} />
+              </FocusTrap>
+            }
+          />
+          <PopOut
+            anchor={menuAnchor}
+            position="Bottom"
+            align="End"
+            offset={6}
+            content={
+              <FocusTrap focusTrapOptions={trapOptions(() => setMenuAnchor(undefined))}>
+                <HomeMenu requestClose={() => setMenuAnchor(undefined)} />
+              </FocusTrap>
+            }
+          />
+        </>
+      }
+    />
   );
 }
 
@@ -380,11 +378,14 @@ const visibleWhenClosed = (
  * The one Home list (NAV-12, Slack and iOS): Favorites, Rooms, Direct
  * messages. It is the nav pane for both `/home/` and `/direct/` routes, so a
  * DM keeps its own route (and `IsDirectRoomProvider`) while the list, its
- * scroll position and the rail's Home tab stay put.
+ * scroll position and the bottom bar's Home stay put. `/approvals` borrows it
+ * as its list column (D2), so the bar never disappears.
  */
 export function Home() {
-  // `home` remembers the last place in this pane, room or DM.
-  useNavToActivePathMapper('home');
+  // `home` remembers the last place in this pane, room or DM, never Approvals.
+  const homeRoute = useHomeSelected();
+  const directRoute = useDirectSelected();
+  useNavToActivePathMapper('home', homeRoute || directRoute);
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const rooms = useHomeRooms();
@@ -568,8 +569,7 @@ export function Home() {
   };
 
   return (
-    <PageNav label={roomsLabel}>
-      <HomeHeader />
+    <PageNav label={roomsLabel} header={<HomeHeader />} footer={<NavBottomBar />}>
       <NavSearchField />
       {noRoomToDisplay ? (
         roomListLoaded ? (

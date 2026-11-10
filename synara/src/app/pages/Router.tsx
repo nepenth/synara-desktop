@@ -54,10 +54,9 @@ import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
 import { Room } from '../features/room';
 import { Lobby } from '../features/lobby';
 import { WelcomePage } from './client/WelcomePage';
-import { SidebarNav } from './client/SidebarNav';
 import { PageRoot } from '../components/page';
 import { ScreenSize } from '../hooks/useScreenSize';
-import { MobileFriendlyPageNav, MobileFriendlyClientNav } from './MobileFriendly';
+import { MobileFriendlyPageNav } from './MobileFriendly';
 import { ClientInitStorageAtom } from './client/ClientInitStorageAtom';
 import { ClientNonUIFeatures } from './client/ClientNonUIFeatures';
 import { AuthRouteThemeManager, UnAuthRouteThemeManager } from './ThemeManager';
@@ -165,13 +164,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                   <ClientBindAtoms>
                     <ApprovalInboxProvider>
                       <ClientNonUIFeatures>
-                        <ClientLayout
-                          nav={
-                            <MobileFriendlyClientNav>
-                              <SidebarNav />
-                            </MobileFriendlyClientNav>
-                          }
-                        >
+                        <ClientLayout>
                           <Outlet />
                         </ClientLayout>
                         <SearchModalRenderer />
@@ -343,8 +336,41 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
           <Route path={_FEATURED_PATH} element={<FeaturedRooms />} />
           <Route path={_SERVER_PATH} element={<PublicRooms />} />
         </Route>
-        <Route path={CREATE_PATH} element={<Create />} />
-        <Route path={APPROVALS_PATH} element={<Approvals />} />
+        <Route
+          path={CREATE_PATH}
+          element={
+            <PageRoot
+              collapsibleNav
+              nav={
+                <MobileFriendlyPageNav path={[]}>
+                  <Home />
+                </MobileFriendlyPageNav>
+              }
+            >
+              <Create />
+            </PageRoot>
+          }
+        />
+        {/*
+          Approvals has no list of its own; it borrows the Home list as its
+          column (D2) so the bottom bar never disappears. On Mobile the page
+          stands alone with its Back button, as a room does.
+        */}
+        <Route
+          path={APPROVALS_PATH}
+          element={
+            <PageRoot
+              collapsibleNav
+              nav={
+                <MobileFriendlyPageNav path={[]}>
+                  <Home />
+                </MobileFriendlyPageNav>
+              }
+            >
+              <Approvals />
+            </PageRoot>
+          }
+        />
         <Route
           path={INBOX_PATH}
           element={

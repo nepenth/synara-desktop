@@ -88,7 +88,7 @@ test('desktop controls and personal notes share quiet interactive depth', () => 
   const home = source('src/app/pages/client/home/Home.tsx');
   const notes = source('src/app/features/room/room-notes/RoomNotesPanel.tsx');
   const notesCss = source('src/app/features/room/room-notes/RoomNotesPanel.css.ts');
-  const sidebar = source('src/app/components/sidebar/SidebarItem.tsx');
+  const bar = source('src/app/features/nav-pane/NavBottomBar.tsx');
   const editorToolbar = source('src/app/components/editor/Toolbar.tsx');
 
   assert.match(composer, /height: toRem\(50\)/);
@@ -102,8 +102,8 @@ test('desktop controls and personal notes share quiet interactive depth', () => 
   assert.match(notesCss, /quietInteractiveSurface/);
   assert.match(notesCss, /boxShadow: raisedShadow/);
   assert.match(notesCss, /prefers-contrast: more/);
-  assert.match(sidebar, /interactive && depthCss\.quietInteractiveSurface/);
-  assert.match(sidebar, /aria-current=\{interactive && active \? 'page' : undefined\}/);
+  assert.match(bar, /classNames\(css\.BarItem, depthCss\.quietInteractiveSurface\)/);
+  assert.match(bar, /aria-current=\{selected \? 'page' : undefined\}/);
   assert.match(editorToolbar, /import \* as depthCss from '\.\.\/\.\.\/styles\/Depth\.css'/);
   // The formatting toolbar matches the composer exactly through the shared
   // quiet action recipe (transparent rest, tint + edge on hover, stronger

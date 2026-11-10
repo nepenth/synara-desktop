@@ -30,10 +30,10 @@ test('the timeline is a labelled region with a polite arrivals log (D58)', () =>
   // Room-list panes name the landmark from the translated section noun.
   for (const [path, pattern] of [
     // Home is the one list of rooms and DMs (NAV-12); `/direct/` routes share it.
-    ['pages/client/home/Home.tsx', /<PageNav label=\{roomsLabel\}>/],
-    ['pages/client/inbox/Inbox.tsx', /<PageNav label="Activity">/],
-    ['pages/client/explore/Explore.tsx', /<PageNav label="Explore">/],
-    ['pages/client/space/Space.tsx', /<PageNav label=\{roomsLabel\}>/],
+    ['pages/client/home/Home.tsx', /<PageNav\s+label=\{roomsLabel\}/],
+    ['pages/client/inbox/Inbox.tsx', /<PageNav\s+label="Activity"/],
+    ['pages/client/explore/Explore.tsx', /<PageNav\s+label="Explore"/],
+    ['pages/client/space/Space.tsx', /<PageNav\s+label=\{roomsLabel\}/],
   ] as const) {
     assert.match(read(path), pattern, path);
   }
@@ -42,23 +42,19 @@ test('the timeline is a labelled region with a polite arrivals log (D58)', () =>
     read('pages/client/home/Home.tsx'),
     /t\('modernization\.nav\.direct_messages', 'Direct messages'\)/
   );
-  assert.match(read('pages/client/SidebarNav.tsx'), /<Sidebar as="nav" aria-label="Spaces">/);
-  // Wave 3 rail: places only. Home, the spaces, then Activity, Approvals and
-  // the account; create/join/explore are in the list's "+" menu and search is
-  // the list's search field (and ⌘K).
-  const rail = read('pages/client/SidebarNav.tsx');
-  assert.doesNotMatch(rail, /DirectTab|ExploreTab|CreateTab|SearchTab/);
-  const order = [
-    '<HomeTab />',
-    '<SpaceTabs',
-    '<InboxTab />',
-    '<ApprovalsTab />',
-    '<SettingsTab />',
-  ];
-  const at = order.map((tag) => rail.indexOf(tag));
-  assert.ok(
-    at.every((index, i) => index >= 0 && (i === 0 || index > at[i - 1])),
-    String(at)
+  // The rail is gone (N6): places live in the list column's bottom bar, a
+  // `nav` landmark of its own (Home, Activity, Approvals, account), and the
+  // spaces in the title's switcher dialog. Create/join/explore are in the
+  // list's "+" menu and search is the list's search field (and ⌘K).
+  const bar = read('features/nav-pane/NavBottomBar.tsx');
+  assert.match(bar, /<nav className=\{css\.Bar\} aria-label="Main"/);
+  assert.doesNotMatch(bar, /DirectBarItem|ExploreBarItem|CreateBarItem|SearchBarItem/);
+  const header = read('features/nav-pane/NavPaneHeader.tsx');
+  assert.match(header, /aria-haspopup="dialog"/);
+  assert.match(header, /aria-expanded=\{!!anchor\}/);
+  assert.match(
+    read('features/nav-pane/SpaceSwitcher.tsx'),
+    /role="dialog"\s+aria-label="Switch space"/
   );
   const addMenu = read('pages/client/home/Home.tsx');
   for (const key of ['create_room', 'join_room', 'new_message', 'explore_rooms', 'create_space']) {
@@ -130,7 +126,6 @@ test('motion respects prefers-reduced-motion (D64)', () => {
   assert.doesNotMatch(presenter, /behavior: 'smooth'/);
   assert.match(read('utils/motion.ts'), /\(prefers-reduced-motion: reduce\)/);
   for (const path of [
-    'pages/client/sidebar/UnverifiedTab.css.ts',
     'components/typing-indicator/TypingIndicator.css.ts',
     'features/room/RoomViewTyping.css.ts',
   ]) {

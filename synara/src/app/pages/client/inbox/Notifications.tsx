@@ -109,6 +109,7 @@ import {
 } from '../../../hooks/useRoomsNotificationPreferences';
 
 import { getNativeRoom } from '../../../native/nativeSession';
+import { ShowRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 type LoadTimeline = (from?: string) => Promise<void>;
 type SilentReloadTimeline = () => Promise<void>;
 
@@ -690,6 +691,7 @@ export function Notifications() {
                 )}
               </BackRouteHandler>
             )}
+            <ShowRoomListButton />
           </Box>
           <Box alignItems="Center" gap="200">
             {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Message} />}

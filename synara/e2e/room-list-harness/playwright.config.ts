@@ -13,6 +13,7 @@ export default defineConfig({
     'gif-picker.spec.ts',
     'room-list-collapse.spec.ts',
     'room-list-keyboard.spec.ts',
+    'nav-pane.spec.ts',
   ],
   fullyParallel: false,
   retries: 0,

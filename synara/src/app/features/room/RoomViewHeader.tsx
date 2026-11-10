@@ -79,6 +79,7 @@ import {
   rtcCallAvailabilityCopy,
   startCallDisabledReason,
 } from '../matrix-rtc/liveCallChrome';
+import { ShowRoomListButton } from '../../features/room-list-pane/RoomListToggleButton';
 
 type Room = ReturnType<typeof useRoom>;
 
@@ -498,6 +499,7 @@ export function RoomViewHeader({
             )}
           </BackRouteHandler>
         )}
+        <ShowRoomListButton />
         <Box grow="Yes" alignItems="Center" gap="300">
           {screenSize !== ScreenSize.Mobile &&
             (glyph.kind === 'person' ? (

@@ -11,7 +11,9 @@ const ACTION_FILES = [
   'features/room-nav/RoomNavItem.tsx',
   'features/room/room-notes/RoomNotesPanel.tsx',
   'pages/client/inbox/Later.tsx',
-  'pages/client/sidebar/SpaceTabs.tsx',
+  'features/nav-pane/useSpaceOrder.ts',
+  'features/nav-pane/SpaceSwitcher.tsx',
+  'features/nav-pane/ManageSpacesDialog.tsx',
   'components/user-profile/UserChips.tsx',
 ];
 
@@ -55,16 +57,16 @@ test('block and unblock failures are shown, and a failed list load is not an emp
   assert.match(chips, /toggleIgnore\(\)\.then\(close, \(\) => \{\}\)/);
 });
 
-test('sidebar layout writes revert at once and show the failure', () => {
-  const source = read('pages/client/sidebar/SpaceTabs.tsx');
-  assert.match(source, /localEchoSidebarItem\(previous\);\s*setSaveError\(failure\);/);
+test('space order writes revert at once and show the failure', () => {
+  const source = read('features/nav-pane/useSpaceOrder.ts');
+  assert.match(source, /localEchoItems\(previous\);\s*setSaveError\(failure\);/);
   assert.doesNotMatch(source, /void saveSynaraSpacesContent/);
 });
 
 test('mark read and unread report failures in the menu that started them', () => {
   for (const path of [
-    'pages/client/sidebar/HomeTab.tsx',
-    'pages/client/sidebar/SpaceTabs.tsx',
+    'features/nav-pane/NavBottomBar.tsx',
+    'features/nav-pane/SpaceRowMenu.tsx',
     'pages/client/home/Home.tsx',
     'pages/client/space/Space.tsx',
   ]) {

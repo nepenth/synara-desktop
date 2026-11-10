@@ -1,7 +1,8 @@
 /**
- * The desktop room list pane can be hidden (rail toggle, ⌘⇧D / Ctrl+Shift+D,
- * macOS View menu) to give the room the window's width. The pane stays
- * mounted, so its scroll position, sections and search survive.
+ * The desktop room list pane can be hidden (the list header's button,
+ * ⌘⇧D / Ctrl+Shift+D, macOS View menu) to give the room the window's width.
+ * The pane stays mounted, so its scroll position, sections and search survive.
+ * While it is hidden, page headers show "Show room list" with its unread.
  */
 import {
   appShortcut,
@@ -10,8 +11,9 @@ import {
   type KeyBinding,
 } from '../desktop-keyboard/appShortcuts';
 
-/** The pane `PageRoot` collapses; the rail toggle's `aria-controls`. */
+/** The pane `PageRoot` collapses; the toggles' `aria-controls`. */
 export const ROOM_LIST_PANE_ID = 'synara-room-list-pane';
+/** The page header's "Show room list" button: focus lands here when the list hides. */
 export const ROOM_LIST_TOGGLE_ID = 'synara-room-list-toggle';
 
 /** The `toggle-room-list` binding from the shortcut registry, as shown and announced. */
@@ -31,8 +33,8 @@ export type RoomListToggleBadge =
   { kind: 'none' } | { kind: 'dot' } | { kind: 'count'; count: number };
 
 /**
- * The rail's Slack rule (a red count for mentions and DMs, a dot for plain
- * unread), only while the list is hidden: a visible list shows its own unread.
+ * The Slack rule (a red count for mentions and DMs, a dot for plain unread),
+ * only while the list is hidden: a visible list shows its own unread.
  */
 export const roomListToggleBadge = (
   collapsed: boolean,
@@ -55,9 +57,15 @@ export const roomListToggleLabel = (collapsed: boolean, badge: RoomListToggleBad
 };
 
 /**
+ * The open room's row (a link). Not any `aria-current`: the pane's bottom bar
+ * marks its current place (Home, Activity) the same way.
+ */
+export const ROOM_LIST_CURRENT_ROW = 'a[aria-current="page"]';
+
+/**
  * Where focus goes when the shortcut reveals the list: the open room's row
  * (the row Alt+↑/↓ steps from), else the pane's search field.
  */
 export const roomListFocusTarget = (pane: ParentNode): HTMLElement | null =>
-  pane.querySelector<HTMLElement>('[aria-current="page"]') ??
+  pane.querySelector<HTMLElement>(ROOM_LIST_CURRENT_ROW) ??
   pane.querySelector<HTMLElement>('[data-testid="nav-search-field"]');

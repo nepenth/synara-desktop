@@ -1,10 +1,10 @@
-// The production Home rail tab and snapshot bindings; only native IPC data is
-// synthetic. Since wave 3 the rail has no Direct messages tab: DMs are a
-// section of the one Home list (NAV-12) and count in the Home badge. `homePane`
-// adds the production Home pane, mounted across `/home/` and `/direct/` routes
-// as in the app router. `collapsible` lays out the desktop client: the rail with
-// the room list toggle, the collapsible Home pane in `PageRoot`, a room page with
-// a composer, and the window shortcuts.
+// The production bottom bar's Home item and snapshot bindings; only native IPC
+// data is synthetic. There is no Direct messages item: DMs are a section of the
+// one Home list (NAV-12) and count in the Home badge. `homePane` adds the
+// production Home pane, mounted across `/home/` and `/direct/` routes as in the
+// app router. `collapsible` lays out the desktop client: the collapsible Home
+// pane in `PageRoot` (its header hides it), a room page whose header shows it
+// again, a composer, and the window shortcuts.
 import React, { useCallback, useState } from 'react';
 import { presentationFor } from './presentation';
 import { Provider } from 'jotai';
@@ -20,7 +20,7 @@ import { useBindAllRoomsAtom } from '../../src/app/state/room-list/roomList';
 import { useBindMDirectAtom } from '../../src/app/state/mDirectList';
 import { useBindRoomToUnreadAtom } from '../../src/app/state/room/roomToUnread';
 import { useBindRoomToParentsAtom } from '../../src/app/state/room/roomToParents';
-import { HomeTab } from '../../src/app/pages/client/sidebar/HomeTab';
+import { HomeBarItem } from '../../src/app/features/nav-pane/NavBottomBar';
 import { useDirectRooms } from '../../src/app/pages/client/direct/useDirectRooms';
 import { useHomeRooms } from '../../src/app/pages/client/home/useHomeRooms';
 import { useRoomNavigate } from '../../src/app/hooks/useRoomNavigate';
@@ -29,9 +29,11 @@ import { Home } from '../../src/app/pages/client/home/Home';
 import { ClosedNavCategoriesProvider } from '../../src/app/state/hooks/closedNavCategories';
 import { makeClosedNavCategoriesAtom } from '../../src/app/state/closedNavCategories';
 import { RoomsNotificationPreferencesProvider } from '../../src/app/hooks/useRoomsNotificationPreferences';
-import { Page, PageRoot } from '../../src/app/components/page';
-import { Sidebar, SidebarStack } from '../../src/app/components/sidebar';
-import { RoomListTab } from '../../src/app/pages/client/sidebar/RoomListTab';
+import { Page, PageHeader, PageRoot } from '../../src/app/components/page';
+import { ShowRoomListButton } from '../../src/app/features/room-list-pane/RoomListToggleButton';
+import { ApprovalInboxProvider } from '../../src/app/features/approvals/ApprovalInboxProvider';
+import { OpenedSidebarFolderProvider } from '../../src/app/state/hooks/openedSidebarFolder';
+import { makeOpenedSidebarFolderAtom } from '../../src/app/state/openedSidebarFolder';
 import { DesktopAppShortcuts } from '../../src/app/features/desktop-keyboard/DesktopAppShortcuts';
 
 const room = (roomId: string, isDirect: boolean): RoomSummary => ({
@@ -109,6 +111,8 @@ const invoke = async (command: string, args?: Record<string, unknown>) => {
     };
   }
   if (command === 'matrix_space_parents_snapshot') return { sessionGeneration: 1, entries: [] };
+  // The list header's space switcher reads the space order.
+  if (command === 'matrix_account_data_get') return { eventType: args?.eventType, content: null };
   throw new Error(`Unexpected fixture command ${command}`);
 };
 window.__SYNARA_DESKTOP__ = {
@@ -125,6 +129,7 @@ setNativeSessionForTests(fixtureSession);
 enableMapSet();
 const nav = makeNavToActivePathAtom('@reader:example.test');
 const closedCategories = makeClosedNavCategoriesAtom('@reader:example.test');
+const openedFolders = makeOpenedSidebarFolderAtom('@reader:example.test');
 const notificationPreferences = {
   mute: new Set<string>(),
   specialMessages: new Set<string>(),
@@ -192,10 +197,13 @@ function DestinationMembership() {
   );
 }
 
-/** The room page beside the pane: a composer and the fixture's unread controls. */
+/** The room page beside the pane: its header, a composer and the fixture's unread controls. */
 function RoomPage() {
   return (
     <Page style={{ padding: 16, gap: 8 }} data-file-drop-region="room">
+      <PageHeader>
+        <ShowRoomListButton />
+      </PageHeader>
       {/* The app's timeline scroller and Slate composer, for F6. */}
       <div id="native-timeline-history" role="region" aria-label="Messages" style={{ height: 80 }}>
         Messages
@@ -244,16 +252,6 @@ function CollapsibleClient() {
       className={`${configClass} ${varsClass} ${light ? lightTheme : `${darkTheme} dark-theme`}`}
       style={{ display: 'flex', height: '100vh' }}
     >
-      <Sidebar as="nav" aria-label="Spaces">
-        <SidebarStack>
-          <RoomListTab />
-        </SidebarStack>
-        <SidebarStack>
-          <div data-testid="home-rail">
-            <HomeTab />
-          </div>
-        </SidebarStack>
-      </Sidebar>
       <Routes>
         <Route
           element={
@@ -283,9 +281,9 @@ function BoundRail() {
   if (collapsible) return <CollapsibleClient />;
   return (
     <main className={`${configClass} ${varsClass} ${darkTheme}`} style={{ padding: 24 }}>
-      <nav style={{ width: 66, display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <div data-testid="home-rail">
-          <HomeTab />
+      <nav aria-label="Main" style={{ width: 96, display: 'flex' }}>
+        <div data-testid="home-rail" style={{ display: 'flex', flexGrow: 1 }}>
+          <HomeBarItem showLabel={false} />
         </div>
       </nav>
       {homePane && <HomePaneRoutes />}
@@ -339,7 +337,11 @@ export function NavigationUnreadFixture() {
       <MemoryRouter initialEntries={[params.has('directSelected') ? '/direct/' : '/home/']}>
         <ScreenSizeProvider value={ScreenSize.Desktop}>
           <NavToActivePathProvider value={nav}>
-            <BoundRail />
+            <OpenedSidebarFolderProvider value={openedFolders}>
+              <ApprovalInboxProvider>
+                <BoundRail />
+              </ApprovalInboxProvider>
+            </OpenedSidebarFolderProvider>
           </NavToActivePathProvider>
         </ScreenSizeProvider>
       </MemoryRouter>

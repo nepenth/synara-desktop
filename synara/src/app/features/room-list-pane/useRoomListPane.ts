@@ -1,7 +1,12 @@
 import { useCallback } from 'react';
 import { useSetting } from '../../state/hooks/settings';
 import { desktopPlatformSettingsAtom } from '../../state/settings';
-import { ROOM_LIST_PANE_ID, ROOM_LIST_TOGGLE_ID, roomListFocusTarget } from './roomListPane';
+import {
+  ROOM_LIST_CURRENT_ROW,
+  ROOM_LIST_PANE_ID,
+  ROOM_LIST_TOGGLE_ID,
+  roomListFocusTarget,
+} from './roomListPane';
 
 export const useRoomListCollapsed = () =>
   useSetting(desktopPlatformSettingsAtom, 'roomListCollapsed');
@@ -21,11 +26,20 @@ export const useToggleRoomList = () => {
     (options: { revealFocus?: boolean } = {}) => {
       const pane = document.getElementById(ROOM_LIST_PANE_ID);
       if (!collapsed) {
-        // The hidden pane is inert, which would drop focus to <body>.
-        if (pane?.contains(document.activeElement)) {
-          document.getElementById(ROOM_LIST_TOGGLE_ID)?.focus();
-        }
+        // The hidden pane is inert, which would drop focus to <body>: hand it
+        // to the page header's "Show room list" button, which mounts with the
+        // hidden state.
+        const focusWasInPane = !!pane?.contains(document.activeElement);
         setCollapsed(true);
+        if (focusWasInPane) {
+          const focusToggle = (framesLeft: number) =>
+            requestAnimationFrame(() => {
+              const toggle = document.getElementById(ROOM_LIST_TOGGLE_ID);
+              if (toggle) toggle.focus();
+              else if (framesLeft > 0) focusToggle(framesLeft - 1);
+            });
+          focusToggle(10);
+        }
         return;
       }
       setCollapsed(false);
@@ -36,7 +50,7 @@ export const useToggleRoomList = () => {
       // field exists. Fall back to it when no room row appears.
       const focusWhenShown = (framesLeft: number) =>
         requestAnimationFrame(() => {
-          const current = pane.querySelector<HTMLElement>('[aria-current="page"]');
+          const current = pane.querySelector<HTMLElement>(ROOM_LIST_CURRENT_ROW);
           if (pane.hasAttribute('inert') || (!current && framesLeft > 0)) {
             if (framesLeft > 0) focusWhenShown(framesLeft - 1);
             return;

@@ -216,14 +216,15 @@ test('desktop chrome source files consume the stacked stops', () => {
   const page = readFileSync(join(srcRoot, 'app/components/page/Page.tsx'), 'utf8');
   const editor = readFileSync(join(srcRoot, 'app/components/editor/Editor.css.ts'), 'utf8');
   const roomNav = readFileSync(join(srcRoot, 'app/features/room-nav/RoomNavItem.tsx'), 'utf8');
-  const sidebar = readFileSync(join(srcRoot, 'app/components/sidebar/Sidebar.css.ts'), 'utf8');
+  const navPane = readFileSync(join(srcRoot, 'app/features/nav-pane/NavPane.css.ts'), 'utf8');
 
   assert.match(page, /PageNavHeader[\s\S]*variant="Surface"/);
   assert.match(page, /Scroll[\s\S]*variant="Surface"/);
   assert.match(page, /ContainerColor\(\{ variant: 'SurfaceVariant' \}\)/);
   assert.match(editor, /color\.Secondary\.Container/);
   assert.match(roomNav, /variant="Surface"/);
-  assert.match(sidebar, /color\.Background\.Container/);
+  // The bottom bar sits on the list column's surface stop.
+  assert.match(navPane, /Bar = style\(\[[\s\S]*?backgroundColor: color\.Surface\.Container/);
 });
 
 test('non-derived themes keep their own surface-matched content roles', () => {
