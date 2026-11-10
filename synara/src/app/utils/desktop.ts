@@ -121,6 +121,9 @@ export type DesktopTrayState = {
   laterCount: number;
   notificationInboxCount: number;
   doNotDisturb: boolean;
+  /** Not shown in the tray; published in the status file (`synara status`). */
+  pendingApprovalCount?: number;
+  inviteCount?: number;
 };
 
 export const DESKTOP_TRAY_STATE_DEBOUNCE_MS = 500;
@@ -1091,6 +1094,8 @@ const invokeDesktopTrayState = async (state: DesktopTrayState): Promise<boolean>
         laterCount: clampCount(state.laterCount),
         notificationInboxCount: clampCount(state.notificationInboxCount),
         doNotDisturb: state.doNotDisturb === true,
+        pendingApprovalCount: clampCount(state.pendingApprovalCount ?? 0),
+        inviteCount: clampCount(state.inviteCount ?? 0),
       },
     });
     if (!invokeResult.available) {

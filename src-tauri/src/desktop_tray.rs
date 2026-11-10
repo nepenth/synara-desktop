@@ -35,7 +35,7 @@ const MAX_TRAY_COUNT: i64 = 9_999;
 #[cfg(debug_assertions)]
 static TRAY_MENU_REBUILD_COUNT: AtomicU64 = AtomicU64::new(0);
 
-#[derive(Clone, Serialize, serde::Deserialize)]
+#[derive(Clone, Default, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopTrayState {
     pub unread_count: i64,
@@ -43,6 +43,11 @@ pub struct DesktopTrayState {
     pub later_count: i64,
     pub notification_inbox_count: i64,
     pub do_not_disturb: bool,
+    /// Not shown in the tray; published in the status file for status bars.
+    #[serde(default)]
+    pub pending_approval_count: i64,
+    #[serde(default)]
+    pub invite_count: i64,
 }
 
 struct TrayMenuItems<R: Runtime> {
@@ -96,6 +101,8 @@ fn normalize_tray_state(state: DesktopTrayState) -> DesktopTrayState {
         later_count: clamp_count(state.later_count),
         notification_inbox_count: clamp_count(state.notification_inbox_count),
         do_not_disturb: state.do_not_disturb,
+        pending_approval_count: clamp_count(state.pending_approval_count),
+        invite_count: clamp_count(state.invite_count),
     }
 }
 
@@ -495,6 +502,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         later_count: 0,
         notification_inbox_count: 0,
         do_not_disturb: false,
+        ..Default::default()
     };
     let (menu, tray_items) = build_tray_menu(app, &initial_state)?;
     app.manage(tray_items);
@@ -673,6 +681,16 @@ pub(crate) fn update_tray_state<R: Runtime>(
     state: DesktopTrayState,
 ) -> Result<bool, String> {
     TRAY_DO_NOT_DISTURB.store(state.do_not_disturb, Ordering::Relaxed);
+    // The status file does not depend on a tray host being present.
+    crate::desktop_status::publish(crate::desktop_status::DesktopStatus {
+        unread: clamp_count(state.unread_count),
+        highlights: clamp_count(state.highlight_count),
+        pending_approvals: clamp_count(state.pending_approval_count),
+        invites: clamp_count(state.invite_count),
+        later: clamp_count(state.later_count),
+        do_not_disturb: state.do_not_disturb,
+        ..Default::default()
+    });
     if tray_is_available(&app) {
         queue_tray_state_update(app, state)?;
         return Ok(true);
@@ -694,6 +712,8 @@ fn signed_out_tray_state() -> DesktopTrayState {
         later_count: 0,
         notification_inbox_count: 0,
         do_not_disturb: TRAY_DO_NOT_DISTURB.load(Ordering::Relaxed),
+        pending_approval_count: 0,
+        invite_count: 0,
     }
 }
 
@@ -724,6 +744,7 @@ mod tests {
             later_count: 4,
             notification_inbox_count: -1,
             do_not_disturb: true,
+            ..Default::default()
         });
 
         assert_eq!(normalized.unread_count, 0);
@@ -751,6 +772,7 @@ mod tests {
             later_count: 3,
             notification_inbox_count: -9,
             do_not_disturb: true,
+            ..Default::default()
         });
         assert!(labels[0].contains("Unread: 0"));
         assert!(labels[0].contains("Highlights: 9999"));
@@ -766,6 +788,7 @@ mod tests {
             later_count: 0,
             notification_inbox_count: 0,
             do_not_disturb: true,
+            ..Default::default()
         });
         let off = tray_route_labels(&DesktopTrayState {
             unread_count: 0,
@@ -773,6 +796,7 @@ mod tests {
             later_count: 0,
             notification_inbox_count: 0,
             do_not_disturb: false,
+            ..Default::default()
         });
 
         assert_eq!(on[3], "Do Not Disturb: On (Approvals Still Alert)");
@@ -795,6 +819,7 @@ mod tests {
             later_count: 5,
             notification_inbox_count: 99,
             do_not_disturb: false,
+            ..Default::default()
         };
         assert_eq!(tray_badge_count(&state), 10);
     }
@@ -815,6 +840,7 @@ mod tests {
             later_count: 5,
             notification_inbox_count: 1,
             do_not_disturb: false,
+            ..Default::default()
         };
         let labels = tray_route_labels(&state);
         assert!(labels[0].contains("Badge: 10"));

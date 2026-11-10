@@ -24,6 +24,7 @@ mod desktop_sanitize;
 mod desktop_secret_store;
 mod desktop_shortcuts;
 mod desktop_spellcheck;
+mod desktop_status;
 mod desktop_tray;
 mod desktop_unread_badge;
 mod desktop_updater_macos;
@@ -598,6 +599,12 @@ fn updater_plugin_configured<R: tauri::Runtime>(context: &tauri::Context<R>) -> 
         .is_some_and(|config| !config.is_null())
 }
 
+/// Command lines that print and exit instead of starting the app
+/// (`synara status`). Returns the exit code, or `None` to start the app.
+pub fn run_cli(args: &[String]) -> Option<i32> {
+    desktop_status::run_cli(args)
+}
+
 pub fn run() {
     let context = tauri::generate_context!();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -1108,6 +1115,10 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
                 let _ = desktop::show_main_window(app);
+            }
+
+            if matches!(event, tauri::RunEvent::Exit) {
+                desktop_status::publish_not_running();
             }
 
             if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {

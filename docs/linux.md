@@ -410,3 +410,43 @@ Recommended first validation matrix:
 - KDE Plasma 6 Wayland on one Debian-family workstation, such as KDE neon or Kubuntu.
 - KDE Plasma 6 Wayland on one rolling workstation, such as Arch.
 - One X11 fallback session for tray and global-shortcut comparison.
+
+## Tiling Window Managers
+
+Under Hyprland, Sway, Niri, i3 and similar window managers Synara starts in tiling mode: it does not
+draw its own title strip, because the window manager frames and moves the window. Detection uses
+`HYPRLAND_INSTANCE_SIGNATURE`, `SWAYSOCK`, `NIRI_SOCKET`, `I3SOCK` and the names in
+`XDG_CURRENT_DESKTOP`. Settings > Appearance > Tiling mode overrides it (Auto, On, Off) and applies
+at once. Ctrl+Q quits in either mode.
+
+The window can be as small as 360×480; below 750px wide the app switches to its single-pane layout.
+
+## Status Command
+
+The running app publishes its counts to `$XDG_RUNTIME_DIR/synara/status.json`. `synara status` reads
+that file without starting the app:
+
+```sh
+synara status            # 2 mentions, 1 approval, 5 unread rooms
+synara status --json     # the raw status
+synara status --waybar   # JSON for a Waybar custom module
+synara status --waybar --follow   # print a line whenever the status changes
+```
+
+It exits with 3 when Synara is not running. A Waybar module:
+
+```jsonc
+"custom/synara": {
+  "exec": "synara status --waybar --follow",
+  "return-type": "json",
+  "format": "{icon} {text}",
+  "format-icons": { "none": "󰭹", "unread": "󰭹", "mention": "󰍡", "approval": "󰒃", "offline": "󰭻" },
+  "on-click": "synara",
+  "tooltip": true
+}
+```
+
+`text` is the number of things waiting on you (mentions, approvals and invites) and is empty when
+there are none. `alt` and `class` are one of `none`, `unread`, `mention`, `approval`, `offline`;
+`class` also carries `dnd` while notifications are paused, so the module can be styled in
+`style.css` (`#custom-synara.approval { ... }`).

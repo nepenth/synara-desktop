@@ -212,6 +212,8 @@ function PlatformBadgeAndTrayUpdater() {
         laterCount: summary.laterActiveCount,
         notificationInboxCount: getTrayNotificationListCount(summary),
         doNotDisturb: !showNotifications,
+        pendingApprovalCount: agentApprovalCount,
+        inviteCount: invites.length,
       }).catch(() => undefined);
     }
   }, [invites.length, laterContent, presentation, showNotifications, agentApprovalCount]);
