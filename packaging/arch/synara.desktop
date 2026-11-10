@@ -7,5 +7,6 @@ Exec=synara %U
 Icon=synara
 Terminal=false
 Categories=Network;InstantMessaging;Chat;
+MimeType=x-scheme-handler/synara;
 StartupWMClass=synara
 SingleMainWindow=true

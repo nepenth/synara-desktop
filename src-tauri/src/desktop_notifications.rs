@@ -401,6 +401,17 @@ async fn deliver_notification_response<R: Runtime>(
 /// the renderer is ready (cold launch, before restore, after re-login), or
 /// refuse it. Whatever happens, a click that cannot be delivered still shows
 /// the window, so it never appears to do nothing.
+/// Show the window at `route` once a session is restored and the renderer is
+/// listening: the path a banner click takes, for links from outside the app.
+pub(crate) fn open_route_when_ready<R: Runtime>(app: &AppHandle<R>, route: String) {
+    handle_notification_response(
+        app,
+        NotificationBinding::default(),
+        false,
+        NotificationResponse::Open { route },
+    );
+}
+
 fn handle_notification_response<R: Runtime>(
     app: &AppHandle<R>,
     binding: NotificationBinding,

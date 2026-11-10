@@ -11,6 +11,7 @@ mod bridge;
 mod build_info;
 mod desktop;
 mod desktop_agent_actions;
+mod desktop_deep_link;
 mod desktop_environment;
 mod desktop_file_transfer;
 mod desktop_integration;
@@ -614,7 +615,12 @@ pub fn run() {
     let mut builder = register_synara_media_protocol(tauri::Builder::default());
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // A second launch with a synara:// link hands the link to this
+            // copy; without one it only brings the window forward.
+            if let Some(route) = desktop_deep_link::route_from_args(&argv) {
+                desktop_notifications::open_route_when_ready(app, route);
+            }
             if let Err(error) = desktop::show_main_window(app) {
                 eprintln!("[synara] failed to focus the running window: {error}");
             }
@@ -1095,6 +1101,13 @@ pub fn run() {
             window.unminimize()?;
             window.set_focus()?;
 
+            // Started by a synara:// link (Linux, Windows): open it once the
+            // session and the renderer are ready.
+            let launch_args: Vec<String> = std::env::args().skip(1).collect();
+            if let Some(route) = desktop_deep_link::route_from_args(&launch_args) {
+                desktop_notifications::open_route_when_ready(app.handle(), route);
+            }
+
             #[cfg(target_os = "macos")]
             desktop_notifications::initialize_macos_notifications(app.handle());
 
@@ -1114,6 +1127,17 @@ pub fn run() {
         .run(|app, event| {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
+                let _ = desktop::show_main_window(app);
+            }
+
+            // macOS hands synara:// links to the running app as an event.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = &event {
+                for url in urls {
+                    if let Some(route) = desktop_deep_link::route_for_deep_link(url.as_str()) {
+                        desktop_notifications::open_route_when_ready(app, route);
+                    }
+                }
                 let _ = desktop::show_main_window(app);
             }
 

@@ -2,6 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.whylandcreative.synara.desktop</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>synara</string>
+      </array>
+    </dict>
+  </array>
   <key>NSCameraUsageDescription</key>
   <string>Synara needs camera access for Matrix calls and video messages when you choose to use them.</string>
   <key>NSMicrophoneUsageDescription</key>
