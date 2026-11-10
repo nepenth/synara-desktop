@@ -4,6 +4,38 @@ Status: in progress on the local branch `feature/tiling-bottom-bar` (started 202
 Pop-out windows (workstream P) are deferred at the user's request; D1–D6 proceed on the recommended option. Paths are relative to the repo root; `app/` is short
 for `synara/src/app/`.
 
+## Where it stands (2026-11-10)
+
+Built on `feature/tiling-bottom-bar`, local only. Frontend: typecheck and lint clean, 1564 unit
+tests, six Chromium Playwright suites (room list, approvals, settings, login, runtime maturity,
+native timeline). Rust: `cargo check` and clippy on macOS, 22 new unit tests. **Nothing has run in
+a built app, and no Linux-only Rust path has been compiled** (the Linux workstation was offline).
+
+| Task | State |
+| --- | --- |
+| F1 environment detection and Tiling mode setting | Done; detection not exercised on a real tiling session |
+| F2 smaller minimum window (360×480) | Done |
+| F3 shortcut registry | Done; the macOS menu keeps its own accelerator list, checked against the registry by a test |
+| F4 Rust-owned status aggregate | Partly: Rust publishes the counts, but the renderer still combines them |
+| N1–N6 bottom bar, space switcher, rail removed | Done; N7 review build not made (the Mac has no room for a release build) |
+| T1 no title strip in tiling mode | Done |
+| T2 explicit Wayland app id | Not done (needs a Linux session to confirm the class) |
+| T3 no size/position restore when tiling | Done, not compiled (Linux-only) |
+| L1–L3 narrow layouts, overlay panels, zoom-aware breakpoints | Done |
+| K1–K4 keyboard | Done. Places are Alt+1–4 (Windows, Linux) and ⌃1–4 (macOS), not Ctrl/⌘+1–4, which are the composer's heading keys |
+| I1 deep links | macOS and Linux (Arch desktop entry). Not done: Windows scheme registration, the deb desktop entry |
+| I2 `synara status` | Done, with a Waybar example in `docs/linux.md`. On Windows release builds the command has no console to print to |
+| I3 notification mark-read and reply actions | Not started |
+| H1 palette engine, H2 fonts | Done |
+| H3 Omarchy provider | Written against an assumed theme layout (`colors.toml`, else `alacritty.toml`, under `~/.config/omarchy/current/theme`); unconfirmed |
+| H4 system accent on macOS and Windows | Not started |
+| P pop-out windows | Deferred |
+
+Changes from the plan below: "Log out" (the app's existing wording) instead of "Sign out"; the list
+header gained a "Hide room list" button; `/create` also keeps the Home list column; an open folder
+cannot be dragged as a whole in the switcher; the fourth place shortcut (Settings) is shown on the
+account menu's Settings item.
+
 ## What we are doing
 
 1. Replace the 66px left rail with a bottom bar on the room-list column, and move spaces into a
