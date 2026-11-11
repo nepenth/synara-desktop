@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [3.0.1] - 2026-11-11
+
 - Desktop (Linux): in a short tile under a tiling window manager the message composer was cut off below the window. Synara asked for a window at least 480px tall; the compositor ignored that, but the window was still drawn at 480px and its bottom fell outside the tile. Under a tiling window manager the floor is now 240×160, and the composer stays in view down to that height.
 - Desktop: the empty 28px strip under the composer is now a 12px gap.
 - Synara mark (desktop and iOS): the centre ring is now joined to the rest of the mark, with two spokes to the nodes on the arc and the ring set against the wing. Updated in the app, the app icons on every platform, the tray icon and the Windows installer.

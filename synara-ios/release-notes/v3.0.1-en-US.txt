@@ -1,0 +1,3 @@
+Synara 3.0.1 refines the new app icon and in-app mark: the centre ring is now joined to the arc and the wing.
+
+Please test: the app icon on the Home Screen, and the mark on the sign-in and About screens.

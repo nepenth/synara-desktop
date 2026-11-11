@@ -62,7 +62,7 @@
   },
   "productName": "Synara",
   "mainBinaryName": "synara",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "identifier": "com.whylandcreative.synara.desktop",
   "plugins": {
     "deep-link": {
