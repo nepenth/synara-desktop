@@ -321,6 +321,12 @@ jobs:
         run: npm ci
         working-directory: synara
 
+      # Playwright's --with-deps runs apt with the system sources; make sure
+      # one is reachable first, so an unreachable mirror fails fast or is
+      # replaced instead of hanging the step.
+      - name: Ensure a reachable apt package source
+        run: scripts/install-linux-tauri-dependencies.sh --sources-only
+
       - name: Install Chromium and WebKit for browser tests
         run: npx playwright install --with-deps chromium webkit
         working-directory: synara
