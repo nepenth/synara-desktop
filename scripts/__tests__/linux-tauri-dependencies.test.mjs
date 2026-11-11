@@ -18,6 +18,9 @@ test("Linux Tauri dependency installation is bounded and centralized", async () 
   assert.match(installer, /Acquire::Retries=3/);
   assert.match(installer, /Acquire::https::Timeout=20/);
   assert.match(installer, /--no-install-recommends/);
+  // A failed index fetch must fail the update, then fall back to the runner's sources.
+  assert.match(installer, /APT::Update::Error-Mode=any update; then/);
+  assert.match(installer, /apt_options=\("\$\{bounds\[@\]\}"\)/);
 
   for (const relativePath of workflowPaths) {
     const workflow = await readFile(path.join(root, relativePath), "utf8");
