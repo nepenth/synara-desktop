@@ -94,9 +94,11 @@ remain design-history evidence rather than alternate product identities.
 ## Simplified mark (November 2026)
 
 The detailed mark (thin spokes, four ringed nodes, glow) was replaced by one
-flat drawing used at every size: a heavy orbit arc, a ring core, two solid
-nodes, and three separated feathers. The sections above describe the earlier
-artwork and remain as design history; the pipeline is unchanged.
+flat drawing used at every size: a heavy orbit arc, two solid nodes joined by
+spokes to a ring core, and three feathers. The feather roots are cut back in an
+even, transparent gap around the ring (a real clip, so it holds on any
+background). The sections above describe the earlier artwork and remain as
+design history; the pipeline is unchanged.
 
 - `assets/branding/synara-mark.svg` is the colour source, and
   `assets/branding/synara-symbolic.svg` is the same geometry in one colour.

@@ -6,229 +6,229 @@
       "width": 1254,
       "height": 1254,
       "colorType": 2,
-      "sha256": "7dec0ce025c9d56ac878f3211fd8b2480d1148ba697f5fa0cc2bae1b33afd5d7"
+      "sha256": "4133f773e1ffc7e17f0cbecae4f6ee651cfb41b06ff7327c1d8f844fddbaf188"
     },
     "assets/branding/synara-app-icon-small.png": {
       "width": 1254,
       "height": 1254,
       "colorType": 2,
-      "sha256": "9b8277218aae70cc8a1064c576aa87164c257d463b086923d71837910793e57f"
+      "sha256": "88fcc807b6dcabcf7e55bdbf18b94e70064580debc1321fea11ea803053cc4b5"
     },
     "assets/branding/synara-app-icon-desktop.png": {
       "width": 1024,
       "height": 1024,
       "colorType": 6,
-      "sha256": "aa955ba5179900f105183d0055d4791d416fdfdd981690f163ee56dad3f8782e"
+      "sha256": "a96487d9020d7347c617fe82e01970478061d89ad983f460cb63e16b6b18c024"
     },
     "src-tauri/icons/16x16.png": {
       "width": 16,
       "height": 16,
       "colorType": 6,
-      "sha256": "80d27e8cf09ebd73ab54797d4e072f1e93b3933cd0e2629909ed11ee4ff25770"
+      "sha256": "d932a21be7984b6ae764c7b3b8501a7abfb10ffd9109a4a64147875c90e2ac90"
     },
     "src-tauri/icons/24x24.png": {
       "width": 24,
       "height": 24,
       "colorType": 6,
-      "sha256": "5c0fc262ed76a1c9b3bd13a78d51e49f01196b35da16533946d373042c0f46bd"
+      "sha256": "c4a18bc874c01412d4c3e1086768a5a122ef50a1b89541a6e817d8fc7639bfe4"
     },
     "src-tauri/icons/32x32.png": {
       "width": 32,
       "height": 32,
       "colorType": 6,
-      "sha256": "43cd8a941ffee80a13a5bcd415a2e7cf22bd64811feca8364cdc009b28fdbc17"
+      "sha256": "0c3eca24cc429951ac7bbcf750ec68c85636ad5e857ad4ea59ccb92190f6b031"
     },
     "src-tauri/icons/48x48.png": {
       "width": 48,
       "height": 48,
       "colorType": 6,
-      "sha256": "4fb743b06e35e3ef21efc2a82e70a813c5ccd3aa47ca985a04685e9b0a373ebb"
+      "sha256": "24368c8f814b7d8a0858abef7e441dbd1c8534fade4e6891a48aa9289979aee6"
     },
     "src-tauri/icons/64x64.png": {
       "width": 64,
       "height": 64,
       "colorType": 6,
-      "sha256": "e975450935f0e1284372630e46ae4a20641c7dc0fe007703a8984af248ae4f9d"
+      "sha256": "1d940fc79ac2a974c7dd9d9da6f212b7e7157a272a6ead8d27c146c76285e2b1"
     },
     "src-tauri/icons/128x128.png": {
       "width": 128,
       "height": 128,
       "colorType": 6,
-      "sha256": "4605f0c7427ee4fb105ee83e7c7d111d66488e3c202f3ff3d811d701aebbd81d"
+      "sha256": "184fd50019addea9805a0a388cc7914f5807d06b3f9df0adc3b90572e91c13d5"
     },
     "src-tauri/icons/128x128@2x.png": {
       "width": 256,
       "height": 256,
       "colorType": 6,
-      "sha256": "ac7600ba9c11feedf489f9e91bebf72cc88eae472b2e22cb014c5808f34a9e08"
+      "sha256": "96cea29d6ef9a70d2097403f48957aa781c8f812254ab785fda7e707b5ef4509"
     },
     "src-tauri/icons/256x256.png": {
       "width": 256,
       "height": 256,
       "colorType": 6,
-      "sha256": "ac7600ba9c11feedf489f9e91bebf72cc88eae472b2e22cb014c5808f34a9e08"
+      "sha256": "96cea29d6ef9a70d2097403f48957aa781c8f812254ab785fda7e707b5ef4509"
     },
     "src-tauri/icons/512x512.png": {
       "width": 512,
       "height": 512,
       "colorType": 6,
-      "sha256": "dca7fa8d14b07cab23fcd6e54e856df54b3fa0c4358a48b5c377c1dfcf3e9a40"
+      "sha256": "e12bf31e238334071a1749959fbbf8a16905f2aac79c87175052700598723908"
     },
     "src-tauri/icons/icon.png": {
       "width": 512,
       "height": 512,
       "colorType": 6,
-      "sha256": "dca7fa8d14b07cab23fcd6e54e856df54b3fa0c4358a48b5c377c1dfcf3e9a40"
+      "sha256": "e12bf31e238334071a1749959fbbf8a16905f2aac79c87175052700598723908"
     },
     "src-tauri/icons/StoreLogo.png": {
       "width": 50,
       "height": 50,
       "colorType": 6,
-      "sha256": "9954a0fc4683215c147c3cb94d26bdc6648ae0005b40f12b131af51524fcfec4"
+      "sha256": "81d559b34823a309b05f6f5efa9bb54229336f28f9dac7cb44ee90ba4b8908ba"
     },
     "src-tauri/icons/Square30x30Logo.png": {
       "width": 30,
       "height": 30,
       "colorType": 6,
-      "sha256": "7e9086f5e73353da85c3b640630516b40070afa051baa27a2f7c4e8090d6da54"
+      "sha256": "427cb0600b7c16c5c8eb09bda8b69effb0482199ad79cd75ea13b1e6cc2c561a"
     },
     "src-tauri/icons/Square44x44Logo.png": {
       "width": 44,
       "height": 44,
       "colorType": 6,
-      "sha256": "337164101a68c3e56ac589b346c38d7db4e7ee7e1380901eac3f482617d23675"
+      "sha256": "fdfbd5035e56ad8657d3d8c41904a94fe094df759aa59c409b6bf0dec935c74c"
     },
     "src-tauri/icons/Square71x71Logo.png": {
       "width": 71,
       "height": 71,
       "colorType": 6,
-      "sha256": "540fb50c7140390d1478d350fa28b2a59bbccf36ef34e53dbac2e230614090b2"
+      "sha256": "0c2340356873da83f30e33d041431245e647b6ce26155a9c741a925767fbbc40"
     },
     "src-tauri/icons/Square89x89Logo.png": {
       "width": 89,
       "height": 89,
       "colorType": 6,
-      "sha256": "4774a08b09df2de6be8be908a6b440a30d39b1914c1f7c16938dd7e86d0985f1"
+      "sha256": "d5286ba291eafff94b346dda860543bf311fff48b38df7002da364f41fc01137"
     },
     "src-tauri/icons/Square107x107Logo.png": {
       "width": 107,
       "height": 107,
       "colorType": 6,
-      "sha256": "b9de95c3cf2e8003456c4ac35f28a730b1de19cc6aba9519728f046a70c4bbb1"
+      "sha256": "0f83536ec03fa62f32132c6a7bdd32e46e16a18bb6229efb45e78a2b76609edf"
     },
     "src-tauri/icons/Square142x142Logo.png": {
       "width": 142,
       "height": 142,
       "colorType": 6,
-      "sha256": "24e6ec96a41d6dfdc55f5105aee756e6c7781d89b0dd7ed5d258d449eff98d8f"
+      "sha256": "da852a71a8f1a977f5f37b4bfa689f369c52110a6f0f3d741f5143724069ddd0"
     },
     "src-tauri/icons/Square150x150Logo.png": {
       "width": 150,
       "height": 150,
       "colorType": 6,
-      "sha256": "3c375c1400fa61ca0868d4aac52bf805916badbc09037e5b493ab78926376aed"
+      "sha256": "0c6cfb0fdf0973eabd986150f6ec4941ac09a1fda5b2b7a30ae8a9d78d6388b0"
     },
     "src-tauri/icons/Square284x284Logo.png": {
       "width": 284,
       "height": 284,
       "colorType": 6,
-      "sha256": "6338c99ed572e9db7f7f86c4975705a682cffec149a959db31959f2e3be029dc"
+      "sha256": "355f365ec027c802c77408e92126fb6f4c29ffd3bda8435ac460341e3443dafb"
     },
     "src-tauri/icons/Square310x310Logo.png": {
       "width": 310,
       "height": 310,
       "colorType": 6,
-      "sha256": "e025a253742528dddfbdcc3b2b078bd17a31b7822f22aabe41455a8743e5e830"
+      "sha256": "18e36d3ad515a863ec41a0b7f5ec3a4cd9073cd3fc3092b2cb04786e92824d1f"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-20.png": {
       "width": 20,
       "height": 20,
       "colorType": 2,
-      "sha256": "11274711531f87976156f8b86b11fb420a5f12a190f5046bbfc5624a865ff1bf"
+      "sha256": "b1e52a9b7a3c0b2d9e709ee83487dc0603370d5d2cdcd6ae186e3cef376b916c"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-29.png": {
       "width": 29,
       "height": 29,
       "colorType": 2,
-      "sha256": "ccb3c55af88c11028eae99e9780b9c4521bd383ee1dec6920622df3cde3e8ff1"
+      "sha256": "3221e8a35f8a29382a19bf87f7f659450fc9db4a548ff6072f258ec352ff47f2"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-40.png": {
       "width": 40,
       "height": 40,
       "colorType": 2,
-      "sha256": "a9c0a5345423d4cf8fd7c887d53cf459e14c7378328ed1a2e67afe76391be013"
+      "sha256": "61a592614cc30cb44f66268674a4e0dc6e529c71ea832f30b6918ef2b54177e9"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-58.png": {
       "width": 58,
       "height": 58,
       "colorType": 2,
-      "sha256": "e647ab883bf1613d8f393f1abe40b4d04203b6cce08c1222ba25cdc4abb29174"
+      "sha256": "7f2b65842979f6338c310b713c389e1d39fdcdbc2200ab7dd704db251031e55f"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-60.png": {
       "width": 60,
       "height": 60,
       "colorType": 2,
-      "sha256": "bfc613badf5cf6fd825ccc32b63b58903c6e480aa6c618cc682aba447cfd7ab5"
+      "sha256": "43c908092c7c987f0482df4b1122029123a53548f8a6f0e05234a9dba5ef154c"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-76.png": {
       "width": 76,
       "height": 76,
       "colorType": 2,
-      "sha256": "8114f17ec1a873e18e10b331adcb7b31aee82a2d935110ac83f9cbe734243c9c"
+      "sha256": "c2634c8ccb156fca45d371957de1b5d5476f61855e2ae5d8d3036b893a1487d4"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-80.png": {
       "width": 80,
       "height": 80,
       "colorType": 2,
-      "sha256": "1120e1a0fdc26dd2cace10dd3528911769c1de4ab53b853346b5713cc3515f19"
+      "sha256": "5e275b8dc134c3467dccb36833f30439db0b68ed4959dbacc3dfb23e232adcab"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-87.png": {
       "width": 87,
       "height": 87,
       "colorType": 2,
-      "sha256": "55c4f2a9ae6c2935c8aa82876f4249dcd77940fd45c4a35704ac76f9410d2c8e"
+      "sha256": "58311f588c8afdc1017c21ba640aca37092f2156e0a91fbe22c3e68d0ec58a17"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-120.png": {
       "width": 120,
       "height": 120,
       "colorType": 2,
-      "sha256": "b9967b179bf45804f48265e2397a70a93907b2f2061a40b8651db8f523f9341d"
+      "sha256": "08d8eacdd4d32802f40ce4d7ed76ee18680ae1b38749a0561dd17627ee9d6845"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-152.png": {
       "width": 152,
       "height": 152,
       "colorType": 2,
-      "sha256": "6dba61f07e277a8d76c0926677814e6f4069aed977b9f60d50f0439aefb384e1"
+      "sha256": "49af191530575946bccfeffc42aa65e507b117f927bc5eecab218db195047565"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-167.png": {
       "width": 167,
       "height": 167,
       "colorType": 2,
-      "sha256": "4de8d12f2bf4c1aeb1a0c5a9264854b6c4d0c957fced4f187c84383d3a113646"
+      "sha256": "2f16caacea54b064669351f6f595246eb8b2ae5014531eeab538b3caf764d229"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png": {
       "width": 180,
       "height": 180,
       "colorType": 2,
-      "sha256": "d93f68084b51181e7c19bdcdf6fb37ece73aa879038f98f025f5844d2ba1b524"
+      "sha256": "0d9a8e98ac4d12c89a8dc0f2cfb2e5043d31be6318168d7df533b8c1a745fe1a"
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png": {
       "width": 1024,
       "height": 1024,
       "colorType": 2,
-      "sha256": "90ffa3c545ebba0cb51a634bf17f2f5abf5b968d5e63d67e533f62d293b7e56a"
+      "sha256": "3d99714683bca30a0ff6379672371029a8285fba341087fa5c15b8cd9b6327b1"
     },
     "src-tauri/icons/icon.icns": {
-      "sha256": "9cdd8dc2ad752008677641fe832612b8b819eb3cd49803b805f7acf8b5e217b7",
-      "bytes": 427284
+      "sha256": "5f53493fbcbc9c492976b24739e617d1b6d90b5f6a0607c7eac13e4dae802166",
+      "bytes": 431483
     },
     "src-tauri/icons/icon.ico": {
-      "sha256": "91b1118b52285d2f5d670d9060ae7b4780af369af8d610032d8f28039d6901ce",
-      "bytes": 43950
+      "sha256": "bf7c2428de1c771929a51716ff05adca299fbaa51ed172258fcc6262e4f10232",
+      "bytes": 45051
     },
     "assets/branding/synara-symbolic.svg": {
-      "sha256": "0e74cc92738bd38a2ae622cba3ff790c87aa00e652387f7e46f5e9444c352fe0",
-      "bytes": 610
+      "sha256": "16ea1f4c722605b89dd9d90fe47b3fb2488746d29456b3b46980518461c2ba28",
+      "bytes": 905
     },
     "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json": {
       "sha256": "c636653cfa809f5849f252519d1b1896654fe5fa05e6004e3d3e6e75fa620b05",
