@@ -253,6 +253,53 @@ enum RoomTimelineFailurePresentationPolicy {
     }
 }
 
+/// When the in-room "messages unavailable" row may show above the composer.
+///
+/// The row is part of the layout, so each time it appears or goes the
+/// timeline resizes and the text being read jumps. Offline, the stream
+/// alternates between the cached snapshot (a success) and a failed reload,
+/// which used to flash the row in and out. So:
+/// - a failure the connection explains stays out while the connection
+///   chrome is not live: the top bar already says the connection is lost;
+/// - any failure must last `appearanceHold` before the row shows. That is
+///   longer than the connection chrome's own lost hold, so a failure caused
+///   by a connection drop is suppressed before the row would ever appear.
+enum RoomTimelineAvailabilityBannerPolicy {
+    static let appearanceHold: TimeInterval = ConnectionStatusCopy.lostHold + 1
+
+    /// The failure the row should show, before the appearance hold.
+    static func candidate(
+        failure: TimelineLoadFailure?,
+        connection: MatrixSyncStatus?
+    ) -> TimelineLoadFailure? {
+        guard let failure else {
+            return nil
+        }
+        if isConnectionCaused(failure.kind), isConnectionLive(connection) == false {
+            return nil
+        }
+        return failure
+    }
+
+    static func isConnectionCaused(_ kind: TimelineLoadFailure.Kind) -> Bool {
+        switch kind {
+        case .temporarilyUnavailable, .viewUnavailable, .waitingToReconnect:
+            return true
+        case .sessionUnavailable, .roomUnavailable:
+            return false
+        }
+    }
+
+    private static func isConnectionLive(_ status: MatrixSyncStatus?) -> Bool {
+        switch status {
+        case .connected, .syncing:
+            return true
+        case .starting, .reconnecting, .disconnected, .restoreFailed, .failed, .stopped, nil:
+            return false
+        }
+    }
+}
+
 /// Where the "Unread messages" divider goes: above the first message after
 /// the read marker that someone else sent. The user's own messages are read
 /// by definition, so the divider never sits above one of them.
@@ -589,6 +636,8 @@ struct RoomTimelineView: View {
     @State private var editSession: ComposerEditSession?
     @State private var sendError: String?
     @State private var timelineAvailability = RoomTimelineAvailabilityState()
+    /// The availability failure on screen, after `RoomTimelineAvailabilityBannerPolicy`.
+    @State private var displayedAvailabilityFailure: TimelineLoadFailure?
     @State private var hasAnchoredEvent = false
     @State private var uploadState: MediaUploadState = .idle
     @State private var viewerResource: MediaResource?
@@ -695,6 +744,13 @@ struct RoomTimelineView: View {
         self.focusedEventID = focusedEventID
     }
 
+    private var availabilityBannerCandidate: TimelineLoadFailure? {
+        RoomTimelineAvailabilityBannerPolicy.candidate(
+            failure: timelineAvailability.failure,
+            connection: observedSyncStatus
+        )
+    }
+
     private var displayRoomTitle: String {
         RoomTimelineTitlePolicy.displayTitle(
             resolved: resolvedRoomTitle,
@@ -728,7 +784,7 @@ struct RoomTimelineView: View {
                     self.eventRouteNotice = nil
                 }
             }
-            if let failure = timelineAvailability.failure {
+            if let failure = displayedAvailabilityFailure {
                 TimelineAvailabilityBanner(failure: failure) {
                     Task { await loadTimeline() }
                 }
@@ -1107,6 +1163,21 @@ struct RoomTimelineView: View {
         }
         .onChange(of: timelineBottomAnchorGeneration) { _ in
             cancelTimestampReveal()
+        }
+        .task(id: availabilityBannerCandidate) {
+            guard let candidate = availabilityBannerCandidate else {
+                displayedAvailabilityFailure = nil
+                return
+            }
+            // Already showing a failure: swap the copy in place, the row stays.
+            guard displayedAvailabilityFailure == nil else {
+                displayedAvailabilityFailure = candidate
+                return
+            }
+            let hold = RoomTimelineAvailabilityBannerPolicy.appearanceHold
+            try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
+            guard Task.isCancelled == false else { return }
+            displayedAvailabilityFailure = candidate
         }
         .onChange(of: hasReachedOldestMessages) { reached in
             guard reached else { return }
