@@ -13,7 +13,9 @@ import { DesktopTitleBar } from '../features/desktop-titlebar/DesktopTitleBar';
 import { ScreenSizeProvider, useScreenSize } from '../hooks/useScreenSize';
 import { useCompositionEndTracking } from '../hooks/useComposingCheck';
 import { useDesktopExternalLinkInterceptor } from '../utils/appLinks';
+import { useMotionPolicy } from '../hooks/useMotionPolicy';
 import '../styles/FocusRing.css';
+import '../styles/motion.css';
 
 const queryClient = new QueryClient();
 
@@ -21,6 +23,7 @@ function App() {
   const screenSize = useScreenSize();
   useCompositionEndTracking();
   useDesktopExternalLinkInterceptor();
+  useMotionPolicy();
 
   const portalContainer = document.getElementById('portalContainer') ?? undefined;
 

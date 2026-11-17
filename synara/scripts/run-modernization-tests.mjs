@@ -7,6 +7,8 @@ import { build } from 'esbuild';
 
 const tests = [
   'src/app/styles/__tests__/quietDepthSourceGuard.test.ts',
+  'src/app/styles/__tests__/motionSourceGuard.test.ts',
+  'src/app/utils/__tests__/motionPolicy.test.ts',
   'src/app/components/__tests__/roomAvatarSourceGuard.test.ts',
   'src/app/components/__tests__/roomGlyph.test.ts',
   'src/app/components/__tests__/middleTruncation.test.ts',
