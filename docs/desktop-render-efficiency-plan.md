@@ -1,9 +1,20 @@
 # Desktop render efficiency plan
 
-Status, 2026-11-17: stages 0 and 1 are implemented on `perf/linux-render-efficiency`
-(sampling script, typing-latency diagnostic, the Balanced rendering mode). The Arch package
-default stays `safe` until Balanced has been checked on NVIDIA/Hyprland and KDE Plasma.
-Stages 2–5 are proposed.
+Status, 2026-11-17: stages 0–5 are implemented on `perf/linux-render-efficiency`, not yet
+released or tried on hardware beyond a manual Balanced run on NVIDIA/Hyprland:
+
+- Stage 0: `scripts/linux-thread-load.sh` and typing latency in the Performance diagnostics.
+- Stage 1: Balanced mode, now the Arch package default (Off and Full remain), with an automatic
+  fallback to Off when the web process crashes or a start dies before drawing, and a capped page
+  reload when the web process ends without one (see `docs/linux.md`).
+- Stage 2: one motion policy (`utils/motion.ts`): infinite animations pause in an unfocused window
+  and step a few times a second in Off mode; the highlight pulse is finite.
+- Stage 3: composer drafts are written after a 400 ms pause (2 s max wait) and at once on send,
+  room switch, blur, hide or quit, never per keystroke.
+- Stage 4: an inline thread no longer streams while the side pane shows it; read receipts survive a
+  view closing mid-write and report accurate error codes.
+- Stage 5: measured; parsing a 40-item message is ~1.5 ms. The real cost was every visible row
+  re-rendering on each edit (unstable callbacks); now only the edited row does.
 
 Goal: make Synara cheaper to draw and smoother to type in, above all on Linux, without
 removing any feature. Every change below keeps the same behaviour or replaces an effect

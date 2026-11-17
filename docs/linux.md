@@ -321,7 +321,7 @@ When Balanced or Full fails, Synara switches to Off by itself:
 
 Either way Synara writes `~/.config/com.whylandcreative.synara.desktop/rendering-fallback`, naming the mode that failed and why, and later starts draw on the CPU while it exists. Your saved choice is not changed. **Settings → Appearance → Window → Hardware acceleration** then shows Off and says which mode failed; choosing any mode, Off included, removes the file, and the next start uses that mode. Deleting the file does the same for the saved or default mode.
 
-A mode chosen with `SYNARA_RENDERING` never falls back: Synara only logs the crash and leaves the window as it is.
+A mode chosen with `SYNARA_RENDERING` never falls back: Synara logs the crash and reloads the page. The same reload happens whenever the web process ends without a fallback (out of memory, or a crash in Off mode), at most three times in five minutes, so the window is not left blank.
 
 `SYNARA_RENDERING` is the way to try a mode for one start, or to get back in when the window blanks or the app exits with hardware acceleration on:
 
