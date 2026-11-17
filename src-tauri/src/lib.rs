@@ -704,6 +704,7 @@ pub fn run() {
             desktop_system_palette_host::desktop_system_palette,
             desktop_rendering_host::desktop_rendering_mode,
             desktop_rendering_host::desktop_set_rendering_mode,
+            desktop_rendering_host::desktop_rendering_started,
             desktop_logging::desktop_append_log,
             desktop_logging::desktop_log_path,
             desktop_logging::desktop_record_diagnostic,
@@ -1027,6 +1028,11 @@ pub fn run() {
 
     builder
         .setup(move |app| {
+            // Before the window draws anything. A second launch has already
+            // handed over to the running copy and exited by now, so only the
+            // copy that shows the window leaves the note.
+            desktop_rendering_host::mark_start_in_progress();
+
             #[cfg(target_os = "macos")]
             {
                 app.set_menu(menu::menu(app.handle())?)?;
@@ -1120,6 +1126,9 @@ pub fn run() {
             if let Err(error) = desktop_webview_performance::inspect(&window) {
                 eprintln!("[synara] {error}");
             }
+            if let Err(error) = desktop_rendering_host::watch_web_process(&window) {
+                eprintln!("[synara] {error}");
+            }
 
             if let Ok(size) = window.inner_size() {
                 if f64::from(size.width) < min_width || f64::from(size.height) < min_height {
@@ -1175,6 +1184,8 @@ pub fn run() {
 
             if matches!(event, tauri::RunEvent::Exit) {
                 desktop_status::publish_not_running();
+                // A normal exit is not a failed start, however early.
+                desktop_rendering_host::mark_start_finished();
             }
 
             if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {

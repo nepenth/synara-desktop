@@ -78,6 +78,7 @@ import {
   DESKTOP_RENDERING_UNAVAILABLE,
   type DesktopRenderingMode,
   getDesktopRenderingStatus,
+  hardwareAccelerationFallbackNote,
   hardwareAccelerationView,
   setDesktopRenderingMode,
 } from '../../../utils/desktopRendering';
@@ -1191,7 +1192,8 @@ function HardwareAccelerationTile() {
   const handleChange = (mode: DesktopRenderingMode) => {
     const previous = status;
     setSaveFailed(false);
-    setStatus({ ...status, saved: mode });
+    // Choosing a mode also clears a fallback, so the next start tries it.
+    setStatus({ ...status, saved: mode, fallback: null });
     void setDesktopRenderingMode(mode).then((next) => {
       setStatus(next ?? previous);
       setSaveFailed(!next);
@@ -1205,6 +1207,8 @@ function HardwareAccelerationTile() {
     }). Remove it to use this setting.`;
   } else if (saveFailed) {
     note = 'Synara could not save this setting.';
+  } else if (view.fallback) {
+    note = hardwareAccelerationFallbackNote(view.fallback);
   } else if (view.restartNeeded) {
     note = 'Restart Synara to apply.';
   }

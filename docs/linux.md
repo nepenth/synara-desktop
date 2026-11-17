@@ -274,20 +274,22 @@ The package installs:
 - `/usr/share/applications/Synara.desktop` desktop entry from `packaging/arch/synara.desktop`. It registers Synara for `synara://` links (see "`synara://` links").
 - hicolor app icons (`Icon=synara` under `/usr/share/icons/hicolor/*/apps/`).
 
-The wrapper keeps the app on native Wayland (`GDK_BACKEND=wayland`) and makes CPU drawing this package's default (`SYNARA_RENDERING_DEFAULT=safe`). The Synara binary applies the drawing mode itself when it starts; see the next section.
+The wrapper keeps the app on native Wayland (`GDK_BACKEND=wayland`) and makes Balanced this package's default drawing mode (`SYNARA_RENDERING_DEFAULT=balanced`). The Synara binary applies the drawing mode itself when it starts, and falls back to CPU drawing on its own if the web view fails; see the next section.
 
 Keep `gst-plugins-good` installed so WebKitGTK can resolve the `autoaudiosink` GStreamer element during Matrix media setup.
 
 #### Hardware acceleration (`SYNARA_RENDERING`)
 
-On Wayland, the Arch-family package draws the interface on the CPU by default. Before the web view starts, Synara sets the two variables that turn off the WebKitGTK DMABUF and compositing paths, which can crash or blank the WebKit web process on CachyOS/KDE Plasma Wayland, especially on NVIDIA systems:
+On Wayland, the Arch-family package uses Balanced by default. Before the web view starts, Synara turns off WebKitGTK's DMABUF renderer, which can crash or blank the WebKit web process on CachyOS/KDE Plasma Wayland, especially on NVIDIA systems, and keeps GPU compositing:
 
 ```sh
 WEBKIT_DISABLE_DMABUF_RENDERER=1
-WEBKIT_DISABLE_COMPOSITING_MODE=1
+__NV_DISABLE_EXPLICIT_SYNC=1   # only with NVIDIA's driver
 ```
 
-The `.deb`, the AppImage and `tauri dev` have no wrapper and no such default: until you choose, Synara sets nothing and WebKitGTK draws with the graphics card.
+If that still fails, Synara switches to Off by itself (see "Automatic fallback" below).
+
+The `.deb`, the AppImage and `tauri dev` have no wrapper and no such default: until you choose, Synara sets nothing and WebKitGTK draws with the graphics card. The automatic fallback applies to them too.
 
 **Settings → Appearance → Window → Hardware acceleration** changes it; restart Synara afterwards. It has three choices:
 
@@ -299,16 +301,27 @@ The `.deb`, the AppImage and `tauri dev` have no wrapper and no such default: un
 
 The choice is shown only on Linux under Wayland. Until you use it, it shows what is running and nothing is saved. Your choice is saved as one word (`safe`, `balanced` or `gpu`) in `~/.config/com.whylandcreative.synara.desktop/rendering-mode`; delete the file to return to the package's default.
 
-With full hardware acceleration chosen by the setting or by `SYNARA_RENDERING=gpu`, Synara leaves WebKitGTK's GPU compositing and DMABUF presentation on. With NVIDIA's driver (when `/proc/driver/nvidia/version` exists) it also sets `__NV_DISABLE_EXPLICIT_SYNC=1` for Synara only: without it the app exits at startup with `Error 71 (Protocol error)` (`wp_linux_drm_syncobj_surface_v1 … Missing acquire timeline`). Checked on Hyprland 0.56 with an RTX 4080 SUPER, driver 615 and WebKitGTK 2.54; other compositors and drivers are untested, which is why the Arch-family package keeps it off by default.
+With full hardware acceleration chosen by the setting or by `SYNARA_RENDERING=gpu`, Synara leaves WebKitGTK's GPU compositing and DMABUF presentation on. With NVIDIA's driver (when `/proc/driver/nvidia/version` exists) it also sets `__NV_DISABLE_EXPLICIT_SYNC=1` for Synara only: without it the app exits at startup with `Error 71 (Protocol error)` (`wp_linux_drm_syncobj_surface_v1 … Missing acquire timeline`). Checked on Hyprland 0.56 with an RTX 4080 SUPER, driver 615 and WebKitGTK 2.54; other compositors and drivers are untested, which is why the Arch-family package uses Balanced rather than Full by default.
 
 What decides, first match wins:
 
 1. `SYNARA_RENDERING`, when set: `gpu` is Full, `balanced` is Balanced, any other value is Off. The choice in Settings is then disabled and says so.
 2. The saved setting, once you have chosen.
-3. `SYNARA_RENDERING_DEFAULT`, the package's default, read the same way. Only the Arch-family wrapper sets it (to `safe`).
+3. `SYNARA_RENDERING_DEFAULT`, the package's default, read the same way. Only the Arch-family wrapper sets it (to `balanced`).
 4. Otherwise Synara sets nothing.
 
-Whichever decides, any of the three variables above that is already set in the environment is left exactly as it is.
+After a failure (next section), Off replaces 2 to 4 until you choose a mode again; `SYNARA_RENDERING` still wins. Whichever decides, any of the three variables above that is already set in the environment is left exactly as it is.
+
+##### Automatic fallback
+
+When Balanced or Full fails, Synara switches to Off by itself:
+
+- **The web view crashes while Synara runs.** Synara restarts at once, drawing on the CPU. A web process that Synara ends itself, or that WebKit ends for using too much memory, does not count.
+- **A start ends before the window has drawn**, for example NVIDIA's `Error 71` above, which takes the whole app down. While a Balanced or Full start is under way, Synara keeps a note, `rendering-startup`, in the config directory, and removes it once the interface has drawn its first frames (at most 10 seconds after the interface loads, so a hidden window is not taken for a failure) and when you quit. A start that finds the note left behind by an earlier one that is no longer running draws on the CPU.
+
+Either way Synara writes `~/.config/com.whylandcreative.synara.desktop/rendering-fallback`, naming the mode that failed and why, and later starts draw on the CPU while it exists. Your saved choice is not changed. **Settings → Appearance → Window → Hardware acceleration** then shows Off and says which mode failed; choosing any mode, Off included, removes the file, and the next start uses that mode. Deleting the file does the same for the saved or default mode.
+
+A mode chosen with `SYNARA_RENDERING` never falls back: Synara only logs the crash and leaves the window as it is.
 
 `SYNARA_RENDERING` is the way to try a mode for one start, or to get back in when the window blanks or the app exits with hardware acceleration on:
 
@@ -318,7 +331,7 @@ SYNARA_RENDERING=safe synara
 
 Then set the choice to Off or Balanced. For a launcher, put the variable in the session environment or in the desktop entry (`Exec=env SYNARA_RENDERING=gpu synara %U`).
 
-If a `.deb` or AppImage build exits at startup on NVIDIA with the `Error 71` above and you have not chosen a mode, that is case 4: nothing was set, so explicit sync is still on. Start it once with `SYNARA_RENDERING=gpu` (which adds `__NV_DISABLE_EXPLICIT_SYNC=1`) or `SYNARA_RENDERING=safe`, then set the choice to match so it is saved.
+If a `.deb` or AppImage build exits at startup on NVIDIA with the `Error 71` above and you have not chosen a mode, that is case 4: nothing was set, so explicit sync is still on. The next start falls back to Off by itself. To keep hardware acceleration, choose Balanced or Full in Settings, which add `__NV_DISABLE_EXPLICIT_SYNC=1`.
 
 #### Updating an existing clone-built CachyOS install
 
