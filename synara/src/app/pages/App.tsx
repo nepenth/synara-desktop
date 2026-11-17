@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Provider as JotaiProvider } from 'jotai';
 import { OverlayContainerProvider, PopOutContainerProvider, TooltipContainerProvider } from 'folds';
 import { RouterProvider } from 'react-router-dom';
@@ -14,6 +14,7 @@ import { ScreenSizeProvider, useScreenSize } from '../hooks/useScreenSize';
 import { useCompositionEndTracking } from '../hooks/useComposingCheck';
 import { useDesktopExternalLinkInterceptor } from '../utils/appLinks';
 import { useMotionPolicy } from '../hooks/useMotionPolicy';
+import { reportDesktopRenderingStarted } from '../utils/desktopRendering';
 import '../styles/FocusRing.css';
 import '../styles/motion.css';
 
@@ -24,6 +25,9 @@ function App() {
   useCompositionEndTracking();
   useDesktopExternalLinkInterceptor();
   useMotionPolicy();
+  // The app shell is up: once it has drawn, the shell knows this start
+  // worked and keeps the hardware acceleration mode for the next one.
+  useEffect(() => reportDesktopRenderingStarted(), []);
 
   const portalContainer = document.getElementById('portalContainer') ?? undefined;
 

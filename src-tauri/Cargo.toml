@@ -100,7 +100,8 @@ tauri-plugin-single-instance = "2.4.5"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 notify-rust = "4.17"
-webkit2gtk = { version = "2.0.2", features = ["v2_16"] }
+# v2_20: the web-process-terminated signal (desktop_rendering_host).
+webkit2gtk = { version = "2.0.2", features = ["v2_20"] }
 zbus = "5.19.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]

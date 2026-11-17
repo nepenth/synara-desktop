@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-rendering-started"
+description = "Enables the desktop_rendering_started command without any pre-configured scope."
+commands.allow = ["desktop_rendering_started"]
+
+[[permission]]
+identifier = "deny-desktop-rendering-started"
+description = "Denies the desktop_rendering_started command without any pre-configured scope."
+commands.deny = ["desktop_rendering_started"]
