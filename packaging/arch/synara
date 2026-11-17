@@ -4,7 +4,7 @@
 # "safe": the web view draws on the CPU, which is known not to crash or blank
 # the window on NVIDIA and KDE Plasma Wayland. The binary applies it at
 # startup. What decides, first match wins:
-#   SYNARA_RENDERING=safe|gpu   for this start; passes through here untouched
+#   SYNARA_RENDERING=safe|balanced|gpu   for this start; passes through here untouched
 #   the "Hardware acceleration" setting, once the user has chosen
 #   SYNARA_RENDERING_DEFAULT    this package's default, set below
 # A WEBKIT_DISABLE_* or __NV_DISABLE_EXPLICIT_SYNC variable already set in the

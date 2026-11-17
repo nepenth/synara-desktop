@@ -1,5 +1,7 @@
-//! How the Linux web view draws: on the CPU ("safe") or with the graphics
-//! card ("gpu"), the "Hardware acceleration" switch in Settings.
+//! How the Linux web view draws: entirely on the CPU ("safe"), composited on
+//! the graphics card but presented without DMABUF buffers ("balanced"), or
+//! fully on the graphics card ("gpu"). It is the "Hardware acceleration"
+//! choice in Settings.
 //!
 //! GTK and WebKitGTK read the choice from environment variables when the
 //! process starts, so it is decided before the app builds its window and a
@@ -33,9 +35,15 @@ const NVIDIA_DRIVER_VERSION_FILE: &str = "/proc/driver/nvidia/version";
 #[serde(rename_all = "lowercase")]
 pub enum RenderingMode {
     /// Software compositing: slower, but known not to crash or blank the
-    /// window on NVIDIA and KDE Plasma Wayland.
+    /// window on NVIDIA and KDE Plasma Wayland. Every animation frame is
+    /// painted on the CPU and copied on the UI process's main thread, so a
+    /// running animation keeps that thread busy.
     #[default]
     Safe,
+    /// WebKitGTK's GPU compositing without the DMABUF renderer, the path
+    /// behind most NVIDIA blank-window and crash reports. Animations are
+    /// composited on the graphics card instead of repainted on the CPU.
+    Balanced,
     /// WebKitGTK's GPU compositing and DMABUF presentation.
     Gpu,
 }
@@ -44,21 +52,23 @@ impl RenderingMode {
     pub fn as_str(self) -> &'static str {
         match self {
             RenderingMode::Safe => "safe",
+            RenderingMode::Balanced => "balanced",
             RenderingMode::Gpu => "gpu",
         }
     }
 
-    /// `gpu` or `safe`, ignoring case and surrounding space.
+    /// `gpu`, `balanced` or `safe`, ignoring case and surrounding space.
     pub fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "safe" => Some(RenderingMode::Safe),
+            "balanced" => Some(RenderingMode::Balanced),
             "gpu" => Some(RenderingMode::Gpu),
             _ => None,
         }
     }
 
     /// The choice a preference file holds. Empty content is no choice;
-    /// content that is neither word is `Safe`.
+    /// content that is none of the words is `Safe`.
     pub fn from_file_content(content: &str) -> Option<Self> {
         if content.trim().is_empty() {
             return None;
@@ -86,8 +96,8 @@ pub struct RenderingDecision {
     pub set: Vec<(&'static str, &'static str)>,
 }
 
-/// A non-empty value of one of the two mode variables: `gpu` is GPU, anything
-/// else is safe (as the launcher script treated `SYNARA_RENDERING` before
+/// A non-empty value of one of the two mode variables: `gpu` and `balanced`
+/// name those modes, anything else is safe (as the launcher script treated `SYNARA_RENDERING` before
 /// this moved here).
 fn mode_from_environment(
     lookup: &impl Fn(&str) -> Option<String>,
@@ -108,7 +118,10 @@ fn mode_from_environment(
 ///
 /// - Safe sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` and
 ///   `WEBKIT_DISABLE_COMPOSITING_MODE=1`.
-/// - A chosen GPU sets nothing for WebKit. With NVIDIA's driver it sets
+/// - Balanced sets only `WEBKIT_DISABLE_DMABUF_RENDERER=1`, keeping GPU
+///   compositing.
+/// - A chosen GPU sets nothing for WebKit.
+/// - Balanced and GPU with NVIDIA's driver also set
 ///   `__NV_DISABLE_EXPLICIT_SYNC=1`: GTK 3 commits a buffer without an
 ///   acquire point and the compositor ends the connection ("Missing acquire
 ///   timeline", Error 71).
@@ -132,6 +145,10 @@ pub fn decide(
             WEBKIT_DISABLE_DMABUF_RENDERER,
             WEBKIT_DISABLE_COMPOSITING_MODE,
         ],
+        (true, Some(RenderingMode::Balanced)) if nvidia_driver_present => {
+            &[WEBKIT_DISABLE_DMABUF_RENDERER, NV_DISABLE_EXPLICIT_SYNC]
+        }
+        (true, Some(RenderingMode::Balanced)) => &[WEBKIT_DISABLE_DMABUF_RENDERER],
         (true, Some(RenderingMode::Gpu)) if nvidia_driver_present => &[NV_DISABLE_EXPLICIT_SYNC],
         (true, Some(RenderingMode::Gpu)) => &[],
     };
@@ -196,6 +213,7 @@ mod tests {
 
     const SAFE: Option<RenderingMode> = Some(RenderingMode::Safe);
     const GPU: Option<RenderingMode> = Some(RenderingMode::Gpu);
+    const BALANCED: Option<RenderingMode> = Some(RenderingMode::Balanced);
     const SAFE_VARIABLES: [(&str, &str); 2] = [
         ("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
         ("WEBKIT_DISABLE_COMPOSITING_MODE", "1"),
@@ -301,6 +319,49 @@ mod tests {
     }
 
     #[test]
+    fn balanced_keeps_compositing_and_turns_only_dmabuf_off() {
+        let decision = decide_with("linux", true, BALANCED, &[], false);
+        assert_eq!(decision.mode, RenderingMode::Balanced);
+        assert_eq!(decision.set, [("WEBKIT_DISABLE_DMABUF_RENDERER", "1")]);
+    }
+
+    #[test]
+    fn balanced_turns_explicit_sync_off_on_nvidia() {
+        let decision = decide_with("linux", true, BALANCED, &[], true);
+        assert_eq!(
+            decision.set,
+            [
+                ("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
+                ("__NV_DISABLE_EXPLICIT_SYNC", "1"),
+            ]
+        );
+    }
+
+    #[test]
+    fn balanced_can_be_the_package_default_or_the_environment_choice() {
+        let default = decide_with(
+            "linux",
+            true,
+            None,
+            &[("SYNARA_RENDERING_DEFAULT", "balanced")],
+            false,
+        );
+        assert_eq!(default.mode, RenderingMode::Balanced);
+        assert!(!default.overridden_by_environment);
+
+        let env = decide_with(
+            "linux",
+            true,
+            SAFE,
+            &[("SYNARA_RENDERING", " Balanced ")],
+            false,
+        );
+        assert_eq!(env.mode, RenderingMode::Balanced);
+        assert!(env.overridden_by_environment);
+        assert_eq!(env.set, [("WEBKIT_DISABLE_DMABUF_RENDERER", "1")]);
+    }
+
+    #[test]
     fn the_environment_variable_wins_over_the_saved_setting_and_the_default() {
         let gpu = decide_with(
             "linux",
@@ -379,7 +440,7 @@ mod tests {
     #[test]
     fn nothing_is_set_outside_linux_wayland() {
         for (os, is_wayland) in [("linux", false), ("macos", true), ("windows", true)] {
-            for saved in [None, SAFE, GPU] {
+            for saved in [None, SAFE, BALANCED, GPU] {
                 let decision = decide_with(
                     os,
                     is_wayland,
@@ -394,10 +455,11 @@ mod tests {
     }
 
     #[test]
-    fn file_content_parses_gpu_and_safe() {
+    fn file_content_parses_every_mode() {
         assert_eq!(RenderingMode::from_file_content("gpu\n"), GPU);
         assert_eq!(RenderingMode::from_file_content("  GPU  "), GPU);
         assert_eq!(RenderingMode::from_file_content("safe\n"), SAFE);
+        assert_eq!(RenderingMode::from_file_content("balanced\n"), BALANCED);
     }
 
     #[test]
@@ -420,7 +482,11 @@ mod tests {
 
     #[test]
     fn file_content_round_trips() {
-        for mode in [RenderingMode::Safe, RenderingMode::Gpu] {
+        for mode in [
+            RenderingMode::Safe,
+            RenderingMode::Balanced,
+            RenderingMode::Gpu,
+        ] {
             assert_eq!(
                 RenderingMode::from_file_content(&mode.file_content()),
                 Some(mode)
@@ -437,6 +503,10 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<RenderingMode>("\"safe\"").unwrap(),
             RenderingMode::Safe
+        );
+        assert_eq!(
+            serde_json::to_string(&RenderingMode::Balanced).unwrap(),
+            "\"balanced\""
         );
         assert!(serde_json::from_str::<RenderingMode>("\"fast\"").is_err());
     }

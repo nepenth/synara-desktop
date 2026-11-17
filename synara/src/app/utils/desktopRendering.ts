@@ -2,8 +2,9 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from './desktop';
 
 /**
  * Contract with the shell (`src-tauri/src/desktop_rendering_host.rs`):
- * - Command `desktop_rendering_mode` → `{ available: boolean, saved: 'safe' |
- *   'gpu' | null, active: 'safe' | 'gpu', overriddenByEnvironment: boolean }`.
+ * - Command `desktop_rendering_mode` → `{ available: boolean, saved: Mode |
+ *   null, active: Mode, overriddenByEnvironment: boolean }` where Mode is
+ *   `'safe' | 'balanced' | 'gpu'`.
  *   `available` is true only on Linux under Wayland. `saved` is the user's
  *   choice for the next start, `null` while they have not chosen and the
  *   package's default applies. `active` is what this process started with,
@@ -15,7 +16,11 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from './desktop';
 export const DESKTOP_RENDERING_MODE_COMMAND = 'desktop_rendering_mode';
 export const DESKTOP_SET_RENDERING_MODE_COMMAND = 'desktop_set_rendering_mode';
 
-export type DesktopRenderingMode = 'safe' | 'gpu';
+/**
+ * `safe` draws everything on the CPU; `balanced` composites on the graphics
+ * card without DMABUF presentation; `gpu` uses the graphics card fully.
+ */
+export type DesktopRenderingMode = 'safe' | 'balanced' | 'gpu';
 
 export type DesktopRenderingStatus = {
   available: boolean;
@@ -31,7 +36,8 @@ export const DESKTOP_RENDERING_UNAVAILABLE: DesktopRenderingStatus = {
   overriddenByEnvironment: false,
 };
 
-const normalizeMode = (value: unknown): DesktopRenderingMode => (value === 'gpu' ? 'gpu' : 'safe');
+const normalizeMode = (value: unknown): DesktopRenderingMode =>
+  value === 'gpu' || value === 'balanced' ? value : 'safe';
 const normalizeSavedMode = (value: unknown): DesktopRenderingMode | null =>
   value === null || value === undefined ? null : normalizeMode(value);
 
@@ -50,11 +56,11 @@ export const normalizeDesktopRenderingStatus = (value: unknown): DesktopRenderin
 
 export type HardwareAccelerationView = {
   /**
-   * The switch position: the saved choice, or what is running when the
+   * The selected mode: the saved choice, or what is running when the
    * environment decides or nothing is saved.
    */
-  enabled: boolean;
-  /** The environment variable decides, so the switch cannot change anything. */
+  mode: DesktopRenderingMode;
+  /** The environment variable decides, so the choice cannot change anything. */
   locked: boolean;
   /** A saved choice differs from what this process started with. */
   restartNeeded: boolean;
@@ -64,10 +70,10 @@ export const hardwareAccelerationView = (
   status: DesktopRenderingStatus
 ): HardwareAccelerationView => {
   if (status.overriddenByEnvironment) {
-    return { enabled: status.active === 'gpu', locked: true, restartNeeded: false };
+    return { mode: status.active, locked: true, restartNeeded: false };
   }
   const shown = status.saved ?? status.active;
-  return { enabled: shown === 'gpu', locked: false, restartNeeded: shown !== status.active };
+  return { mode: shown, locked: false, restartNeeded: shown !== status.active };
 };
 
 /** The shell's rendering setting; "not available" off Linux Wayland. */

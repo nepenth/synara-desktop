@@ -50,7 +50,7 @@ test('with nothing saved the switch shows what is running', () => {
       active: 'gpu',
       overriddenByEnvironment: false,
     }),
-    { enabled: true, locked: false, restartNeeded: false }
+    { mode: 'gpu', locked: false, restartNeeded: false }
   );
   assert.deepEqual(
     hardwareAccelerationView({
@@ -59,7 +59,7 @@ test('with nothing saved the switch shows what is running', () => {
       active: 'safe',
       overriddenByEnvironment: false,
     }),
-    { enabled: false, locked: false, restartNeeded: false }
+    { mode: 'safe', locked: false, restartNeeded: false }
   );
 });
 
@@ -80,7 +80,7 @@ test('the switch shows the saved choice and asks for a restart when it differs',
       active: 'safe',
       overriddenByEnvironment: false,
     }),
-    { enabled: true, locked: false, restartNeeded: true }
+    { mode: 'gpu', locked: false, restartNeeded: true }
   );
   assert.deepEqual(
     hardwareAccelerationView({
@@ -89,7 +89,7 @@ test('the switch shows the saved choice and asks for a restart when it differs',
       active: 'gpu',
       overriddenByEnvironment: false,
     }),
-    { enabled: false, locked: false, restartNeeded: true }
+    { mode: 'safe', locked: false, restartNeeded: true }
   );
   assert.deepEqual(
     hardwareAccelerationView({
@@ -98,7 +98,7 @@ test('the switch shows the saved choice and asks for a restart when it differs',
       active: 'gpu',
       overriddenByEnvironment: false,
     }),
-    { enabled: true, locked: false, restartNeeded: false }
+    { mode: 'gpu', locked: false, restartNeeded: false }
   );
 });
 
@@ -110,7 +110,7 @@ test('the environment variable locks the switch to what is running', () => {
       active: 'gpu',
       overriddenByEnvironment: true,
     }),
-    { enabled: true, locked: true, restartNeeded: false }
+    { mode: 'gpu', locked: true, restartNeeded: false }
   );
   assert.deepEqual(
     hardwareAccelerationView({
@@ -119,6 +119,22 @@ test('the environment variable locks the switch to what is running', () => {
       active: 'safe',
       overriddenByEnvironment: true,
     }),
-    { enabled: false, locked: true, restartNeeded: false }
+    { mode: 'safe', locked: true, restartNeeded: false }
+  );
+});
+
+test('balanced is kept as its own mode', () => {
+  assert.deepEqual(
+    normalizeDesktopRenderingStatus({ available: true, saved: 'balanced', active: 'balanced' }),
+    { available: true, saved: 'balanced', active: 'balanced', overriddenByEnvironment: false }
+  );
+  assert.deepEqual(
+    hardwareAccelerationView({
+      available: true,
+      saved: 'balanced',
+      active: 'safe',
+      overriddenByEnvironment: false,
+    }),
+    { mode: 'balanced', locked: false, restartNeeded: true }
   );
 });

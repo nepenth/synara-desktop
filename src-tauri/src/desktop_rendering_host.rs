@@ -1,6 +1,6 @@
 //! The app side of `desktop_rendering`: the startup call that sets the
 //! rendering variables, and the commands behind the "Hardware acceleration"
-//! switch in Settings.
+//! choice in Settings.
 
 use crate::desktop_rendering::{
     decide, nvidia_driver_present, preference_path, read_saved_mode, write_saved_mode,
