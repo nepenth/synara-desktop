@@ -145,6 +145,7 @@ import {
 import { draftMarkdownOf, useSyncedRoomDraft } from './useSyncedRoomDraft';
 import { draftSlotFor } from './nativeDraftSync';
 import { createCoalescingScheduler } from './coalescingScheduler';
+import { BEFORE_QUIT_EVENT } from '../../utils/beforeQuit';
 import { createComposerDraftPersistence, type DraftTarget } from './composerDraftPersistence';
 import {
   DEFAULT_POLL_SELECTIONS,
@@ -722,11 +723,13 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       window.addEventListener('blur', flush);
       window.addEventListener('pagehide', flush);
       window.addEventListener('beforeunload', flush);
+      window.addEventListener(BEFORE_QUIT_EVENT, flush);
       document.addEventListener('visibilitychange', onVisibility);
       return () => {
         window.removeEventListener('blur', flush);
         window.removeEventListener('pagehide', flush);
         window.removeEventListener('beforeunload', flush);
+        window.removeEventListener(BEFORE_QUIT_EVENT, flush);
         document.removeEventListener('visibilitychange', onVisibility);
       };
     }, [draftPersistence]);

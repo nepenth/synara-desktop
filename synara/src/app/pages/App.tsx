@@ -15,6 +15,7 @@ import { useCompositionEndTracking } from '../hooks/useComposingCheck';
 import { useDesktopExternalLinkInterceptor } from '../utils/appLinks';
 import { useMotionPolicy } from '../hooks/useMotionPolicy';
 import { reportDesktopRenderingStarted } from '../utils/desktopRendering';
+import { useNativeBeforeQuit } from '../utils/beforeQuit';
 import '../styles/FocusRing.css';
 import '../styles/motion.css';
 
@@ -25,6 +26,7 @@ function App() {
   useCompositionEndTracking();
   useDesktopExternalLinkInterceptor();
   useMotionPolicy();
+  useNativeBeforeQuit();
   // The app shell is up: once it has drawn, the shell knows this start
   // worked and keeps the hardware acceleration mode for the next one.
   useEffect(() => reportDesktopRenderingStarted(), []);

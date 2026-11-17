@@ -184,7 +184,7 @@ pub fn watch_web_process<R: tauri::Runtime>(
 
             webview
                 .inner()
-                .connect_web_process_terminated(move |_, reason| {
+                .connect_web_process_terminated(move |view, reason| {
                     let exit = match reason {
                         WebProcessTerminationReason::Crashed => WebProcessExit::Crashed,
                         WebProcessTerminationReason::ExceededMemoryLimit => {
@@ -195,7 +195,11 @@ pub fn watch_web_process<R: tauri::Runtime>(
                         }
                         _ => WebProcessExit::Unknown,
                     };
-                    on_web_process_exit(&app, exit);
+                    if on_web_process_exit(&app, exit) && allow_web_view_reload() {
+                        // A web process that ends without a fallback leaves
+                        // the window blank; reloading starts a new one.
+                        view.reload();
+                    }
                 });
         })
         .map_err(|error| format!("Unable to watch the web view's process: {error}"))
@@ -208,15 +212,48 @@ pub fn watch_web_process<R: tauri::Runtime>(
     Ok(())
 }
 
+/// Reloads allowed per window of time after a web process ends, so a page
+/// that keeps killing its process cannot loop forever.
+#[cfg(any(target_os = "linux", test))]
+const WEB_VIEW_RELOADS_PER_WINDOW: usize = 3;
+#[cfg(any(target_os = "linux", test))]
+const WEB_VIEW_RELOAD_WINDOW: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// Whether one more reload fits the budget at `now`; records it if so.
+#[cfg(any(target_os = "linux", test))]
+fn take_reload_budget(recent: &mut Vec<std::time::Instant>, now: std::time::Instant) -> bool {
+    recent.retain(|at| now.saturating_duration_since(*at) < WEB_VIEW_RELOAD_WINDOW);
+    if recent.len() >= WEB_VIEW_RELOADS_PER_WINDOW {
+        return false;
+    }
+    recent.push(now);
+    true
+}
+
 #[cfg(target_os = "linux")]
-fn on_web_process_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>, exit: WebProcessExit) {
+fn allow_web_view_reload() -> bool {
+    static RECENT: Mutex<Vec<std::time::Instant>> = Mutex::new(Vec::new());
+    let allowed = RECENT
+        .lock()
+        .map(|mut recent| take_reload_budget(&mut recent, std::time::Instant::now()))
+        .unwrap_or(false);
+    if !allowed {
+        eprintln!("[synara] the web view's process keeps ending; not reloading it again");
+    }
+    allowed
+}
+
+/// Handles the end of the web view's process. True when the window is left
+/// without a page (no fallback relaunch is under way) and should reload.
+#[cfg(target_os = "linux")]
+fn on_web_process_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>, exit: WebProcessExit) -> bool {
     static RELAUNCHING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     let Some(startup) = STARTUP.get() else {
-        return;
+        return !matches!(exit, WebProcessExit::TerminatedByApi);
     };
     let mode = startup.decision.mode.as_str();
     match web_process_exit_response(&startup.decision, exit) {
-        WebProcessExitResponse::Ignore => {}
+        WebProcessExitResponse::Ignore => false,
         WebProcessExitResponse::Log => {
             let why = if startup.decision.overridden_by_environment {
                 "; SYNARA_RENDERING chose this mode, so it is kept"
@@ -224,27 +261,31 @@ fn on_web_process_exit<R: tauri::Runtime>(app: &tauri::AppHandle<R>, exit: WebPr
                 ""
             };
             eprintln!("[synara] the web view's process ended ({exit:?}) in {mode} mode{why}");
+            true
         }
         WebProcessExitResponse::FallBack(fallback) => {
             if RELAUNCHING.swap(true, std::sync::atomic::Ordering::AcqRel) {
-                return;
+                return false;
             }
             eprintln!(
                 "[synara] the web view's process crashed in {mode} mode; starting again with hardware acceleration off"
             );
             // Without the record the new copy would start in the same mode
-            // and could crash again, so it is not started.
+            // and could crash again, so it is not started; the page reloads
+            // in this mode instead.
             let Some(dir) = startup.config_dir.as_ref() else {
                 eprintln!("[synara] cannot record the rendering fallback: no config directory");
-                return;
+                return true;
             };
             if let Err(error) = write_fallback(&dir.join(FALLBACK_FILE_NAME), fallback) {
                 eprintln!("[synara] cannot record the rendering fallback: {error}");
-                return;
+                return true;
             }
             if let Err(error) = relaunch_after_exit(app, &startup.decision) {
                 eprintln!("[synara] cannot start Synara again: {error}");
+                return true;
             }
+            false
         }
     }
 }
@@ -400,6 +441,18 @@ pub fn desktop_set_rendering_mode(
 mod tests {
     use super::*;
     use std::ffi::OsString;
+
+    #[test]
+    fn the_reload_budget_allows_a_few_reloads_per_window_then_refills() {
+        let start = std::time::Instant::now();
+        let mut recent = Vec::new();
+        for _ in 0..WEB_VIEW_RELOADS_PER_WINDOW {
+            assert!(take_reload_budget(&mut recent, start));
+        }
+        assert!(!take_reload_budget(&mut recent, start));
+        let later = start + WEB_VIEW_RELOAD_WINDOW;
+        assert!(take_reload_budget(&mut recent, later));
+    }
 
     /// A fresh directory for one test, removed when dropped.
     struct TestDir(PathBuf);

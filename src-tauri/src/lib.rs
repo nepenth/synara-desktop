@@ -1190,6 +1190,9 @@ pub fn run() {
 
             if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {
                 if begin_exit_sync_stop() {
+                    // Let the page write pending state (a composer draft
+                    // waiting on its debounce) while sync stops.
+                    let _ = app.emit(BEFORE_QUIT_EVENT, ());
                     // Stop sync so the SDK is not mid-request at exit, then
                     // exit for real. The stop is bounded: quit never hangs.
                     api.prevent_exit();
@@ -1205,6 +1208,9 @@ pub fn run() {
             }
         });
 }
+
+/// Tells the page the app is quitting (`synara/src/app/utils/beforeQuit.ts`).
+const BEFORE_QUIT_EVENT: &str = "synara://before-quit";
 
 /// Upper bound on stopping sync during quit.
 const EXIT_SYNC_STOP_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
