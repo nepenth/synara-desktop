@@ -58,10 +58,13 @@ const highlightAnime = keyframes({
     backgroundColor: color.Primary.Container,
   },
 });
+// Three pulses (6 s), then the row settles on the highlight colour: an
+// endless pulse repaints the page every frame for as long as it is shown.
 const HighlightVariant = styleVariants({
   true: {
+    backgroundColor: color.Primary.Container,
     animation: `${highlightAnime} 2000ms ease-in-out`,
-    animationIterationCount: 'infinite',
+    animationIterationCount: 3,
   },
 });
 
