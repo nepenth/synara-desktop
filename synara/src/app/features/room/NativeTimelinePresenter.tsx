@@ -44,6 +44,7 @@ import {
 } from './nativeReactionOwner';
 import { ReactionViewer } from './reaction-viewer';
 import { observeNativeTimelineBottom } from './nativeTimelineVisibility';
+import { useLatestRef } from '../../hooks/useLatestRef';
 import {
   forwardMediaWithNativeTimelineAction,
   forwardTextWithNativeTimelineAction,
@@ -219,6 +220,11 @@ type NativeTimelinePresenterProps = {
    * reply (notification or link) the pane scrolls to.
    */
   onOpenThreadPane?: (rootEventId: string, latestEventId?: string, focusEventId?: string) => void;
+  /**
+   * The thread the side pane shows. Its inline copy in this room presenter
+   * keeps its expansion but does not stream while the pane does.
+   */
+  threadPaneRootEventId?: string;
   /** A thread presenter's routed reply to scroll to when it opens. */
   threadFocusEventId?: string;
   /**
@@ -2994,6 +3000,7 @@ export function NativeTimelinePresenter({
   onCloseThreadRoute,
   threadDisplay = 'full',
   onOpenThreadPane,
+  threadPaneRootEventId,
   threadFocusEventId,
   publishThreadRoot = true,
   showThreadBack = true,
@@ -4087,6 +4094,21 @@ export function NativeTimelinePresenter({
     [onOpenThreadPane, onOpenThreadRoute, saveViewport, threadRootId]
   );
 
+  // Rows are memoised. `onFocusEvent` and `openThread` read the current rows,
+  // so their identity changes with every delta; handing them to rows directly
+  // re-rendered every mounted row on each edit. Rows get stable forwarders
+  // instead, so an edit re-renders only the edited row.
+  const rowCallbacksRef = useLatestRef({ onFocusEvent, openThread });
+  const rowOnFocusEvent = useCallback(
+    (targetEventId: string) => rowCallbacksRef.current.onFocusEvent(targetEventId),
+    [rowCallbacksRef]
+  );
+  const rowOnOpenThread = useCallback(
+    (rootEventId: string, latestEventId?: string) =>
+      rowCallbacksRef.current.openThread(rootEventId, latestEventId),
+    [rowCallbacksRef]
+  );
+
   // Core resolved the routed event of a `focused` open. A thread reply is
   // never in the room stream: open its thread at the reply with the room
   // behind it. A target that cannot be shown leaves the live room usable and
@@ -4184,8 +4206,16 @@ export function NativeTimelinePresenter({
       toggleExpanded: toggleInlineThread,
       openInPane: onOpenThreadPane,
       replyCache: inlineExpansion.replyCache,
+      paneRootEventId: threadPaneRootEventId,
     }),
-    [inlineExpansion, onOpenThreadPane, roomId, threadDisplay, toggleInlineThread]
+    [
+      inlineExpansion,
+      onOpenThreadPane,
+      roomId,
+      threadDisplay,
+      threadPaneRootEventId,
+      toggleInlineThread,
+    ]
   );
 
   const closeThread = useCallback(() => {
@@ -4560,9 +4590,9 @@ export function NativeTimelinePresenter({
                         pinnedEventIds={snapshot.pinnedEventIds}
                         sourceEncryptionStatus={sourceEncryptionStatus}
                         onActionError={showActionError}
-                        onFocusEvent={onFocusEvent}
+                        onFocusEvent={rowOnFocusEvent}
                         onViewReactions={viewReactions}
-                        onOpenThread={openThread}
+                        onOpenThread={rowOnOpenThread}
                         activeThreadRoot={threadRootId}
                         onOpenMarkdownPreview={setFilePreview}
                         onOpenMediaViewer={setMediaViewer}

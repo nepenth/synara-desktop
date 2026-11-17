@@ -12,7 +12,7 @@ import {
   visibleInlineReplies,
 } from '../../../utils/threadDisplay';
 import { resolveThreadPane } from '../threadPane';
-import { inlineThreadReplies } from '../nativeInlineThreadModel';
+import { inlineThreadReplies, inlineThreadStreamsLive } from '../nativeInlineThreadModel';
 import { defaultSettings, splitSettings } from '../../../state/settings';
 import type { NativeTimelineViewRow } from '../nativeTimelineView';
 
@@ -111,6 +111,12 @@ test('inline replies drop the root and non-message rows', () => {
     inlineThreadReplies(rows, '$root').map((reply) => reply.body),
     ['First answer', 'Second answer']
   );
+});
+
+test('an inline thread does not stream while the side pane shows the same thread', () => {
+  assert.equal(inlineThreadStreamsLive('$root'), true);
+  assert.equal(inlineThreadStreamsLive('$root', '$other'), true);
+  assert.equal(inlineThreadStreamsLive('$root', '$root'), false);
 });
 
 test('inline replies carry Matrix HTML for text, never for media captions (D27)', () => {

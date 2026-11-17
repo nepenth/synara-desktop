@@ -46,3 +46,11 @@ export type InlineThreadReplyCache = {
   moreOnServer: boolean;
   visible: number;
 };
+
+/**
+ * Whether an expanded inline thread holds its own live stream. While the side
+ * pane shows the same thread, the pane's view is the live one: the inline copy
+ * shows its cached replies and opens its stream again when the pane closes.
+ */
+export const inlineThreadStreamsLive = (rootEventId: string, paneRootEventId?: string): boolean =>
+  paneRootEventId !== rootEventId;
