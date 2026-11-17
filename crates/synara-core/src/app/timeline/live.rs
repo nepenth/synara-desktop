@@ -1347,6 +1347,11 @@ impl NativeTimelineOwner {
     /// The registry lock is held only to validate the stream and to read the
     /// snapshot source. Receipt writes and any explicit-read pagination run without
     /// it, so a slow homeserver does not stall every other timeline command.
+    ///
+    /// The readback comes from the view the write was validated against. A
+    /// stream id never names another view, and the frontend may close the
+    /// stream while the write is in flight (a thread pane closing): the
+    /// receipt has gone out by then, so that is still success.
     pub async fn set_read_state(
         &self,
         request: NativeTimelineReadStateRequest,
@@ -1355,12 +1360,7 @@ impl NativeTimelineOwner {
         let (receipt_sent, acknowledged_event_id) =
             apply_stream_read_action(&timeline, &request).await?;
         publish_current_read_state(&timeline, &view, self.client.user_id()).await;
-        let snapshot = self
-            .registry
-            .lock()
-            .await
-            .published_view(&request.stream_id)?
-            .snapshot();
+        let snapshot = view.snapshot();
         Ok(NativeTimelineReadStateReadback {
             action: request.action,
             receipt_sent,

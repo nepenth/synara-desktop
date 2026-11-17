@@ -904,6 +904,45 @@ export type NativeTimelineOpenInput = {
     | { kind: 'thread'; rootEventId: string };
 };
 
+type LatestWinsEntry = {
+  task: () => Promise<void>;
+  resolve: () => void;
+  reject: (error: unknown) => void;
+};
+
+/**
+ * Run one task at a time, newest last. A call made while a task is in flight
+ * waits; a later call replaces the waiting one, which resolves without
+ * running. Mark-read uses one per stream: a quick run of new tails sends at
+ * most one receipt at a time, and the newest tail always goes last.
+ */
+export const createLatestWinsRunner = () => {
+  let inFlight = false;
+  let waiting: LatestWinsEntry | undefined;
+  const start = (entry: LatestWinsEntry) => {
+    inFlight = true;
+    Promise.resolve()
+      .then(entry.task)
+      .then(entry.resolve, entry.reject)
+      .finally(() => {
+        inFlight = false;
+        const next = waiting;
+        waiting = undefined;
+        if (next) start(next);
+      });
+  };
+  return (task: () => Promise<void>): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      const entry = { task, resolve, reject };
+      if (!inFlight) {
+        start(entry);
+        return;
+      }
+      waiting?.resolve();
+      waiting = entry;
+    });
+};
+
 export type NativeTimelineCommandError = {
   code?: string;
   message?: string;
@@ -1171,6 +1210,9 @@ export const useNativeTimelineView = (
   const navigationRevisionRef = useRef(0);
   const navigationRequestRef = useRef(nativeRequest);
   navigationRequestRef.current = nativeRequest;
+  const readStateQueueRef = useRef<
+    { streamId: string; run: ReturnType<typeof createLatestWinsRunner> } | undefined
+  >(undefined);
 
   const acceptSnapshot = useCallback((next: NativeTimelineViewSnapshot): boolean => {
     const current = snapshotRef.current;
@@ -1260,28 +1302,38 @@ export const useNativeTimelineView = (
         streamIdRef.current !== streamId ||
         navigationRevisionRef.current !== revision ||
         navigationRequestRef.current !== navigationRequest;
-      let result: DesktopInvokeResult<NativeTimelineReadStateReadback>;
-      try {
-        result = await invokeDesktopWithAvailability<NativeTimelineReadStateReadback>(
-          'matrix_timeline_set_read_state',
-          { request: { streamId, ...request, publicReceipt: readReceiptsArePublic() } }
-        );
-      } catch (error) {
+      // At most one read write per stream is in flight; a newer one replaces
+      // any still waiting, so the newest tail is the last receipt sent.
+      let queue = readStateQueueRef.current;
+      if (queue?.streamId !== streamId) {
+        queue = { streamId, run: createLatestWinsRunner() };
+        readStateQueueRef.current = queue;
+      }
+      return queue.run(async () => {
         if (superseded()) return;
-        throw error;
-      }
-      if (superseded()) return;
-      if (!result.available || !result.value) {
-        throw new Error('Native timeline read action is unavailable.');
-      }
-      // The read state reaches the presenter as a delta batch; the reply only
-      // confirms the action ran on this stream.
-      if (isSameNativeTimelineStream(snapshotRef.current, result.value.view)) return;
-      setState({
-        status: 'error',
-        error: new Error('Native timeline read state lost synchronization.'),
+        let result: DesktopInvokeResult<NativeTimelineReadStateReadback>;
+        try {
+          result = await invokeDesktopWithAvailability<NativeTimelineReadStateReadback>(
+            'matrix_timeline_set_read_state',
+            { request: { streamId, ...request, publicReceipt: readReceiptsArePublic() } }
+          );
+        } catch (error) {
+          if (superseded()) return;
+          throw error;
+        }
+        if (superseded()) return;
+        if (!result.available || !result.value) {
+          throw new Error('Native timeline read action is unavailable.');
+        }
+        // The read state reaches the presenter as a delta batch; the reply only
+        // confirms the action ran on this stream.
+        if (isSameNativeTimelineStream(snapshotRef.current, result.value.view)) return;
+        setState({
+          status: 'error',
+          error: new Error('Native timeline read state lost synchronization.'),
+        });
+        throw new Error('Native timeline read state lost synchronization.');
       });
-      throw new Error('Native timeline read state lost synchronization.');
     },
     []
   );
