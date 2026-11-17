@@ -85,6 +85,10 @@ const SAFE_NUMBER_FIELDS = new Set([
   'lastLongTaskMs',
   'maxLongTaskMs',
   'memoryMb',
+  'inputKeyCount',
+  'inputP50Ms',
+  'inputP95Ms',
+  'inputMaxMs',
 ]);
 
 const SAFE_BOOLEAN_FIELDS = new Set([

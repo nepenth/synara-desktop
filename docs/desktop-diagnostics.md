@@ -7,7 +7,7 @@ Synara's desktop diagnostics are an opt-in troubleshooting facility for macOS an
 1. Open **Settings → Diagnostics**.
 2. Enable **Diagnostic Capture**.
 3. Enable the categories that match the problem:
-   - **Performance** for frame cadence, long tasks, rendered timeline size, and slow operations.
+   - **Performance** for frame cadence, long tasks, rendered timeline size, typing latency, and slow operations.
    - **Session Persistence** for native credential-store, bootstrap, token refresh, Matrix store, crypto, and startup lifecycle evidence.
    - **Room State and Positioning** for room-open decisions, read markers, recent-room activity, pagination, anchoring, Jump to Latest, and unexpected scroll movement.
 4. Optionally enable the performance overlay.
@@ -30,4 +30,4 @@ The structured writer accepts only predefined event categories, event-name names
 
 Diagnostic files are owner-readable and owner-writable on Unix platforms (`0600`), expire after seven days, and are bounded to a 5 MiB current file plus one 5 MiB rotation. Export reads only the structured diagnostic store; the general application log is not included.
 
-Performance capture uses frame callbacks and the browser long-task observer even when the visual overlay is hidden. Room-activity records are burst-limited and include coalescing counts so troubleshooting does not create unbounded native writes during large syncs.
+Performance capture uses frame callbacks and the browser long-task observer even when the visual overlay is hidden. Typing latency is timed for keys that change text in a text field, from the key event to just after the next frame; each `runtime.sample` record carries the count and the p50, p95 and maximum in milliseconds for its window (`inputKeyCount`, `inputP50Ms`, `inputP95Ms`, `inputMaxMs`), and the overlay shows the p95. Only timings are recorded, never which keys were pressed. The frame callback keeps the page drawing every frame while capture is on, so turn Performance off before judging idle CPU use. On Linux, `scripts/linux-thread-load.sh` samples the CPU and wakeups of Synara's main threads from outside the app. Room-activity records are burst-limited and include coalescing counts so troubleshooting does not create unbounded native writes during large syncs.

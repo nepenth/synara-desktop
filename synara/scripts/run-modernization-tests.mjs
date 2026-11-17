@@ -45,6 +45,8 @@ const tests = [
   'src/app/utils/__tests__/notifications.test.ts',
   'src/app/utils/__tests__/foundationDiagnostics.test.ts',
   'src/app/utils/__tests__/clientDiagnostics.test.ts',
+  'src/app/utils/__tests__/inputLatency.test.ts',
+  'src/app/utils/__tests__/desktopRendering.test.ts',
   'src/app/utils/__tests__/diagnosticsReport.test.ts',
   'src/app/utils/__tests__/boundedLru.test.ts',
   'src/app/utils/__tests__/bulkActions.test.ts',
