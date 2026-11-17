@@ -115,6 +115,16 @@ test('desktop grouped timestamps overlay on hover without shifting the message',
   assert.doesNotMatch(presenter, /grouped \? \(\s*originServerTs \? \(\s*<Time/);
 });
 
+test('memoised timeline rows get callbacks that survive every snapshot', () => {
+  const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
+  // `onFocusEvent` and `openThread` depend on `rows`; passed directly, every
+  // mounted row re-rendered on each delta (an agent edit re-rendered 18 rows).
+  const rowElement = presenter.slice(presenter.indexOf('<NativeTimelineRow\n'));
+  assert.match(rowElement, /onFocusEvent=\{rowOnFocusEvent\}/);
+  assert.match(rowElement, /onOpenThread=\{rowOnOpenThread\}/);
+  assert.match(presenter, /const rowCallbacksRef = useLatestRef\(\{ onFocusEvent, openThread \}\)/);
+});
+
 test('native media rendering keeps Matrix filename and caption fields distinct', () => {
   const contract = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
   const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');

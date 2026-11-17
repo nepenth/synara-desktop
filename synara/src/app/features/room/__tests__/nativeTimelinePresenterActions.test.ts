@@ -314,7 +314,8 @@ test('thread chip and reply-in-thread open a dedicated thread timeline with Back
   assert.match(presenter, /aria-label="Back to room"/);
   assert.match(presenter, /Icons\.ArrowLeft/);
   assert.match(presenter, /onClick=\{closeThread\}/);
-  assert.match(presenter, /onOpenThread=\{openThread\}/);
+  // Rows reach `openThread` through a stable forwarder (memoised rows).
+  assert.match(presenter, /onOpenThread=\{rowOnOpenThread\}/);
   assert.match(presenter, /activeThreadRoot=\{threadRootId\}/);
   assert.match(presenter, /setPreferLiveBottom\(true\)/);
   assert.match(presenter, /publishNativeThreadRoot\(roomId, threadRootId\)/);
