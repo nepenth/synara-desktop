@@ -1,4 +1,10 @@
-import React, { ClipboardEventHandler, KeyboardEventHandler, ReactNode, forwardRef } from 'react';
+import React, {
+  ClipboardEventHandler,
+  FocusEventHandler,
+  KeyboardEventHandler,
+  ReactNode,
+  forwardRef,
+} from 'react';
 import { Line } from 'folds';
 import { Editor } from 'slate';
 
@@ -24,6 +30,7 @@ type RoomComposerProps = {
   onKeyUp?: KeyboardEventHandler;
   onPaste?: ClipboardEventHandler;
   onChange?: EditorChangeHandler;
+  onBlur?: FocusEventHandler;
 };
 
 export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
@@ -45,6 +52,7 @@ export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
       onKeyUp,
       onPaste,
       onChange,
+      onBlur,
     },
     ref
   ) => (
@@ -62,6 +70,7 @@ export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
         onKeyUp={onKeyUp}
         onPaste={onPaste}
         onChange={onChange}
+        onBlur={onBlur}
         top={
           replyPreview || linkPreview ? (
             <>
