@@ -3,7 +3,19 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { decideAgentApprovalWithNativeOwner } from '../../src/app/features/room/nativeReactionOwner';
-import { Box, Icon, IconButton, Icons, MenuItem, Text, configClass, varsClass, color } from 'folds';
+import {
+  Box,
+  Icon,
+  IconButton,
+  Icons,
+  MenuItem,
+  PopOut,
+  Text,
+  configClass,
+  varsClass,
+  color,
+} from 'folds';
+import { EmojiBoard } from '../../src/app/components/emoji-board';
 import 'folds/dist/style.css';
 import '../../src/index.css';
 import { darkTheme, synaraLightTheme } from '../../src/colors.css';
@@ -16,6 +28,7 @@ import type { ApprovalInboxItem } from '../../src/app/features/approvals/nativeA
 import { ApprovalsBarItem } from '../../src/app/features/nav-pane/NavBottomBar';
 import { useEditor } from '../../src/app/components/editor/Editor';
 import {
+  createEmoticonElement,
   createMentionElement,
   focusEditorAfterRender,
   getPrevWorldRange,
@@ -29,6 +42,11 @@ import {
   type AutocompleteQuery,
 } from '../../src/app/components/editor/autocomplete/autocompleteQuery';
 import { AutocompleteMenu } from '../../src/app/components/editor/autocomplete/AutocompleteMenu';
+import { EmoticonAutocomplete } from '../../src/app/components/editor/autocomplete/EmoticonAutocomplete';
+import {
+  insertClipboardData,
+  shouldPreventDefaultForClipboardInsert,
+} from '../../src/app/components/editor/input';
 import { Toolbar } from '../../src/app/components/editor/Toolbar';
 import { RoomComposer } from '../../src/app/features/room/RoomComposer';
 import * as composerCss from '../../src/app/features/room/RoomComposer.css';
@@ -151,6 +169,19 @@ function ComposerPreview() {
   // Browser specs drive and inspect the Slate document through this handle.
   Object.assign(window, { synaraComposerEditor: editor });
   const [toolbar, setToolbar] = useState(query.has('toolbar'));
+  // The production emoji board, wired as RoomInput wires it.
+  const [emojiBoardOpen, setEmojiBoardOpen] = useState(false);
+  const emojiBtnRef = React.useRef<HTMLButtonElement>(null);
+  const handleEmoticonSelect = (key: string, shortcode: string) => {
+    editor.insertNode(createEmoticonElement(key, shortcode));
+    moveCursor(editor);
+  };
+  // The production `:shortcode` autocomplete, closed as RoomInput closes it.
+  const [emoticonQuery, setEmoticonQuery] = useState<AutocompleteQuery<AutocompletePrefix>>();
+  const closeEmoticons = () => {
+    setEmoticonQuery(undefined);
+    focusEditorAfterRender(editor);
+  };
   // The production autocomplete menu with fixture members, picked and closed
   // the way RoomInput does it.
   const [mentionQuery, setMentionQuery] = useState<AutocompleteQuery<AutocompletePrefix>>();
@@ -184,6 +215,14 @@ function ComposerPreview() {
             ))}
           </AutocompleteMenu>
         )}
+        {emoticonQuery && (
+          <EmoticonAutocomplete
+            imagePackRooms={[]}
+            editor={editor}
+            query={emoticonQuery}
+            requestClose={closeEmoticons}
+          />
+        )}
         <RoomComposer
           editor={editor}
           onChange={() => {
@@ -192,6 +231,12 @@ function ComposerPreview() {
               ? getAutocompleteQuery<AutocompletePrefix>(editor, range, AUTOCOMPLETE_PREFIXES)
               : undefined;
             setMentionQuery(next?.prefix === AutocompletePrefix.UserMention ? next : undefined);
+            setEmoticonQuery(next?.prefix === AutocompletePrefix.Emoticon ? next : undefined);
+          }}
+          onPaste={(evt) => {
+            // RoomInput's paste path for text and HTML (links arrive as HTML).
+            const insertion = insertClipboardData(editor, evt.clipboardData);
+            if (shouldPreventDefaultForClipboardInsert(insertion)) evt.preventDefault();
           }}
           placeholder="Send a message..."
           leadingAction={
@@ -221,16 +266,44 @@ function ComposerPreview() {
               >
                 <Icon src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
               </IconButton>
-              <IconButton
-                className={composerCss.ComposerAction}
-                fill="None"
-                aria-label="Emoji"
-                variant="SurfaceVariant"
-                size="300"
-                radii="300"
+              <PopOut
+                offset={16}
+                alignOffset={-44}
+                position="Top"
+                align="End"
+                anchor={
+                  !emojiBoardOpen
+                    ? undefined
+                    : (emojiBtnRef.current?.getBoundingClientRect() ?? undefined)
+                }
+                content={
+                  <EmojiBoard
+                    imagePackRooms={[]}
+                    returnFocusOnDeactivate={false}
+                    onEmojiSelect={handleEmoticonSelect}
+                    onCustomEmojiSelect={handleEmoticonSelect}
+                    addToRecentEmoji={false}
+                    requestClose={() => {
+                      if (emojiBoardOpen) focusEditorAfterRender(editor);
+                      setEmojiBoardOpen(false);
+                    }}
+                  />
+                }
               >
-                <Icon src={Icons.Smile} />
-              </IconButton>
+                <IconButton
+                  className={composerCss.ComposerAction}
+                  fill="None"
+                  ref={emojiBtnRef}
+                  aria-label="Emoji"
+                  aria-pressed={emojiBoardOpen}
+                  onClick={() => setEmojiBoardOpen((open) => !open)}
+                  variant="SurfaceVariant"
+                  size="300"
+                  radii="300"
+                >
+                  <Icon src={Icons.Smile} />
+                </IconButton>
+              </PopOut>
               <IconButton
                 className={composerCss.ComposerAction}
                 fill="None"

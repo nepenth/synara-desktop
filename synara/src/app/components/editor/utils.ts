@@ -1,4 +1,5 @@
 import { BasePoint, BaseRange, Editor, Element, Point, Range, Text, Transforms } from 'slate';
+import { IS_NODE_MAP_DIRTY } from 'slate-dom';
 import { ReactEditor } from 'slate-react';
 import { BlockType, MarkType } from './types';
 import {
@@ -123,9 +124,16 @@ export const escapeLinkEdge = (editor: Editor): void => {
   }
 };
 
-/** Text and breaks entered at a link's edge land outside the link. */
+/**
+ * Text, breaks and chips (emoji, mentions) entered at a link's edge land
+ * outside the link. An insert at an explicit location is left alone.
+ */
 export const withLinkEdgeEscape = (editor: Editor): Editor => {
-  const { insertText, insertBreak, insertSoftBreak } = editor;
+  const { insertText, insertBreak, insertSoftBreak, insertNodes } = editor;
+  editor.insertNodes = (nodes, options) => {
+    if (!options?.at) escapeLinkEdge(editor);
+    insertNodes(nodes, options);
+  };
   editor.insertText = (text, options) => {
     escapeLinkEdge(editor);
     insertText(text, options);
@@ -155,20 +163,46 @@ export const replaceWithElement = (editor: Editor, selectRange: BaseRange, eleme
   });
 };
 
+/** Frames to wait for slate-react to draw an edit before giving up on focus. */
+const FOCUS_RENDER_FRAMES = 10;
+
 /**
- * Focuses the editor once React has drawn the latest edit.
+ * True while the DOM does not show the editor's latest value yet: operations
+ * are waiting for Slate's flush, or Slate has flushed them but React has not
+ * drawn the result. slate-react checks the same flag before it maps the DOM
+ * selection, for the same reason.
+ */
+const isEditorDomStale = (editor: Editor): boolean =>
+  editor.operations.length > 0 || IS_NODE_MAP_DIRTY.get(editor) === true;
+
+/**
+ * Focuses the editor once React has drawn the latest edit. Use it, never a
+ * bare `ReactEditor.focus`, to refocus the editor after changing its value
+ * from outside it (a picker, a menu, an effect).
  *
- * Closing an autocomplete menu can run inside React's commit: the menu's focus
- * trap deactivates while it unmounts and calls `requestClose`. A mention pick
- * has just inserted the pill and a space, and their DOM nodes don't exist yet,
- * so `ReactEditor.focus` (which maps the selection to the DOM) threw "Cannot
- * resolve a DOM node from Slate node" and took the screen down. It happens
- * when the click moved focus off the editor, as WebKitGTK on Linux does.
+ * `ReactEditor.focus` maps the selection to the DOM. After an insert the
+ * selection sits in nodes React has not drawn yet (an emoji or mention pick
+ * leaves the cursor in the new empty text after the chip), and the mapping
+ * threw "Cannot resolve a DOM node from Slate node: {"text":""}", which put
+ * the whole screen on the error page. slate-dom only waits while operations
+ * are pending, not for React to draw them, and a popover's focus trap calls
+ * its close handler while React unmounts it, mid-commit, when the new nodes
+ * are not mapped yet. So this waits a frame, and more frames while the DOM is
+ * behind the value; if the edit is never drawn (the composer went away), it
+ * leaves focus alone.
  */
 export const focusEditorAfterRender = (editor: Editor): void => {
-  requestAnimationFrame(() => {
-    if (!ReactEditor.isFocused(editor)) ReactEditor.focus(editor);
-  });
+  let frames = FOCUS_RENDER_FRAMES;
+  const attempt = () => {
+    if (ReactEditor.isFocused(editor)) return;
+    if (isEditorDomStale(editor)) {
+      frames -= 1;
+      if (frames > 0) requestAnimationFrame(attempt);
+      return;
+    }
+    ReactEditor.focus(editor);
+  };
+  requestAnimationFrame(attempt);
 };
 
 export const moveCursor = (editor: Editor, withSpace?: boolean) => {
