@@ -1,0 +1,3 @@
+Synara 3.1.1 makes the app icon number count conversations that need your attention instead of unread messages. Muted rooms, spaces and mentions-only rooms without a mention no longer add to it, and Later only counts reminders that are due. Reading a room now also clears its notifications.
+
+Please test: compare the icon number with the conversations that show as needing attention, including after notifications arrive while Synara is closed; then read a room and check its notifications leave Notification Center.
