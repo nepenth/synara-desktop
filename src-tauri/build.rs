@@ -31,6 +31,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_save_file_chunk",
     "desktop_save_file_end",
     "desktop_save_file_abort",
+    "desktop_reveal_download",
     "desktop_read_dropped_files",
     "desktop_read_dropped_file_chunk",
     "desktop_read_dropped_file_end",

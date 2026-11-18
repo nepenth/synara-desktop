@@ -58,6 +58,11 @@ pub(crate) fn downloads_dir() -> Result<PathBuf, String> {
 }
 
 /// Write `bytes` into the user's Downloads folder and return only the filename.
+///
+/// The bytes go to a hidden temp file in Downloads first and only then take
+/// their final name, so a quit mid-write never leaves a truncated file under
+/// the name the user expects. The final name is claimed without overwriting:
+/// when another save takes it first, the next free `name (n).ext` is used.
 pub(crate) fn save_exclusive_download(filename: &str, bytes: &[u8]) -> Result<String, String> {
     if bytes.is_empty() {
         return Err("File is empty".to_owned());
@@ -67,14 +72,115 @@ pub(crate) fn save_exclusive_download(filename: &str, bytes: &[u8]) -> Result<St
     }
     let downloads = downloads_dir()?;
     fs::create_dir_all(&downloads).map_err(|err| format!("Unable to create Downloads: {err}"))?;
+    save_exclusive_download_in(&downloads, filename, bytes)
+}
+
+/// Attempts at a free name; each one loses only to a save that claimed the
+/// same name between our existence check and our link.
+const MAX_DOWNLOAD_NAME_ATTEMPTS: usize = 16;
+
+fn save_exclusive_download_in(
+    downloads: &Path,
+    filename: &str,
+    bytes: &[u8],
+) -> Result<String, String> {
     let filename = sanitize_download_filename(filename);
-    let path = unique_download_path(&downloads, &filename);
-    write_exclusive_download(&downloads, &path, bytes)?;
-    Ok(path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(&filename)
-        .to_owned())
+    let partial = PartialDownload::write(downloads, bytes)?;
+    for _ in 0..MAX_DOWNLOAD_NAME_ATTEMPTS {
+        let path = unique_download_path(downloads, &filename);
+        ensure_inside_downloads(downloads, &path)?;
+        match partial.claim(&path) {
+            Ok(()) => {
+                return Ok(path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or(&filename)
+                    .to_owned());
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(format!("Unable to write file: {err}")),
+        }
+    }
+    Err("Unable to find a free download filename".to_owned())
+}
+
+/// A complete download in a hidden, private (0600) temp file next to its
+/// destination. Dropping it removes the temp file, on success and on error.
+struct PartialDownload {
+    path: PathBuf,
+}
+
+impl PartialDownload {
+    fn write(downloads: &Path, bytes: &[u8]) -> Result<Self, String> {
+        let path = downloads.join(format!(".{}.part", new_file_transfer_id("synara-download")));
+        ensure_inside_downloads(downloads, &path)?;
+        let mut file = create_private_temp_file(&path)
+            .map_err(|err| format!("Unable to write file: {err}"))?;
+        // From here on, `Drop` removes whatever was written.
+        let partial = Self { path };
+        file.write_all(bytes)
+            .and_then(|()| file.sync_all())
+            .map_err(|err| format!("Unable to write file: {err}"))?;
+        Ok(partial)
+    }
+
+    /// Give the complete file `destination`'s name, failing with
+    /// `AlreadyExists` instead of replacing a file that already has it.
+    fn claim(&self, destination: &Path) -> std::io::Result<()> {
+        // A hard link is an atomic create-if-absent. File systems without hard
+        // links (FAT, some network shares) reserve the name with an empty
+        // exclusive file and rename the temp file over it.
+        match fs::hard_link(&self.path, destination) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Err(err),
+            Err(_) => {
+                drop(create_private_temp_file(destination)?);
+                fs::rename(&self.path, destination).inspect_err(|_| {
+                    let _ = fs::remove_file(destination);
+                })
+            }
+        }
+    }
+}
+
+impl Drop for PartialDownload {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+/// `path` must sit directly in `downloads`, after resolving symlinks.
+fn ensure_inside_downloads(downloads: &Path, path: &Path) -> Result<(), String> {
+    let downloads = downloads
+        .canonicalize()
+        .map_err(|err| format!("Unable to resolve Downloads: {err}"))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Unable to resolve download path".to_owned())?
+        .canonicalize()
+        .map_err(|err| format!("Unable to resolve Downloads: {err}"))?;
+    if parent != downloads {
+        return Err("Refusing to save outside Downloads".to_owned());
+    }
+    Ok(())
+}
+
+/// The path of a file Synara saved as `filename` (the name a save returned)
+/// in `downloads`. The name is sanitized again and must come back unchanged,
+/// so a path, a traversal or any name the save could not have produced is
+/// refused rather than reinterpreted. The file must exist.
+pub(crate) fn saved_download_path(downloads: &Path, filename: &str) -> Result<PathBuf, String> {
+    if filename.is_empty() || sanitize_download_filename(filename) != filename {
+        return Err("Not a saved download filename".to_owned());
+    }
+    let path = downloads.join(filename);
+    ensure_inside_downloads(downloads, &path)?;
+    let metadata =
+        fs::symlink_metadata(&path).map_err(|_| "The file is not in Downloads".to_owned())?;
+    if !metadata.is_file() {
+        return Err("The file is not in Downloads".to_owned());
+    }
+    Ok(path)
 }
 
 pub(crate) fn unique_download_path(downloads: &Path, filename: &str) -> PathBuf {
@@ -480,6 +586,46 @@ pub fn desktop_save_file_abort(session_id: String) -> Result<bool, String> {
     Ok(true)
 }
 
+/// What "Show in folder" managed to open.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DesktopRevealDownloadResult {
+    /// The file manager opened Downloads with the file selected.
+    Item,
+    /// Revealing failed, so Downloads itself was opened.
+    Folder,
+}
+
+/// Show a file Synara saved in the system file manager. Only the filename the
+/// save returned crosses IPC; the path is rebuilt from Downloads here.
+///
+/// On Linux the reveal uses the `org.freedesktop.FileManager1` D-Bus service
+/// (then the OpenURI portal), which tiling desktops often lack, so a failed
+/// reveal opens the Downloads folder instead.
+#[tauri::command]
+pub async fn desktop_reveal_download(
+    app: tauri::AppHandle,
+    filename: String,
+) -> Result<DesktopRevealDownloadResult, String> {
+    use tauri_plugin_opener::OpenerExt;
+
+    // D-Bus and AppKit calls block; keep them off the async runtime.
+    tauri::async_runtime::spawn_blocking(move || {
+        let downloads = downloads_dir()?;
+        let path = saved_download_path(&downloads, &filename)?;
+        let opener = app.opener();
+        if opener.reveal_item_in_dir(&path).is_ok() {
+            return Ok(DesktopRevealDownloadResult::Item);
+        }
+        opener
+            .open_path(downloads.to_string_lossy(), None::<&str>)
+            .map(|()| DesktopRevealDownloadResult::Folder)
+            .map_err(|err| format!("Unable to open Downloads: {err}"))
+    })
+    .await
+    .map_err(|err| format!("Unable to open Downloads: {err}"))?
+}
+
 #[derive(Default)]
 struct DragDropSession {
     dropped_this_drag: bool,
@@ -804,6 +950,165 @@ pub fn desktop_read_dropped_file_end(transfer_id: String) -> Result<bool, String
     purge_stale_file_transfer_sessions(Instant::now());
     remove_dropped_read_session(&transfer_id);
     Ok(true)
+}
+
+#[cfg(test)]
+mod download_save_tests {
+    use super::*;
+
+    fn temp_downloads(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(new_file_transfer_id(label));
+        fs::create_dir_all(&dir).expect("test downloads directory");
+        dir
+    }
+
+    fn names_in(dir: &Path) -> Vec<String> {
+        let mut names = fs::read_dir(dir)
+            .expect("list downloads")
+            .map(|entry| {
+                entry
+                    .expect("entry")
+                    .file_name()
+                    .into_string()
+                    .expect("utf-8")
+            })
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn save_writes_the_complete_private_file_and_leaves_no_temp_file() {
+        let dir = temp_downloads("save-complete-test");
+        let saved = save_exclusive_download_in(&dir, "key.pem", b"-----BEGIN-----").expect("save");
+        assert_eq!(saved, "key.pem");
+        assert_eq!(
+            fs::read(dir.join("key.pem")).expect("read"),
+            b"-----BEGIN-----"
+        );
+        assert_eq!(names_in(&dir), ["key.pem"]);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(dir.join("key.pem"))
+                .expect("meta")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn save_never_replaces_an_existing_file() {
+        let dir = temp_downloads("save-existing-test");
+        fs::write(dir.join("report.txt"), b"theirs").expect("fixture");
+        let saved = save_exclusive_download_in(&dir, "report.txt", b"ours").expect("save");
+        assert_eq!(saved, "report (1).txt");
+        assert_eq!(fs::read(dir.join("report.txt")).expect("read"), b"theirs");
+        assert_eq!(fs::read(dir.join("report (1).txt")).expect("read"), b"ours");
+        assert_eq!(names_in(&dir), ["report (1).txt", "report.txt"]);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn concurrent_saves_of_one_name_all_land_under_distinct_names() {
+        let dir = temp_downloads("save-race-test");
+        let saves = 8;
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(saves));
+        let handles = (0..saves)
+            .map(|index| {
+                let dir = dir.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    let bytes = format!("copy {index}").into_bytes();
+                    barrier.wait();
+                    let name = save_exclusive_download_in(&dir, "report.txt", &bytes)
+                        .expect("every racing save succeeds");
+                    (name, bytes)
+                })
+            })
+            .collect::<Vec<_>>();
+        let results = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("save thread"))
+            .collect::<Vec<_>>();
+        let mut names = results
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), saves);
+        for (name, bytes) in &results {
+            assert_eq!(&fs::read(dir.join(name)).expect("read"), bytes);
+        }
+        assert_eq!(names_in(&dir), names);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_taken_name_fails_the_claim_and_the_temp_file_is_removed() {
+        let dir = temp_downloads("save-claim-test");
+        fs::write(dir.join("taken.txt"), b"theirs").expect("fixture");
+        let partial = PartialDownload::write(&dir, b"ours").expect("temp write");
+        assert_eq!(names_in(&dir).len(), 2);
+        let err = partial
+            .claim(&dir.join("taken.txt"))
+            .expect_err("name is taken");
+        assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+        drop(partial);
+        assert_eq!(names_in(&dir), ["taken.txt"]);
+        assert_eq!(fs::read(dir.join("taken.txt")).expect("read"), b"theirs");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_failed_write_leaves_nothing_behind() {
+        let dir = temp_downloads("save-missing-dir-test");
+        let missing = dir.join("gone");
+        assert!(save_exclusive_download_in(&missing, "report.txt", b"bytes").is_err());
+        assert!(names_in(&dir).is_empty());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn reveal_accepts_only_a_saved_filename_that_exists_in_downloads() {
+        let dir = temp_downloads("reveal-test");
+        fs::write(dir.join("key.pem"), b"pem").expect("fixture");
+        fs::create_dir(dir.join("folder")).expect("fixture dir");
+        assert_eq!(
+            saved_download_path(&dir, "key.pem").expect("saved file"),
+            dir.join("key.pem")
+        );
+        for refused in [
+            "",
+            "../key.pem",
+            "..",
+            ".",
+            "sub/key.pem",
+            "sub\\key.pem",
+            "/etc/passwd",
+            "C:\\Windows\\win.ini",
+            " key.pem",
+            "missing.pem",
+            "folder",
+        ] {
+            assert!(
+                saved_download_path(&dir, refused).is_err(),
+                "{refused:?} must be refused"
+            );
+        }
+        #[cfg(unix)]
+        {
+            let outside = temp_downloads("reveal-outside-test");
+            fs::write(outside.join("secret"), b"secret").expect("fixture");
+            std::os::unix::fs::symlink(outside.join("secret"), dir.join("link")).expect("link");
+            assert!(saved_download_path(&dir, "link").is_err());
+            let _ = fs::remove_dir_all(outside);
+        }
+        let _ = fs::remove_dir_all(dir);
+    }
 }
 
 #[cfg(test)]

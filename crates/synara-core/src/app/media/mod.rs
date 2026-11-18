@@ -18,7 +18,10 @@ mod plain;
 mod preview;
 mod upload_queue;
 
-pub use bounded::{download_media_bounded, BoundedMediaError};
+pub use bounded::{
+    download_media_bounded, download_media_bounded_with_progress, BoundedMediaError,
+    MediaDownloadProgress, MediaProgressSink,
+};
 pub use cache::{
     clear_hot_media_cache, clear_hot_media_cache_for_client, clear_hot_media_cache_for_user,
     fetch_media_cached, HotMediaCache, HOT_MEDIA_CACHE_MAX_BYTES, HOT_MEDIA_CACHE_MAX_ITEM_BYTES,

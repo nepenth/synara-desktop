@@ -86,18 +86,102 @@ pub struct MatrixMediaTextPreviewResult {
     pub text: String,
 }
 
+/// Progress of one save, for the file chip (`MatrixMediaSaveEvent` in
+/// `media.ts`). `Finishing` follows the network part: decryption and the
+/// write into Downloads are left.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "event", content = "data", rename_all = "camelCase")]
+pub enum MatrixMediaSaveEvent {
+    Started { total: Option<u64> },
+    Progress { received: u64 },
+    Finishing,
+}
+
+/// A `Channel` argument the webview may leave out. `Channel` reads its id
+/// through `CommandArg`, not `Deserialize`, so `Option<Channel<_>>` is not a
+/// valid command argument; a missing or null key here means no channel.
+pub struct OptionalChannel<T>(Option<tauri::ipc::Channel<T>>);
+
+impl<'de, R: tauri::Runtime, T> tauri::ipc::CommandArg<'de, R> for OptionalChannel<T> {
+    fn from_command(
+        command: tauri::ipc::CommandItem<'de, R>,
+    ) -> Result<Self, tauri::ipc::InvokeError> {
+        use std::str::FromStr;
+        let (name, key) = (command.name, command.key);
+        let webview = command.message.webview();
+        let value: Option<String> = serde::Deserialize::deserialize(command)
+            .map_err(|error| tauri::Error::InvalidArgs(name, key, error))?;
+        let Some(value) = value else {
+            return Ok(Self(None));
+        };
+        tauri::ipc::JavaScriptChannelId::from_str(&value)
+            .map(|id| Self(Some(id.channel_on(webview))))
+            .map_err(|_| tauri::ipc::InvokeError::from(format!("invalid channel for `{key}`")))
+    }
+}
+
+/// Shortest gap between two `Progress` events (at most ten a second).
+pub(super) const MEDIA_SAVE_PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Turns every-chunk download progress into throttled save events.
+#[derive(Default)]
+pub(super) struct MediaSaveProgressThrottle {
+    last_progress: Option<Instant>,
+}
+
+impl MediaSaveProgressThrottle {
+    pub(super) fn event(
+        &mut self,
+        progress: synara_core::app::media::MediaDownloadProgress,
+        now: Instant,
+    ) -> Option<MatrixMediaSaveEvent> {
+        use synara_core::app::media::MediaDownloadProgress;
+        match progress {
+            MediaDownloadProgress::Started { total } => {
+                Some(MatrixMediaSaveEvent::Started { total })
+            }
+            MediaDownloadProgress::Received { received } => {
+                if self
+                    .last_progress
+                    .is_some_and(|last| now.duration_since(last) < MEDIA_SAVE_PROGRESS_INTERVAL)
+                {
+                    return None;
+                }
+                self.last_progress = Some(now);
+                Some(MatrixMediaSaveEvent::Progress { received })
+            }
+            MediaDownloadProgress::Downloaded => Some(MatrixMediaSaveEvent::Finishing),
+        }
+    }
+}
+
 /// Save a timeline handle or plain `mxc://` into Downloads.
 ///
 /// The webview receives the saved filename only. Decrypted bytes stay in Rust.
+/// With `on_progress`, the webview also gets [`MatrixMediaSaveEvent`]s.
 #[tauri::command]
 pub async fn matrix_media_save(
     state: State<'_, MatrixAuthState>,
     content_uri: String,
     filename: String,
+    on_progress: OptionalChannel<MatrixMediaSaveEvent>,
 ) -> Result<MatrixMediaSaveResult, MatrixAuthCommandError> {
-    let bytes = download_content_bytes(&state, &content_uri, MAX_MEDIA_DOWNLOAD_BYTES).await?;
-    let filename = crate::desktop_file_transfer::save_exclusive_download(&filename, &bytes)
-        .map_err(|_| map_media_download_error("v-send.r-media-save-failed"))?;
+    let mut throttle = MediaSaveProgressThrottle::default();
+    let mut report = |progress| {
+        if let Some(channel) = &on_progress.0 {
+            if let Some(event) = throttle.event(progress, Instant::now()) {
+                let _ = channel.send(event);
+            }
+        }
+    };
+    let bytes =
+        download_content_bytes(&state, &content_uri, MAX_MEDIA_DOWNLOAD_BYTES, &mut report).await?;
+    let filename = tauri::async_runtime::spawn_blocking(move || {
+        crate::desktop_file_transfer::save_exclusive_download(&filename, &bytes)
+    })
+    .await
+    .map_err(|_| map_media_download_error("v-send.r-media-save-failed"))?
+    .map_err(|_| map_media_download_error("v-send.r-media-save-failed"))?;
     Ok(MatrixMediaSaveResult { filename })
 }
 
@@ -109,7 +193,13 @@ pub async fn matrix_media_text_preview(
     state: State<'_, MatrixAuthState>,
     content_uri: String,
 ) -> Result<MatrixMediaTextPreviewResult, MatrixAuthCommandError> {
-    let bytes = download_content_bytes(&state, &content_uri, MAX_MEDIA_TEXT_PREVIEW_BYTES).await?;
+    let bytes = download_content_bytes(
+        &state,
+        &content_uri,
+        MAX_MEDIA_TEXT_PREVIEW_BYTES,
+        &mut |_| {},
+    )
+    .await?;
     let text = std::str::from_utf8(&bytes)
         .map_err(|_| map_media_download_error("v-send.r-media-preview-not-text"))?;
     Ok(MatrixMediaTextPreviewResult {
@@ -140,6 +230,7 @@ async fn download_content_bytes(
     state: &State<'_, MatrixAuthState>,
     content_uri: &str,
     max_bytes: usize,
+    on_progress: synara_core::app::media::MediaProgressSink<'_>,
 ) -> Result<Vec<u8>, MatrixAuthCommandError> {
     let too_large_id = if max_bytes == MAX_MEDIA_TEXT_PREVIEW_BYTES {
         "v-send.r-media-preview-too-large"
@@ -154,7 +245,14 @@ async fn download_content_bytes(
             source: source.source,
             format: MediaFormat::File,
         };
-        return download_bounded(&client, &media_request, max_bytes, too_large_id).await;
+        return download_bounded(
+            &client,
+            &media_request,
+            max_bytes,
+            too_large_id,
+            on_progress,
+        )
+        .await;
     }
     let content_uri = parse_media_download_uri(content_uri)?;
     let media_request = MediaRequestParameters {
@@ -165,7 +263,14 @@ async fn download_content_bytes(
         let session = state.session.lock().await;
         require_session(session.as_ref())?.client.clone()
     };
-    download_bounded(&client, &media_request, max_bytes, too_large_id).await
+    download_bounded(
+        &client,
+        &media_request,
+        max_bytes,
+        too_large_id,
+        on_progress,
+    )
+    .await
 }
 
 async fn download_bounded(
@@ -173,15 +278,21 @@ async fn download_bounded(
     media_request: &MediaRequestParameters,
     max_bytes: usize,
     too_large_id: &'static str,
+    on_progress: synara_core::app::media::MediaProgressSink<'_>,
 ) -> Result<Vec<u8>, MatrixAuthCommandError> {
-    synara_core::app::media::download_media_bounded(client, media_request, max_bytes)
-        .await
-        .map_err(|error| match error {
-            synara_core::app::media::BoundedMediaError::TooLarge => {
-                map_media_download_error(too_large_id)
-            }
-            _ => map_media_download_error("v-send.r-media-download-sdk-failed"),
-        })
+    synara_core::app::media::download_media_bounded_with_progress(
+        client,
+        media_request,
+        max_bytes,
+        on_progress,
+    )
+    .await
+    .map_err(|error| match error {
+        synara_core::app::media::BoundedMediaError::TooLarge => {
+            map_media_download_error(too_large_id)
+        }
+        _ => map_media_download_error("v-send.r-media-download-sdk-failed"),
+    })
 }
 
 pub(crate) fn parse_media_download_uri(
@@ -232,4 +343,62 @@ pub(super) fn validate_media_download_size(byte_len: usize) -> Result<(), Matrix
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod save_progress_tests {
+    use super::*;
+    use synara_core::app::media::MediaDownloadProgress;
+
+    #[test]
+    fn save_progress_is_throttled_to_ten_a_second_and_marks_finishing() {
+        let mut throttle = MediaSaveProgressThrottle::default();
+        let start = Instant::now();
+        assert_eq!(
+            throttle.event(MediaDownloadProgress::Started { total: None }, start),
+            Some(MatrixMediaSaveEvent::Started { total: None })
+        );
+        assert_eq!(
+            throttle.event(MediaDownloadProgress::Received { received: 10 }, start),
+            Some(MatrixMediaSaveEvent::Progress { received: 10 })
+        );
+        assert_eq!(
+            throttle.event(
+                MediaDownloadProgress::Received { received: 20 },
+                start + Duration::from_millis(50)
+            ),
+            None
+        );
+        assert_eq!(
+            throttle.event(
+                MediaDownloadProgress::Received { received: 30 },
+                start + MEDIA_SAVE_PROGRESS_INTERVAL
+            ),
+            Some(MatrixMediaSaveEvent::Progress { received: 30 })
+        );
+        // The end of the network part is never throttled away.
+        assert_eq!(
+            throttle.event(
+                MediaDownloadProgress::Downloaded,
+                start + MEDIA_SAVE_PROGRESS_INTERVAL
+            ),
+            Some(MatrixMediaSaveEvent::Finishing)
+        );
+    }
+
+    #[test]
+    fn save_events_serialize_as_tagged_camel_case() {
+        assert_eq!(
+            serde_json::to_value(MatrixMediaSaveEvent::Started { total: Some(5) }).unwrap(),
+            serde_json::json!({ "event": "started", "data": { "total": 5 } })
+        );
+        assert_eq!(
+            serde_json::to_value(MatrixMediaSaveEvent::Progress { received: 3 }).unwrap(),
+            serde_json::json!({ "event": "progress", "data": { "received": 3 } })
+        );
+        assert_eq!(
+            serde_json::to_value(MatrixMediaSaveEvent::Finishing).unwrap(),
+            serde_json::json!({ "event": "finishing" })
+        );
+    }
 }
