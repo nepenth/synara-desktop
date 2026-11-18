@@ -119,6 +119,26 @@ final class AppRouteTests: XCTestCase {
         XCTAssertTrue(router.settingsPath.isEmpty)
     }
 
+    /// The phone Settings rows push `SettingsPage` values. A stack bound to a
+    /// typed `[AppRoute]` path cannot append them, so every row did nothing
+    /// (2.8.0 to 3.1.0). Keep the path typed by the values the rows push.
+    func testSettingsStackHoldsThePagesItsRowsPush() throws {
+        let router = AppRouter()
+        router.settingsPath.append(.notifications)
+        router.settingsPath.append(.about)
+        XCTAssertEqual(router.settingsPath, [.notifications, .about])
+
+        router.selectedTab = .settings
+        router.popSelectedTabToRoot()
+        XCTAssertTrue(router.settingsPath.isEmpty)
+
+        router.settingsPath = [.privacy]
+        let opened = router.open(url: try XCTUnwrap(URL(string: "synara://settings")), sessionIsSignedIn: true)
+        XCTAssertTrue(opened)
+        XCTAssertTrue(router.settingsPath.isEmpty)
+        XCTAssertFalse(router.holdsRoom(id: "!roomid:example.org", eventID: nil, in: .settings))
+    }
+
     func testDeepLinkRoutesRoom() throws {
         let router = AppRouter()
         let url = try XCTUnwrap(URL(string: "synara://room/!roomid:example.org"))
