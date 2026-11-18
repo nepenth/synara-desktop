@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 // The list column without the rail (N1–N5): a header whose title opens the
 // space switcher and a bottom bar with Home, Activity, Approvals and the
@@ -23,6 +23,38 @@ const spaceOrder = (page: Page) =>
 const isMac = (page: Page) => page.evaluate(() => navigator.userAgent.includes('Mac'));
 const savedSidebar = async (page: Page) =>
   JSON.parse((await page.locator('body').getAttribute('data-saved-spaces')) ?? 'null');
+
+// Drag `source` above `firstRow`, the switcher's top row. Hovering a low
+// row scrolls the switcher list, and every point on its top row lies in the
+// list's auto-scroll band, so pragmatic-drag-and-drop scrolls the list under
+// the held pointer, slowly at first. A release before the list is back at the
+// top lands at a stale position, between rows. Wait until the list cannot
+// scroll further, aim at the row where it now is, and release once the row
+// shows its own drop-above indicator.
+const dragAboveFirstRow = async (page: Page, source: Locator, firstRow: Locator) => {
+  const listScrollTop = () =>
+    firstRow.evaluate((el) => {
+      for (let node = el.parentElement; node; node = node.parentElement) {
+        if (/(auto|scroll)/.test(getComputedStyle(node).overflowY)) return node.scrollTop;
+      }
+      return 0;
+    });
+  const aim = async () => {
+    const box = (await firstRow.boundingBox())!;
+    await page.mouse.move(box.x + 20, box.y + 4, { steps: 8 });
+    await page.mouse.move(box.x + 20, box.y + 2, { steps: 2 });
+  };
+  await source.hover();
+  await page.mouse.down();
+  await aim();
+  await expect.poll(listScrollTop).toBe(0);
+  await aim();
+  await expect(firstRow.locator('xpath=ancestor::li[1]')).toHaveAttribute(
+    'data-drop-above',
+    'true'
+  );
+  await page.mouse.up();
+};
 
 test('the bar: four places, icons with tooltips, labels once the column is wide', async ({
   page,
@@ -236,14 +268,7 @@ test('drag to reorder saves to in.synara.spaces; a failed save rolls back', asyn
     '!space-finance:example.test',
   ]);
   // Drag Zeta above Design.
-  const zeta = row(page, 'Zeta');
-  const design = row(page, 'Design');
-  await zeta.hover();
-  await page.mouse.down();
-  const target = (await design.boundingBox())!;
-  await page.mouse.move(target.x + 20, target.y + 4, { steps: 8 });
-  await page.mouse.move(target.x + 20, target.y + 2, { steps: 2 });
-  await page.mouse.up();
+  await dragAboveFirstRow(page, row(page, 'Zeta'), row(page, 'Design'));
   await expect.poll(async () => (await spaceOrder(page))[0]).toBe('!space-zeta:example.test');
   await expect.poll(async () => (await savedSidebar(page))?.[0]).toBe('!space-zeta:example.test');
 
@@ -251,13 +276,7 @@ test('drag to reorder saves to in.synara.spaces; a failed save rolls back', asyn
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Fail saves' }).click();
   await trigger(page).click();
-  const finance = row(page, 'Finance');
-  await finance.hover();
-  await page.mouse.down();
-  const top = (await row(page, 'Zeta').boundingBox())!;
-  await page.mouse.move(top.x + 20, top.y + 4, { steps: 8 });
-  await page.mouse.move(top.x + 20, top.y + 2, { steps: 2 });
-  await page.mouse.up();
+  await dragAboveFirstRow(page, row(page, 'Finance'), row(page, 'Zeta'));
   await expect(switcher(page).getByRole('alert')).toContainText(
     "Couldn't save the new order of your spaces. Try again."
   );

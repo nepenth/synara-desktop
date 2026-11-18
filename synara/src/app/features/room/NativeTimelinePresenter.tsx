@@ -1,5 +1,14 @@
 import { observeRoomLatestAfterSend } from './nativeTimelineNavigation';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
+import { flushSync } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFocusWithin, useHover } from 'react-aria';
 import { useTranslation } from 'react-i18next';
@@ -3247,8 +3256,30 @@ export function NativeTimelinePresenter({
     },
     [roomId, messageSpacing]
   );
+  // TanStack reports a size from its ResizeObserver with an asynchronous
+  // re-render; only scroll updates flush synchronously. WebKit can paint a
+  // frame before that render, so the rows below a row that grew while the list
+  // scrolled (a streaming Hermes edit) overlap it for a frame. ResizeObserver
+  // runs before paint: commit an observed resize synchronously from there.
+  // The layout-effect remeasure below passes no entry and keeps the adapter's
+  // own commit-phase guard.
+  const observedResizeRef = useRef(false);
+  const [, commitObservedResize] = useReducer((count: number) => count + 1, 0);
+  const onVirtualizerChange = useCallback((_instance: unknown, sync: boolean) => {
+    if (!observedResizeRef.current) return;
+    observedResizeRef.current = false;
+    if (!sync) flushSync(commitObservedResize);
+  }, []);
   const measureElement = useCallback(
     (element: HTMLDivElement, entry?: ResizeObserverEntry) => {
+      if (entry) {
+        // Set for the resize this observer entry may report; cleared once the
+        // observer callback has returned, whether or not the size changed.
+        observedResizeRef.current = true;
+        queueMicrotask(() => {
+          observedResizeRef.current = false;
+        });
+      }
       const measured = entry?.borderBoxSize?.[0]?.blockSize
         ? Math.round(entry.borderBoxSize[0].blockSize)
         : Math.round(element.getBoundingClientRect().height);
@@ -3284,6 +3315,7 @@ export function NativeTimelinePresenter({
     ),
     estimateSize,
     measureElement,
+    onChange: onVirtualizerChange,
     overscan: 16,
   });
   useLayoutEffect(() => {
