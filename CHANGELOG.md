@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## [3.1.0] - 2026-11-17
+
+- Desktop (Linux): a new Balanced drawing mode is the default for the Arch package. Settings → Appearance → Window → Hardware acceleration is now Off / Balanced / Full. Off drew every frame on the CPU and copied it on the thread that also handles typing, so an animated "is typing…" indicator alone kept about a third of a core busy and typing stuttered. Balanced keeps GPU compositing and turns off only the DMABUF display path behind most NVIDIA blank-window reports.
+- Desktop (Linux): if the web view crashes in Balanced or Full, or a start in those modes ends before the window has drawn (such as NVIDIA's "Error 71"), Synara switches to Off on its own, restarts, and says so in Settings; choosing a mode tries again. A web view that ends for any other reason is reloaded instead of leaving a blank window.
+- Desktop: continuous animations (typing dots, spinners, progress and connection bars) pause while the window is unfocused, and in Off mode move in a few steps a second instead of every frame. The message highlight pulses three times instead of forever.
+- Desktop: the composer no longer saves the draft, converts it to Markdown and sends it to the core on every keystroke and cursor move. Drafts are written after a short pause in typing (at least every 2 seconds), and at once on send, room or thread switch, window blur and quit.
+- Desktop: an edit to one message (such as an agent updating a long progress message) re-renders only that message instead of every visible one.
+- Desktop: while the side pane shows a thread, its expanded inline copy in the room no longer keeps a second live stream.
+- Read receipts sent while a thread pane closes no longer fail, and read-receipt errors now name their actual cause.
+- Desktop diagnostics: Performance capture records typing latency (key press to next frame), and `scripts/linux-thread-load.sh` samples Synara's main-thread load on Linux.
+
 ## [3.0.1] - 2026-11-11
 
 - Desktop (Linux): in a short tile under a tiling window manager the message composer was cut off below the window. Synara asked for a window at least 480px tall; the compositor ignored that, but the window was still drawn at 480px and its bottom fell outside the tile. Under a tiling window manager the floor is now 240×160, and the composer stays in view down to that height.
