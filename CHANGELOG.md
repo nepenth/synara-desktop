@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- iOS: the app icon counts conversations that need attention instead of unread messages. A room adds 1 when it has a mention, is marked unread, or has unread messages that notify you (DMs and rooms set to notify for all messages); muted rooms, spaces and mentions-only rooms without a mention add nothing. Later adds 1 per reminder that is due, not per saved item. The app sets the icon itself while it runs instead of applying the push server's per-message count, notifications that arrive in the background add 1 per new conversation, and reading a room removes its delivered notifications.
+
 ## [3.1.0] - 2026-11-17
 
 - Desktop (Linux): a new Balanced drawing mode is the default for the Arch package. Settings → Appearance → Window → Hardware acceleration is now Off / Balanced / Full. Off drew every frame on the CPU and copied it on the thread that also handles typing, so an animated "is typing…" indicator alone kept about a third of a core busy and typing stuttered. Balanced keeps GPU compositing and turns off only the DMABUF display path behind most NVIDIA blank-window reports.

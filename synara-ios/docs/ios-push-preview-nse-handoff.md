@@ -148,6 +148,33 @@ Algorithm:
 8. On any failure / timeout → original content.
 9. Always call `contentHandler` exactly once.
 
+### A4a. App-icon badge ownership
+
+The gateway's `aps.badge` is the homeserver's aggregate, which counts messages.
+The app shows a different unit: one per conversation that needs attention
+(joined, not a space, not muted, with a mention, marked unread, or unread
+events that notify) plus one per Later reminder that is due and not completed.
+Core defines that rule (`summarize_app_icon_badge`).
+
+- While the app runs it is the only writer. It applies Core's count when it
+  becomes active, on every room-list update and when it enters the background.
+  `willPresent` does not return `.badge`, and taps, foreground pushes and
+  approval actions do not apply the payload badge.
+- The app stores its last count and the rooms it counted in the App Group
+  (`SynaraAppIconBadgeStore`, key `synara.notification.appIconBadge.v1`).
+- The NSE sets the push's badge from that store: the stored count, plus 1 when
+  the push's room is not already counted, and then adds the room, so pushes
+  for several rooms accumulate. With no stored state it passes the gateway
+  badge through. A payload badge of 0 sets 0 and clears the stored rooms; the
+  app's background-push handler does the same and ignores other payload
+  badges.
+- When a room-list update shows that a room no longer needs attention, the app
+  removes that room's delivered notifications (matched on the payload
+  `room_id`, or `threadIdentifier`).
+- Count-only gateway pushes (no IDs, no `mutable-content`) never reach the
+  NSE or the app, so iOS applies their nonzero `aps.badge` as sent until the
+  app next runs.
+
 ### A5. Keychain session access (critical)
 
 Current session lives in main app Keychain via `SecureSessionStore`.

@@ -469,57 +469,173 @@ final class PushServiceTests: XCTestCase {
         XCTAssertFalse(first.contains(key))
     }
 
-    func testApplyIncomingBadgeUsesAppIconOwnerInsteadOfClearingToZero() {
-        let push = MockPushService()
-        push.applyIncomingBadge(from: ["badge": 7])
-        XCTAssertEqual(push.badgeApplyCallCount, 1)
-        XCTAssertEqual(push.lastAppIconBadgeCount, 7)
-        XCTAssertNotEqual(push.lastAppIconBadgeCount, 0)
-
-        push.applyAppIconBadge(0)
-        XCTAssertEqual(push.lastAppIconBadgeCount, 0)
-        XCTAssertEqual(push.appIconBadgeApplyCallCount, 2)
+    private func scratchDefaults(file: StaticString = #filePath, line: UInt = #line) throws -> (UserDefaults, () -> Void) {
+        let suite = "AppIconBadgeTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite), file: file, line: line)
+        return (defaults, { defaults.removePersistentDomain(forName: suite) })
     }
 
-    func testApplyCurrentSummaryUsesRoomListLaterAndSkipsUnreadySnapshots() async {
+    private func room(
+        _ id: String,
+        unread: Int = 0,
+        notifying: Int = 0,
+        highlight: Bool = false
+    ) -> RoomSummary {
+        RoomSummary(
+            id: id,
+            name: id,
+            lastMessagePreview: "hello",
+            unreadCount: unread,
+            hasHighlight: highlight,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: Date(),
+            unreadNotificationCount: notifying
+        )
+    }
+
+    func testBackgroundPayloadBadgeClearsOnlyOnZero() throws {
+        let (defaults, cleanup) = try scratchDefaults()
+        defer { cleanup() }
+        let push = MockPushService()
+        SynaraAppIconBadgeStore.replace(count: 2, roomIDs: ["!a:x", "!b:x"], defaults: defaults)
+
+        // A nonzero payload badge counts messages in the gateway's unit.
+        AppIconBadge.applyBackgroundPayloadBadge(23, push: push, defaults: defaults)
+        AppIconBadge.applyBackgroundPayloadBadge(nil, push: push, defaults: defaults)
+        XCTAssertNil(push.lastAppIconBadgeCount)
+        XCTAssertEqual(SynaraAppIconBadgeStore.load(defaults: defaults)?.count, 2)
+
+        AppIconBadge.applyBackgroundPayloadBadge(0, push: push, defaults: defaults)
+        XCTAssertEqual(push.lastAppIconBadgeCount, 0)
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.load(defaults: defaults),
+            SynaraAppIconBadgeStore.State(count: 0, roomIDs: [])
+        )
+    }
+
+    func testApplyCurrentSummaryUsesRoomListDueRemindersAndSkipsUnreadySnapshots() async throws {
+        let (defaults, cleanup) = try scratchDefaults()
+        defer { cleanup() }
         let push = MockPushService()
         let rooms = [
-            RoomSummary(
-                id: "!unread:matrix.org",
-                name: "Unread",
-                lastMessagePreview: "hello",
-                unreadCount: 4,
-                hasHighlight: false,
-                kind: .room,
-                membership: .joined,
-                lastActivityAt: Date()
-            )
+            room("!busy:matrix.org", unread: 40, notifying: 40),
+            room("!quiet:matrix.org", unread: 6),
         ]
+        let now = Date(timeIntervalSince1970: 100)
         let later = MockLaterService(
             items: [
+                // Saved without a due time: off the icon (it used to add 1).
                 SynaraLaterListItem(
                     id: "saved",
-                    roomID: "!unread:matrix.org",
+                    roomID: "!busy:matrix.org",
                     eventID: "$one",
                     kind: .saved,
                     dueTs: nil,
                     completedAt: nil,
                     createdAt: 1,
                     isCompleted: false
-                )
+                ),
+                SynaraLaterListItem(
+                    id: "due",
+                    roomID: "!busy:matrix.org",
+                    eventID: "$two",
+                    kind: .reminder,
+                    dueTs: 50_000,
+                    completedAt: nil,
+                    createdAt: 1,
+                    isCompleted: false
+                ),
+                SynaraLaterListItem(
+                    id: "future",
+                    roomID: "!busy:matrix.org",
+                    eventID: "$three",
+                    kind: .reminder,
+                    dueTs: 500_000,
+                    completedAt: nil,
+                    createdAt: 1,
+                    isCompleted: false
+                ),
             ]
         )
 
-        await AppIconBadge.applyCurrentSummary(rooms: rooms, later: later, push: push)
-        XCTAssertEqual(push.lastAppIconBadgeCount, 5)
+        await AppIconBadge.applyCurrentSummary(rooms: rooms, later: later, push: push, defaults: defaults, now: now)
+        // One busy room plus one due reminder.
+        XCTAssertEqual(push.lastAppIconBadgeCount, 2)
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.load(defaults: defaults),
+            SynaraAppIconBadgeStore.State(count: 2, roomIDs: ["!busy:matrix.org"])
+        )
 
         await AppIconBadge.applyCurrentSummary(
             roomList: MockRoomListService(state: .loading),
             later: later,
-            push: push
+            push: push,
+            defaults: defaults,
+            now: now
         )
-        XCTAssertEqual(push.lastAppIconBadgeCount, 5)
+        XCTAssertEqual(push.lastAppIconBadgeCount, 2)
         XCTAssertEqual(push.appIconBadgeApplyCallCount, 1)
+    }
+
+    func testRoomThatStopsNeedingAttentionLosesItsDeliveredNotifications() async throws {
+        let (defaults, cleanup) = try scratchDefaults()
+        defer { cleanup() }
+        let push = MockPushService()
+        let later = MockLaterService(items: [])
+        // The extension added "!pushed" for a push while the app was away.
+        SynaraAppIconBadgeStore.replace(count: 1, roomIDs: ["!a:x"], defaults: defaults)
+        _ = SynaraAppIconBadgeStore.badgeForIncomingPush(roomID: "!pushed:x", payloadBadge: 9, defaults: defaults)
+
+        await AppIconBadge.applyCurrentSummary(
+            rooms: [room("!a:x", unread: 1, notifying: 1), room("!pushed:x", unread: 2, notifying: 2)],
+            later: later,
+            push: push,
+            defaults: defaults
+        )
+        XCTAssertEqual(push.lastAppIconBadgeCount, 2)
+        XCTAssertTrue(push.removedDeliveredNotificationRoomIDs.isEmpty)
+
+        // "!a" is read; "!gone" is missing from this list, so it is not
+        // treated as read.
+        SynaraAppIconBadgeStore.replace(count: 3, roomIDs: ["!a:x", "!pushed:x", "!gone:x"], defaults: defaults)
+        await AppIconBadge.applyCurrentSummary(
+            rooms: [room("!a:x"), room("!pushed:x", unread: 2, notifying: 2)],
+            later: later,
+            push: push,
+            defaults: defaults
+        )
+        XCTAssertEqual(push.lastAppIconBadgeCount, 1)
+        XCTAssertEqual(push.removedDeliveredNotificationRoomIDs, [["!a:x"]])
+
+        // No change: nothing more to remove.
+        await AppIconBadge.applyCurrentSummary(
+            rooms: [room("!a:x"), room("!pushed:x", unread: 2, notifying: 2)],
+            later: later,
+            push: push,
+            defaults: defaults
+        )
+        XCTAssertEqual(push.removedDeliveredNotificationRoomIDs.count, 1)
+    }
+
+    func testDeliveredNotificationMatchingUsesPayloadRoomOrThread() {
+        func content(userInfo: [AnyHashable: Any], thread: String = "") -> UNNotificationContent {
+            let content = UNMutableNotificationContent()
+            content.userInfo = userInfo
+            content.threadIdentifier = thread
+            return content
+        }
+        let notifications: [(identifier: String, content: UNNotificationContent)] = [
+            ("nested", content(userInfo: ["synara": ["room_id": "!a:x", "event_id": "$1"]])),
+            ("flat", content(userInfo: ["room_id": "!b:x", "event_id": "$2"])),
+            ("thread", content(userInfo: [:], thread: "!a:x")),
+            ("other", content(userInfo: ["room_id": "!c:x", "event_id": "$3"])),
+            ("none", content(userInfo: ["aps": ["badge": 1]])),
+        ]
+        XCTAssertEqual(
+            AppIconBadge.deliveredNotificationIdentifiers(notifications, forRoomIDs: ["!a:x", "!b:x"]),
+            ["nested", "flat", "thread"]
+        )
     }
 
     func testBadgeCountParsesApsBadgeAndSummaryFormats() {

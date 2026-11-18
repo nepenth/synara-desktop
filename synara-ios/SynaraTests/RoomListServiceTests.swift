@@ -534,7 +534,7 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(badges.rooms, 13)
     }
 
-    func testAppIconBadgeCountMatchesDesktopSummaryAndOmitsInvitesAndAgent() {
+    func testAppIconBadgeCountsConversationsAndOmitsInvitesAndAgent() {
         let rooms = [
             RoomSummary(
                 id: "!mentions:matrix.org",
@@ -554,7 +554,8 @@ final class RoomListServiceTests: XCTestCase {
                 hasHighlight: false,
                 kind: .room,
                 membership: .joined,
-                lastActivityAt: RoomListFixtures.now
+                lastActivityAt: RoomListFixtures.now,
+                unreadNotificationCount: 3
             ),
             RoomSummary(
                 id: "!invite:matrix.org",
@@ -590,11 +591,11 @@ final class RoomListServiceTests: XCTestCase {
             ),
         ]
 
-        XCTAssertEqual(NotificationBadgeSummary.laterActiveCount(from: laterItems), 1)
-        XCTAssertEqual(
-            NotificationBadgeSummary.appBadgeCount(from: rooms, laterActiveCount: 1),
-            5
-        )
+        // Saved items without a due time stay off the icon.
+        XCTAssertEqual(NotificationBadgeSummary.dueReminderCount(from: laterItems), 0)
+        // One per conversation: the mention room adds 1, not its 4 unread,
+        // and the room with 3 notifying messages adds 1.
+        XCTAssertEqual(NotificationBadgeSummary.appBadgeCount(from: rooms), 2)
         XCTAssertEqual(
             NotificationBadgeSummary.summarizeNotifications(
                 NotificationSummaryInput(
@@ -611,7 +612,7 @@ final class RoomListServiceTests: XCTestCase {
                 roomListState: .loaded(rooms),
                 laterItems: laterItems
             ),
-            5
+            2
         )
         XCTAssertNil(
             NotificationBadgeSummary.appIconBadgeCount(
@@ -627,6 +628,77 @@ final class RoomListServiceTests: XCTestCase {
             0
         )
         XCTAssertEqual(NotificationBadgeSummary.roomsTabBadgeCount(from: rooms), 4)
+    }
+
+    func testAppIconBadgeSkipsMutedSpacesAndQuietRoomsAndCountsBusyRoomOnce() throws {
+        func room(
+            _ id: String,
+            unread: Int = 0,
+            notifying: Int = 0,
+            highlight: Bool = false,
+            marked: Bool = false,
+            kind: RoomSummary.RoomKind = .room,
+            membership: RoomSummary.Membership = .joined,
+            mode: SynaraRoomNotificationMode = .default
+        ) -> RoomSummary {
+            RoomSummary(
+                id: id,
+                name: id,
+                lastMessagePreview: "",
+                unreadCount: unread,
+                hasHighlight: highlight,
+                isMarkedUnread: marked,
+                kind: kind,
+                membership: membership,
+                lastActivityAt: RoomListFixtures.now,
+                notificationMode: mode,
+                unreadNotificationCount: notifying
+            )
+        }
+        let rooms = [
+            room("!muted:x", unread: 9, notifying: 9, highlight: true, mode: .mute),
+            room("!space:x", unread: 2, notifying: 2, kind: .space),
+            room("!quiet:x", unread: 12, mode: .mentionsOnly),
+            room("!busy:x", unread: 40, notifying: 40),
+            room("!mention:x", unread: 7, highlight: true, mode: .mentionsOnly),
+            room("!marked:x", marked: true),
+            room("!invite:x", unread: 1, notifying: 1, highlight: true, membership: .invited),
+            room("!dm:x", unread: 2, notifying: 2, kind: .directMessage),
+            room("!read:x"),
+        ]
+
+        let summary = NotificationBadgeSummary.appIconBadge(from: rooms)
+        XCTAssertEqual(summary.count, 4)
+        XCTAssertEqual(summary.attentionRoomIds, ["!busy:x", "!mention:x", "!marked:x", "!dm:x"])
+    }
+
+    func testAppIconBadgeAddsOnlyDueUncompletedReminders() {
+        let now = Date(timeIntervalSince1970: 10)
+        func item(_ id: String, kind: SynaraLaterItem.Kind, due: Int?, completed: Bool = false) -> SynaraLaterListItem {
+            SynaraLaterListItem(
+                id: id,
+                roomID: "!room:x",
+                eventID: "$\(id)",
+                kind: kind,
+                dueTs: due,
+                completedAt: completed ? 9_000 : nil,
+                createdAt: 1,
+                isCompleted: completed
+            )
+        }
+        let items = [
+            item("saved", kind: .saved, due: nil),
+            item("due", kind: .reminder, due: 5_000),
+            item("due-now", kind: .reminder, due: 10_000),
+            item("future", kind: .reminder, due: 20_000),
+            item("done", kind: .reminder, due: 5_000, completed: true),
+        ]
+
+        XCTAssertEqual(NotificationBadgeSummary.dueReminderCount(from: items, now: now), 2)
+        XCTAssertEqual(
+            NotificationBadgeSummary.appIconBadgeCount(roomListState: .empty, laterItems: items, now: now),
+            2
+        )
     }
 
     func testAgentPendingInboxBuildsRowsFromLatestAgentCard() {
