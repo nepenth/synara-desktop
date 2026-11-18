@@ -10,6 +10,7 @@ import { isLinuxOS } from '../../utils/user-agent';
 import * as css from './DesktopTitleBar.css';
 import { observeNativeMaximizedState } from './nativeMaximizedState';
 import { appShortcutAction } from '../desktop-keyboard/appShortcuts';
+import { announceBeforeQuit } from '../../utils/beforeQuit';
 import { useTilingMode } from '../../hooks/useTilingMode';
 
 /** A persistent drag strip and window controls for the borderless Linux shell.
@@ -65,6 +66,8 @@ export function DesktopTitleBar() {
     const onKeyDown = (evt: KeyboardEvent) => {
       if (appShortcutAction(evt, { macOS: false, linux: true }) !== 'quit') return;
       evt.preventDefault();
+      // Pending drafts are written before the shell is asked to exit.
+      announceBeforeQuit();
       void invokeDesktopWithAvailability('desktop_quit');
     };
     window.addEventListener('keydown', onKeyDown);

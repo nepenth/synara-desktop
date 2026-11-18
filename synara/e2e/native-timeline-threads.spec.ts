@@ -168,6 +168,33 @@ test('inline Reply in thread opens the side panel', async ({ page }) => {
   await expect(page.locator('[data-thread-side-panel]')).toBeVisible();
 });
 
+test('an inline thread shown in the side panel pauses its own stream until the panel closes', async ({
+  page,
+}) => {
+  await openThreads(page, 'inline');
+  await threadButton(page).click();
+  const inline = page.locator('[data-inline-thread]');
+  await expect(inline.getByText('Thread reply 7')).toBeVisible();
+  expect(await openThreadStreams(page)).toBe(1);
+
+  await inline.getByRole('button', { name: 'Reply in thread' }).click();
+  const pane = page.locator('[data-thread-side-panel]');
+  await expect(pane.getByText('Thread reply 7')).toBeVisible();
+  // One live view of the thread: the pane's. The inline copy keeps its
+  // expansion and shows its last replies, without a stream of its own.
+  await expect.poll(() => openThreadStreams(page)).toBe(1);
+  await expect(inline.getByText('Thread reply 7')).toBeVisible();
+  await expect(inline.getByText('Open in the side panel')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Hide 7 replies/ })).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(pane).toHaveCount(0);
+  // The inline copy resumes its own stream.
+  await expect.poll(() => openThreadStreams(page)).toBe(1);
+  await expect(inline.getByText('Open in the side panel')).toHaveCount(0);
+  await expect(inline.getByRole('button', { name: 'Reply in thread' })).toBeVisible();
+});
+
 test('full view keeps swapping the timeline into the thread', async ({ page }) => {
   await openThreads(page, 'full');
   await threadButton(page).click();

@@ -188,6 +188,7 @@ export function Room() {
                 onOpenThreadPane={
                   threadPaneFits && threadDisplay !== 'full' ? handleOpenThreadPane : undefined
                 }
+                threadPaneRootEventId={pane?.rootEventId}
               />
             </Box>
           </Box>

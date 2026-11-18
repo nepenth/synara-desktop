@@ -76,7 +76,9 @@ import { isLinuxDesktopShell } from '../../../hooks/useTilingMode';
 import { getDesktopWindowEnvironment } from '../../../utils/desktop';
 import {
   DESKTOP_RENDERING_UNAVAILABLE,
+  type DesktopRenderingMode,
   getDesktopRenderingStatus,
+  hardwareAccelerationFallbackNote,
   hardwareAccelerationView,
   setDesktopRenderingMode,
 } from '../../../utils/desktopRendering';
@@ -414,11 +416,13 @@ function SegmentedChoice<T extends string>({
   value,
   options,
   onChange,
+  disabled,
 }: {
   label: string;
   value: T;
   options: Array<{ value: T; label: string }>;
   onChange: (value: T) => void;
+  disabled?: boolean;
 }) {
   return (
     <Box gap="100" role="group" aria-label={label}>
@@ -431,6 +435,7 @@ function SegmentedChoice<T extends string>({
           variant="Secondary"
           fill={value === option.value ? 'Soft' : 'None'}
           aria-pressed={value === option.value}
+          disabled={disabled}
           before={
             <Icon
               size="100"
@@ -1150,6 +1155,18 @@ function TilingModeTile() {
   );
 }
 
+const HARDWARE_ACCELERATION_OPTIONS: Array<{ value: DesktopRenderingMode; label: string }> = [
+  { value: 'safe', label: 'Off' },
+  { value: 'balanced', label: 'Balanced' },
+  { value: 'gpu', label: 'Full' },
+];
+
+const HARDWARE_ACCELERATION_LABELS: Record<DesktopRenderingMode, string> = {
+  safe: 'off',
+  balanced: 'balanced',
+  gpu: 'full',
+};
+
 /**
  * GPU drawing for the Linux web view. The shell reads the choice when it
  * starts, so a change waits for the next start. Shown only where the shell
@@ -1172,11 +1189,12 @@ function HardwareAccelerationTile() {
   if (!status.available) return null;
   const view = hardwareAccelerationView(status);
 
-  const handleChange = (enabled: boolean) => {
+  const handleChange = (mode: DesktopRenderingMode) => {
     const previous = status;
     setSaveFailed(false);
-    setStatus({ ...status, saved: enabled ? 'gpu' : 'safe' });
-    void setDesktopRenderingMode(enabled ? 'gpu' : 'safe').then((next) => {
+    // Choosing a mode also clears a fallback, so the next start tries it.
+    setStatus({ ...status, saved: mode, fallback: null });
+    void setDesktopRenderingMode(mode).then((next) => {
       setStatus(next ?? previous);
       setSaveFailed(!next);
     });
@@ -1185,10 +1203,12 @@ function HardwareAccelerationTile() {
   let note: string | undefined;
   if (view.locked) {
     note = `The SYNARA_RENDERING environment variable is deciding this (${
-      view.enabled ? 'on' : 'off'
-    }). Remove it to use this switch.`;
+      HARDWARE_ACCELERATION_LABELS[view.mode]
+    }). Remove it to use this setting.`;
   } else if (saveFailed) {
     note = 'Synara could not save this setting.';
+  } else if (view.fallback) {
+    note = hardwareAccelerationFallbackNote(view.fallback);
   } else if (view.restartNeeded) {
     note = 'Restart Synara to apply.';
   }
@@ -1197,11 +1217,12 @@ function HardwareAccelerationTile() {
     <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
       <SettingTile
         title="Hardware acceleration"
-        description="Draw the interface with your graphics card. Turn this off if the window flickers, goes blank or the app closes on start. Applies after you restart Synara."
+        description="Draw the interface with your graphics card. Full is the fastest. Balanced avoids the display path that most often fails on NVIDIA. Off draws on the CPU only and is the slowest: use it if the window flickers, goes blank or the app closes on start. Applies after you restart Synara."
         after={
-          <Switch
-            variant="Primary"
-            value={view.enabled}
+          <SegmentedChoice
+            label="Hardware acceleration"
+            value={view.mode}
+            options={HARDWARE_ACCELERATION_OPTIONS}
             onChange={handleChange}
             disabled={view.locked}
           />

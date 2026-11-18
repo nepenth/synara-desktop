@@ -326,7 +326,7 @@ export const APP_SETTINGS_SEARCH_INDEX: SettingsSearchEntry<SettingsPages>[] = [
     page: SettingsPages.AppearancePage,
     title: 'Hardware acceleration',
     description:
-      'Draw the interface with your graphics card. Linux on Wayland only; applies after a restart.',
+      'Draw the interface with your graphics card: off, balanced or full. Linux on Wayland only; applies after a restart.',
     synonyms: [
       'gpu',
       'graphics card',

@@ -98,6 +98,10 @@ const NUMBER_FIELDS: &[&str] = &[
     "lastLongTaskMs",
     "maxLongTaskMs",
     "memoryMb",
+    "inputKeyCount",
+    "inputP50Ms",
+    "inputP95Ms",
+    "inputMaxMs",
     "requestDurationMs",
     "nativeWriteDurationMs",
 ];

@@ -61,11 +61,14 @@ export function RoomView({
   threadRootEventId,
   threadDisplay = 'full',
   onOpenThreadPane,
+  threadPaneRootEventId,
 }: {
   eventId?: string;
   threadRootEventId?: string;
   threadDisplay?: ThreadDisplayMode;
   onOpenThreadPane?: (rootEventId: string, latestEventId?: string, focusEventId?: string) => void;
+  /** The thread shown in the side pane, if any. */
+  threadPaneRootEventId?: string;
 }) {
   const roomInputRef = useRef<HTMLDivElement>(null);
   const roomViewRef = useRef<HTMLDivElement>(null);
@@ -118,6 +121,7 @@ export function RoomView({
           onCloseThreadRoute={() => navigateRoom(roomId)}
           threadDisplay={threadDisplay}
           onOpenThreadPane={onOpenThreadPane}
+          threadPaneRootEventId={threadPaneRootEventId}
         />
         <RoomViewTyping room={room} />
       </Box>

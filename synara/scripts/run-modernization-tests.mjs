@@ -7,6 +7,8 @@ import { build } from 'esbuild';
 
 const tests = [
   'src/app/styles/__tests__/quietDepthSourceGuard.test.ts',
+  'src/app/styles/__tests__/motionSourceGuard.test.ts',
+  'src/app/utils/__tests__/motionPolicy.test.ts',
   'src/app/components/__tests__/roomAvatarSourceGuard.test.ts',
   'src/app/components/__tests__/roomGlyph.test.ts',
   'src/app/components/__tests__/middleTruncation.test.ts',
@@ -45,6 +47,8 @@ const tests = [
   'src/app/utils/__tests__/notifications.test.ts',
   'src/app/utils/__tests__/foundationDiagnostics.test.ts',
   'src/app/utils/__tests__/clientDiagnostics.test.ts',
+  'src/app/utils/__tests__/inputLatency.test.ts',
+  'src/app/utils/__tests__/desktopRendering.test.ts',
   'src/app/utils/__tests__/diagnosticsReport.test.ts',
   'src/app/utils/__tests__/boundedLru.test.ts',
   'src/app/utils/__tests__/bulkActions.test.ts',
@@ -65,6 +69,7 @@ const tests = [
   'src/app/agents/__tests__/agentActions.test.ts',
   'src/app/utils/__tests__/drafts.test.ts',
   'src/app/features/room/__tests__/nativeDraftSync.test.ts',
+  'src/app/features/room/__tests__/composerDraftPersistence.test.ts',
   'src/app/utils/__tests__/polls.test.ts',
   'src/app/utils/__tests__/dom.test.ts',
   'src/app/utils/__tests__/appLinks.test.ts',

@@ -6,6 +6,7 @@ import {
   refreshDesktopDiagnosticsConfig,
 } from '../../utils/clientDiagnostics';
 import { isLegacyPerformanceDebugEnabled } from '../../utils/performance';
+import { startInputLatencyProbe, summarizeInputLatency } from '../../utils/inputLatency';
 
 type PerformanceSnapshot = {
   fps: number;
@@ -13,6 +14,8 @@ type PerformanceSnapshot = {
   lastLongTaskMs: number;
   renderedTimelineRows: number;
   memoryMb?: number;
+  /** Keystroke-to-paint p95 over the last diagnostic window, if anything was typed. */
+  inputP95Ms?: number;
 };
 
 const readRenderedTimelineRows = (): number =>
@@ -57,20 +60,28 @@ export function PerformanceDebugOverlay() {
     let maxLongTaskMs = 0;
     let lastDiagnosticTs = 0;
     let observer: PerformanceObserver | undefined;
+    const inputProbe = startInputLatencyProbe();
+    let inputSamples: number[] = [];
+    let inputP95Ms: number | undefined;
 
     const tick = (now: number) => {
       frameCount += 1;
       if (now - lastFpsTs >= 1000) {
         const fps = Math.round((frameCount * 1000) / (now - lastFpsTs));
+        inputSamples = inputSamples.concat(inputProbe.take());
         const nextSnapshot = {
           fps,
           longTasks,
           lastLongTaskMs,
           renderedTimelineRows: readRenderedTimelineRows(),
           memoryMb: readMemoryMb(),
+          inputP95Ms,
         };
         if (showOverlay) setSnapshot(nextSnapshot);
         if (now - lastDiagnosticTs >= 5_000) {
+          const input = summarizeInputLatency(inputSamples);
+          inputSamples = [];
+          inputP95Ms = input?.p95Ms;
           recordClientDiagnostic('performance', 'runtime.sample', {
             fps: nextSnapshot.fps,
             renderedRowCount: nextSnapshot.renderedTimelineRows,
@@ -79,6 +90,10 @@ export function PerformanceDebugOverlay() {
             maxLongTaskMs,
             memoryMb: nextSnapshot.memoryMb,
             documentVisible: document.visibilityState === 'visible',
+            inputKeyCount: input?.count ?? 0,
+            inputP50Ms: input?.p50Ms,
+            inputP95Ms: input?.p95Ms,
+            inputMaxMs: input?.maxMs,
           });
           lastDiagnosticTs = now;
         }
@@ -107,6 +122,7 @@ export function PerformanceDebugOverlay() {
     return () => {
       window.cancelAnimationFrame(animationFrame);
       observer?.disconnect();
+      inputProbe.stop();
     };
   }, [enabled, showOverlay]);
 
@@ -135,6 +151,7 @@ export function PerformanceDebugOverlay() {
         {snapshot.lastLongTaskMs ? ` (${snapshot.lastLongTaskMs}ms)` : ''}
       </div>
       {snapshot.memoryMb && <div>heap {snapshot.memoryMb}MB</div>}
+      {snapshot.inputP95Ms !== undefined && <div>typing p95 {snapshot.inputP95Ms}ms</div>}
     </div>
   );
 }

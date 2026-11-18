@@ -15,6 +15,7 @@ import {
   nativeTimelinePollDelay,
   shouldPlaceLatestLocally,
   canAcceptNativeTimelineFollowReadback,
+  createLatestWinsRunner,
   nativeThreadFocusEventId,
   nativeTimelineCommandError,
   nativeForwardEncryptionDecision,
@@ -586,4 +587,82 @@ test('D9: after a send only a live-bottom view places its tail without Core', ()
   assert.equal(shouldPlaceLatestLocally(undefined), false);
   const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
   assert.match(presenter, /threadRootId \? showThreadTail : showLatestAfterSend/);
+});
+
+const deferred = () => {
+  let resolve!: () => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
+const settle = () =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
+test('mark-read runs one write at a time and the newest waiting write wins', async () => {
+  const run = createLatestWinsRunner();
+  const started: string[] = [];
+  const first = deferred();
+  const last = deferred();
+  const outcomes: string[] = [];
+  const track = (name: string, done: Promise<void>) =>
+    done.then(
+      () => outcomes.push(`${name}:ok`),
+      () => outcomes.push(`${name}:failed`)
+    );
+
+  const a = track(
+    'a',
+    run(() => {
+      started.push('a');
+      return first.promise;
+    })
+  );
+  const b = track(
+    'b',
+    run(async () => {
+      started.push('b');
+    })
+  );
+  const c = track(
+    'c',
+    run(() => {
+      started.push('c');
+      return last.promise;
+    })
+  );
+  await settle();
+  assert.deepEqual(started, ['a'], 'only one write is in flight');
+  assert.deepEqual(outcomes, ['b:ok'], 'a replaced write resolves without running');
+
+  first.reject(new Error('receipt failed'));
+  await settle();
+  assert.deepEqual(started, ['a', 'c'], 'the newest write runs after the in-flight one');
+  last.resolve();
+  await Promise.all([a, b, c]);
+  assert.deepEqual(outcomes, ['b:ok', 'a:failed', 'c:ok']);
+
+  // Idle again: the next write starts at once.
+  await run(async () => {
+    started.push('d');
+  });
+  assert.deepEqual(started, ['a', 'c', 'd']);
+});
+
+test('read writes go through a per-stream latest-wins queue', () => {
+  const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  const setReadState = source
+    .split('const setReadState = useCallback(')[1]
+    ?.split('const followLive = useCallback')[0];
+  assert.ok(setReadState);
+  assert.match(setReadState, /queue\?\.streamId !== streamId/);
+  assert.match(
+    setReadState,
+    /return queue\.run\(async \(\) => \{\n\s+if \(superseded\(\)\) return;/
+  );
 });

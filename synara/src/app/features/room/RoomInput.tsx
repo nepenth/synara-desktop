@@ -143,6 +143,10 @@ import {
   saveRoomDraft,
 } from '../../utils/drafts';
 import { draftMarkdownOf, useSyncedRoomDraft } from './useSyncedRoomDraft';
+import { draftSlotFor } from './nativeDraftSync';
+import { createCoalescingScheduler } from './coalescingScheduler';
+import { BEFORE_QUIT_EVENT } from '../../utils/beforeQuit';
+import { createComposerDraftPersistence, type DraftTarget } from './composerDraftPersistence';
 import {
   DEFAULT_POLL_SELECTIONS,
   MAX_POLL_SELECTIONS,
@@ -359,6 +363,11 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       const nodes = openingDraft ?? loadRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
       return nodes ? draftMarkdownOf(nodes, isMarkdown) : '';
     }, [draftKey, isMarkdown, openingDraft]);
+    // Read once per draft, not on every render (it parses the stored draft).
+    const storedUpdatedAt = useMemo(
+      () => loadRoomDraftUpdatedAt(window.localStorage, getSafeMyUserId(), draftKey),
+      [draftKey]
+    );
     const syncedDraft = useSyncedRoomDraft({
       editor,
       roomId,
@@ -366,7 +375,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       isMarkdown,
       enabled: syncDrafts,
       replyToEventId: replyDraft?.eventId,
-      storedUpdatedAt: loadRoomDraftUpdatedAt(window.localStorage, getSafeMyUserId(), draftKey),
+      storedUpdatedAt,
       storedMarkdown,
       applyReplyTo: (eventId) => {
         // A thread pane's replies stay in its thread; only the room composer
@@ -684,40 +693,99 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       }
     }, [roomId, draftKey, editor, msgDraft]);
 
+    // Draft writes (localStorage and the synced mirror) are coalesced while
+    // typing and made at once when the draft is emptied or left: never one
+    // serialization, storage write or IPC per keystroke.
+    const draftSlot = draftSlotFor(threadRootOverride);
+    const syncedDraftRef = useRef(syncedDraft);
+    syncedDraftRef.current = syncedDraft;
+    const draftPersistence = useMemo(
+      () =>
+        createComposerDraftPersistence<Descendant[]>({
+          writer: {
+            save: (target, value, urgent) => {
+              saveRoomDraft(window.localStorage, getSafeMyUserId(), target.draftKey, value);
+              syncedDraftRef.current.persist(target, value, urgent);
+            },
+            clear: (target) => {
+              clearRoomDraft(window.localStorage, getSafeMyUserId(), target.draftKey);
+              syncedDraftRef.current.persist(target, undefined, true);
+            },
+          },
+        }),
+      []
+    );
+    useEffect(() => {
+      const flush = () => draftPersistence.flush();
+      const onVisibility = () => {
+        if (document.visibilityState === 'hidden') flush();
+      };
+      window.addEventListener('blur', flush);
+      window.addEventListener('pagehide', flush);
+      window.addEventListener('beforeunload', flush);
+      window.addEventListener(BEFORE_QUIT_EVENT, flush);
+      document.addEventListener('visibilitychange', onVisibility);
+      return () => {
+        window.removeEventListener('blur', flush);
+        window.removeEventListener('pagehide', flush);
+        window.removeEventListener('beforeunload', flush);
+        window.removeEventListener(BEFORE_QUIT_EVENT, flush);
+        document.removeEventListener('visibilitychange', onVisibility);
+      };
+    }, [draftPersistence]);
+
+    // The link preview needs the whole text: look for its URL once typing pauses.
+    const isMarkdownRef = useRef(isMarkdown);
+    isMarkdownRef.current = isMarkdown;
+    const previewUrlScheduler = useMemo(
+      () =>
+        createCoalescingScheduler<Descendant[]>({
+          delayMs: COMPOSER_UNFURL_DEBOUNCE_MS,
+          write: (_key, value) => {
+            const nextUrl = trailingComposerPreviewUrl(toPlainText(value, isMarkdownRef.current));
+            setComposerPreviewUrl(nextUrl);
+            if (!nextUrl) setComposerPreview(null);
+          },
+        }),
+      []
+    );
+
     useEffect(
       () => () => {
-        if (!isEmptyEditor(editor)) {
-          const parsedDraft = JSON.parse(JSON.stringify(editor.children));
-          setMsgDraft(parsedDraft);
-          saveRoomDraft(window.localStorage, getSafeMyUserId(), draftKey, parsedDraft);
-        } else {
-          setMsgDraft([]);
-          clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
-        }
+        // Leaving this draft (room or thread switch, unmount): write it now,
+        // to its own key, before the editor is emptied for the next one.
+        const empty = isEmptyEditor(editor);
+        const target: DraftTarget = { draftKey, roomId, slot: draftSlot };
+        draftPersistence.leave(target, empty ? undefined : editor.children);
+        previewUrlScheduler.cancel(draftKey);
+        setMsgDraft(empty ? [] : JSON.parse(JSON.stringify(editor.children)));
         resetEditor(editor);
         resetEditorHistory(editor);
       },
-      [roomId, draftKey, editor, setMsgDraft]
+      [roomId, draftKey, draftSlot, draftPersistence, previewUrlScheduler, editor, setMsgDraft]
     );
 
     const handleEditorChange = useCallback(
       (value: Parameters<EditorChangeHandler>[0]) => {
+        // A cursor move or selection is not an edit.
+        if (editor.operations.every((op) => op.type === 'set_selection')) return;
         const empty = isEmptyEditor(editor);
         setDraftHasText(!empty);
+        syncedDraft.noteChange();
+        const target: DraftTarget = { draftKey, roomId, slot: draftSlot };
         if (empty) {
-          clearRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
-          syncedDraft.noteChange(value, true);
+          // Sent or erased: cleared at once, and a pending save is dropped.
+          draftPersistence.change(target, undefined);
+          previewUrlScheduler.cancel(draftKey);
           setComposerPreviewUrl(undefined);
           setComposerPreview(null);
           return;
         }
-        saveRoomDraft(window.localStorage, getSafeMyUserId(), draftKey, value);
-        syncedDraft.noteChange(value, false);
-        const nextUrl = trailingComposerPreviewUrl(toPlainText(editor.children, isMarkdown));
-        setComposerPreviewUrl(nextUrl);
-        if (!nextUrl) setComposerPreview(null);
+        // Held by reference: Slate replaces the tree on every edit.
+        draftPersistence.change(target, value);
+        previewUrlScheduler.schedule(draftKey, value);
       },
-      [draftKey, editor, isMarkdown, syncedDraft]
+      [draftKey, draftPersistence, draftSlot, editor, previewUrlScheduler, roomId, syncedDraft]
     );
 
     useEffect(() => {
@@ -732,20 +800,18 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         }
         return undefined;
       }
+      // The URL is found only once typing pauses, so it is fetched at once.
       let cancelled = false;
-      const timer = window.setTimeout(() => {
-        void fetchDeviceLinkPreview({
-          url: composerPreviewUrl,
-          enabled: linkPreviews,
-          desktopAvailable: isSynaraDesktop(),
-          invoke: invokeDesktopWithAvailability,
-        }).then((preview) => {
-          if (!cancelled) setComposerPreview(preview);
-        });
-      }, COMPOSER_UNFURL_DEBOUNCE_MS);
+      void fetchDeviceLinkPreview({
+        url: composerPreviewUrl,
+        enabled: linkPreviews,
+        desktopAvailable: isSynaraDesktop(),
+        invoke: invokeDesktopWithAvailability,
+      }).then((preview) => {
+        if (!cancelled) setComposerPreview(preview);
+      });
       return () => {
         cancelled = true;
-        window.clearTimeout(timer);
       };
     }, [composerPreviewDismissed, composerPreviewUrl, linkPreviews]);
 
@@ -1407,6 +1473,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       [editor, sendTypingStatus, hideActivity]
     );
 
+    // Leaving the composer (or the window) ends the typing notice now, not
+    // after the idle stop.
+    const handleEditorBlur = useCallback(() => sendTypingStatus(false), [sendTypingStatus]);
+
     const handleCloseAutocomplete = useCallback(() => {
       setAutocompleteQuery(undefined);
       focusEditorAfterRender(editor);
@@ -1689,6 +1759,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           }
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
+          onBlur={handleEditorBlur}
           onPaste={handlePaste}
           replyPreview={
             replyDraft && (

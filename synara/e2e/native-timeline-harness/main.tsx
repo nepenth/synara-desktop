@@ -1279,6 +1279,7 @@ function App() {
                       setPaneFocus(focusEventId);
                     }
               }
+              threadPaneRootEventId={paneRoot}
             />
           )}
         </div>

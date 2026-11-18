@@ -1,5 +1,6 @@
 import { keyframes, style, styleVariants } from '@vanilla-extract/css';
 import { color, toRem } from 'folds';
+import { continuousMotion } from '../../utils/motion';
 
 /** Zero-height slot under the titlebar: the beam overlays, nothing reflows. */
 export const Slot = style({
@@ -45,19 +46,26 @@ export const BeamPhase = styleVariants({
   },
 });
 
-export const Pulse = style({
-  position: 'absolute',
-  top: 0,
-  bottom: 0,
-  left: 0,
-  width: '40%',
-  background: `linear-gradient(90deg, transparent, ${color.Critical.Main}, transparent)`,
-  animation: `${sweep} 1400ms ease-in-out infinite`,
-  '@media': {
-    '(prefers-reduced-motion: reduce)': {
-      animation: 'none',
-      width: '100%',
-      background: color.Critical.Main,
+// Safe rendering mode: the pulse hops across in seven steps per sweep (five
+// paints a second) instead of gliding (see utils/motion.ts).
+export const Pulse = style(
+  continuousMotion(
+    {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      left: 0,
+      width: '40%',
+      background: `linear-gradient(90deg, transparent, ${color.Critical.Main}, transparent)`,
+      animation: `${sweep} 1400ms ease-in-out infinite`,
+      '@media': {
+        '(prefers-reduced-motion: reduce)': {
+          animation: 'none',
+          width: '100%',
+          background: color.Critical.Main,
+        },
+      },
     },
-  },
-});
+    { animationTimingFunction: 'steps(7)' }
+  )
+);

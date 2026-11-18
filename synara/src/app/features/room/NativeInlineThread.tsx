@@ -1,7 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Box, Button, Text } from 'folds';
 import { useNativeTimelineView, type NativeTimelineThreadSummary } from './nativeTimelineView';
-import { inlineThreadReplies, type InlineThreadReplyCache } from './nativeInlineThreadModel';
+import {
+  inlineThreadReplies,
+  inlineThreadStreamsLive,
+  type InlineThreadReply,
+  type InlineThreadReplyCache,
+} from './nativeInlineThreadModel';
 import {
   INLINE_THREAD_INITIAL_REPLIES,
   INLINE_THREAD_REVEAL_STEP,
@@ -28,6 +33,8 @@ export type NativeThreadDisplay = {
   openInPane?: (rootEventId: string, latestEventId?: string) => void;
   /** Last replies of each expanded root, kept while its row is unmounted. */
   replyCache?: Map<string, InlineThreadReplyCache>;
+  /** The thread the side pane shows: its inline copy does not stream too. */
+  paneRootEventId?: string;
 };
 
 const NativeThreadDisplayContext = createContext<NativeThreadDisplay | undefined>(undefined);
@@ -65,6 +72,49 @@ export const useInlineThreadExpansion = (roomId: string) => {
     [roomId, state]
   );
 };
+
+function InlineThreadReplyItem({ reply }: { reply: InlineThreadReply }) {
+  return (
+    <Box direction="Column" gap="100" className={htmlCss.InlineThreadReply}>
+      <Text size="T300" className={htmlCss.SenderName}>
+        {reply.senderName}
+      </Text>
+      {reply.formattedBody ? (
+        <NativeFormattedBody html={reply.formattedBody} fallbackBody={reply.body} />
+      ) : (
+        <NativePlainMessageBody
+          body={reply.body}
+          style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+        />
+      )}
+    </Box>
+  );
+}
+
+/**
+ * The thread is open in the side pane, whose view is the live one. This copy
+ * shows the replies it last had, without a stream, until the pane closes.
+ */
+function InlineThreadPausedReplies({
+  rootEventId,
+  cached,
+}: {
+  rootEventId: string;
+  cached?: InlineThreadReplyCache;
+}) {
+  const replies = cached ? inlineThreadReplies(cached.rows, rootEventId) : [];
+  const { shown } = visibleInlineReplies(replies, cached?.visible ?? INLINE_THREAD_INITIAL_REPLIES);
+  return (
+    <Box direction="Column" alignItems="Start" gap="200" className={htmlCss.InlineThreadReplies}>
+      {shown.map((reply) => (
+        <InlineThreadReplyItem key={reply.key} reply={reply} />
+      ))}
+      <Text size="T200" priority="300" className={htmlCss.InlineThreadStatus}>
+        Open in the side panel
+      </Text>
+    </Box>
+  );
+}
 
 const EARLIER_REPLIES_FAILED = 'Synara could not load earlier replies. Try again.';
 
@@ -171,19 +221,7 @@ function InlineThreadReplies({
         />
       )}
       {shown.map((reply) => (
-        <Box key={reply.key} direction="Column" gap="100" className={htmlCss.InlineThreadReply}>
-          <Text size="T300" className={htmlCss.SenderName}>
-            {reply.senderName}
-          </Text>
-          {reply.formattedBody ? (
-            <NativeFormattedBody html={reply.formattedBody} fallbackBody={reply.body} />
-          ) : (
-            <NativePlainMessageBody
-              body={reply.body}
-              style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-            />
-          )}
-        </Box>
+        <InlineThreadReplyItem key={reply.key} reply={reply} />
       ))}
       {onReply && (
         <Box>
@@ -206,6 +244,7 @@ export function NativeInlineThread({
 }) {
   const { rootEventId, replyCount } = thread;
   const expanded = display.isExpanded(rootEventId);
+  const live = inlineThreadStreamsLive(rootEventId, display.paneRootEventId);
   const label = `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`;
   return (
     <Box direction="Column" gap="200" data-inline-thread={rootEventId}>
@@ -220,7 +259,13 @@ export function NativeInlineThread({
           <Text size="B300">{expanded ? `Hide ${label}` : `Thread · ${label}`}</Text>
         </Button>
       </Box>
-      {expanded && (
+      {expanded && !live && (
+        <InlineThreadPausedReplies
+          rootEventId={rootEventId}
+          cached={display.replyCache?.get(rootEventId)}
+        />
+      )}
+      {expanded && live && (
         <InlineThreadReplies
           roomId={display.roomId}
           rootEventId={rootEventId}
