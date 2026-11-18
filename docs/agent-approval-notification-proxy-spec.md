@@ -37,6 +37,10 @@ only if a future remote-push path is designed.
   these to badge-only APNs updates; do not add `aps.alert` or `mutable-content`
   or manufacture a visible “New activity” notification. Include `aps.badge: 0`
   when the authoritative aggregate is zero so the OS can clear a stale badge.
+  The iOS client counts conversations, not messages: on alert pushes its NSE
+  replaces a nonzero `aps.badge` with its own count and treats 0 as "all read"
+  (see `synara-ios/docs/ios-push-preview-nse-handoff.md`, A4a). This gateway
+  contract is unchanged.
 - The proxy sends generic `aps.alert` fallback text. The Notification Service
   Extension fetches/decrypts the exact event on device and composes content only
   when the message-preview preference is enabled. Gateway text and approval

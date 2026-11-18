@@ -43,6 +43,10 @@ struct RoomSummary: Identifiable, Equatable {
     /// Core's per-room push override; `.mute` dims the row and flips the
     /// swipe action to Unmute.
     let notificationMode: SynaraRoomNotificationMode
+    /// Unread events that notify under the room's push rules (Core's
+    /// `notification_count`), apart from `unreadCount`, which also counts
+    /// plain messages. Only the app-icon rule reads it.
+    let unreadNotificationCount: Int
 
     /// Legacy display convenience. Unknown never becomes authoritative cleartext.
     var isEncrypted: Bool { encryptionStatus == .encrypted }
@@ -74,7 +78,8 @@ struct RoomSummary: Identifiable, Equatable {
         directUserId: String? = nil,
         isEncrypted: Bool? = nil,
         encryptionStatus: SynaraRoomEncryptionStatus? = nil,
-        notificationMode: SynaraRoomNotificationMode = .default
+        notificationMode: SynaraRoomNotificationMode = .default,
+        unreadNotificationCount: Int = 0
     ) {
         self.id = id
         self.name = name
@@ -99,6 +104,7 @@ struct RoomSummary: Identifiable, Equatable {
         self.activeCallParticipantCount = activeCallParticipantCount
         self.directUserId = directUserId
         self.notificationMode = notificationMode
+        self.unreadNotificationCount = unreadNotificationCount
         if let encryptionStatus {
             self.encryptionStatus = encryptionStatus
         } else if let isEncrypted {
@@ -781,38 +787,67 @@ enum NotificationBadgeSummary {
         )?.appBadgeCount ?? 0
     }
 
-    static func laterActiveCount(from items: [SynaraLaterListItem]) -> Int {
-        items.reduce(0) { partial, item in
-            partial + (item.isCompleted ? 0 : 1)
-        }
+    /// Later items on the icon: reminders whose due time has arrived and
+    /// that are not completed. Undated saved items and future reminders add 0.
+    static func dueReminderCount(from items: [SynaraLaterListItem], now: Date = Date()) -> Int {
+        let nowMS = Int(now.timeIntervalSince1970 * 1_000)
+        return items.filter { item in
+            guard item.isCompleted == false, item.completedAt == nil, let dueTs = item.dueTs else {
+                return false
+            }
+            return dueTs <= nowMS
+        }.count
     }
 
-    /// Dock/SpringBoard icon: later + highlights + ordinary unreads.
-    /// Invites and agent approvals stay on the inbox tab, not the icon.
-    static func appBadgeCount(from rooms: [RoomSummary], laterActiveCount: Int = 0) -> Int {
-        let joinedRooms = rooms.filter { $0.membership != .invited }
-        return summarizeNotifications(
-            NotificationSummaryInput(
-                unreadCounts: unreadSources(from: joinedRooms),
-                laterActiveCount: laterActiveCount
-            )
-        )?.appBadgeCount ?? 0
+    /// Core's app-icon rule (`room_list::presentation::summarize_app_icon_badge`):
+    /// 1 per joined, non-space, unmuted room with a mention, marked unread or
+    /// unread events that notify, plus 1 per due reminder. Invites and agent
+    /// approvals stay on the inbox tab, not the icon.
+    static func appIconBadge(from rooms: [RoomSummary], dueReminderCount: Int = 0) -> AppIconBadgeSummary {
+        summarizeAppIconBadge(input: AppIconBadgeInput(
+            rooms: rooms.map { room in
+                AppIconBadgeRoom(
+                    roomId: room.id,
+                    isJoined: room.membership == .joined,
+                    isSpace: room.kind == .space,
+                    isMuted: room.isMuted,
+                    highlightCount: room.hasHighlight ? 1 : 0,
+                    notificationCount: UInt64(clampCount(room.unreadNotificationCount)),
+                    markedUnread: room.isMarkedUnread
+                )
+            },
+            dueReminderCount: UInt64(clampCount(dueReminderCount))
+        ))
     }
 
-    /// `nil` means the snapshot is not ready; keep the current icon (push may own it).
-    static func appIconBadgeCount(
+    static func appBadgeCount(from rooms: [RoomSummary], dueReminderCount: Int = 0) -> Int {
+        Int(clamping: appIconBadge(from: rooms, dueReminderCount: dueReminderCount).count)
+    }
+
+    /// `nil` means the snapshot is not ready; keep the current icon.
+    static func appIconBadge(
         roomListState: RoomListState,
-        laterItems: [SynaraLaterListItem]
-    ) -> Int? {
-        let laterCount = laterActiveCount(from: laterItems)
+        laterItems: [SynaraLaterListItem],
+        now: Date = Date()
+    ) -> AppIconBadgeSummary? {
+        let dueCount = dueReminderCount(from: laterItems, now: now)
         switch roomListState {
         case .loaded(let rooms):
-            return appBadgeCount(from: rooms, laterActiveCount: laterCount)
+            return appIconBadge(from: rooms, dueReminderCount: dueCount)
         case .empty:
-            return appBadgeCount(from: [], laterActiveCount: laterCount)
+            return appIconBadge(from: [], dueReminderCount: dueCount)
         case .idle, .loading, .failed:
             return nil
         }
+    }
+
+    static func appIconBadgeCount(
+        roomListState: RoomListState,
+        laterItems: [SynaraLaterListItem],
+        now: Date = Date()
+    ) -> Int? {
+        appIconBadge(roomListState: roomListState, laterItems: laterItems, now: now)
+            .map { Int(clamping: $0.count) }
     }
 
     static func notificationsTabBadgeCount(from rooms: [RoomSummary]) -> Int {
@@ -1336,7 +1371,8 @@ final class MockInviteTransitionService: RoomListServicing, RoomMembershipServic
                 membership: .joined,
                 lastActivityAt: Date(),
                 parentSpaces: room.parentSpaces,
-                avatarURL: room.avatarURL
+                avatarURL: room.avatarURL,
+                unreadNotificationCount: room.unreadNotificationCount
             )
         }
     }

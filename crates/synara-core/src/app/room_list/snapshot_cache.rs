@@ -280,6 +280,7 @@ mod tests {
             join_rule: None,
             unread_count: 0,
             highlight_count: 0,
+            notification_count: 0,
             marked_unread: false,
             notification_mode: None,
             last_activity_ts: None,
