@@ -1024,6 +1024,7 @@ async fn project_room(
         join_rule: None,
         unread_count: bounded_count(unread.unread_count),
         highlight_count: bounded_count(mention_count),
+        notification_count: bounded_count(counts.notifications.max(u64::from(pending_approval))),
         marked_unread: room.is_marked_unread(),
         notification_mode,
         last_activity_ts,

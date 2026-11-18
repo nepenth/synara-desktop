@@ -16,6 +16,21 @@ final class AppRouteTests: XCTestCase {
         XCTAssertTrue(source.contains("AppIconBadge.applyCurrentSummary"))
     }
 
+    /// While the app runs it is the only owner of the icon: a foreground
+    /// presentation must not let iOS apply the payload's `aps.badge`, and a
+    /// tap or approval action must not apply the payload badge either.
+    func testForegroundPresentationAndTapDoNotApplyPayloadBadge() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Synara/App/SynaraApp.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(source.contains("return [.banner, .sound, .list]"))
+        XCTAssertFalse(source.contains(".badge, .list"))
+        XCTAssertFalse(source.contains("applyIncomingBadge"))
+        XCTAssertTrue(source.contains("AppIconBadge.applyBackgroundPayloadBadge("))
+    }
+
     @MainActor
     func testNotificationDelegateIsInstalledBeforeLaunchReturnsWithoutSwiftUIBinding() {
         let center = UNUserNotificationCenter.current()
@@ -39,17 +54,18 @@ final class AppRouteTests: XCTestCase {
                 hasHighlight: false,
                 kind: .room,
                 membership: .joined,
-                lastActivityAt: Date()
+                lastActivityAt: Date(),
+                unreadNotificationCount: 4
             )
         ]
         let later = MockLaterService(
             items: [
                 SynaraLaterListItem(
-                    id: "saved",
+                    id: "reminder",
                     roomID: "!unread:matrix.org",
                     eventID: "$one",
-                    kind: .saved,
-                    dueTs: nil,
+                    kind: .reminder,
+                    dueTs: 1,
                     completedAt: nil,
                     createdAt: 1,
                     isCompleted: false
@@ -65,10 +81,11 @@ final class AppRouteTests: XCTestCase {
         delegate.bind(to: environment)
         delegate.applicationDidBecomeActive(UIApplication.shared)
 
-        let expected = NotificationBadgeSummary.appBadgeCount(from: rooms, laterActiveCount: 1)
+        // One room plus one due reminder.
+        let expected = NotificationBadgeSummary.appBadgeCount(from: rooms, dueReminderCount: 1)
+        XCTAssertEqual(expected, 2)
         await waitUntil { push.lastAppIconBadgeCount == expected }
         XCTAssertEqual(push.lastAppIconBadgeCount, expected)
-        XCTAssertGreaterThan(expected, 0)
     }
 
     @MainActor

@@ -302,8 +302,9 @@ protocol PushServicing {
     func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute?
     func resolveRoute(from notificationPayload: [AnyHashable: Any]) async -> AppRoute?
     func parseBadgeCount(from notificationPayload: [AnyHashable: Any]) -> Int?
-    func applyIncomingBadge(from notificationPayload: [AnyHashable: Any])
     func applyAppIconBadge(_ count: Int)
+    /// Removes delivered notifications of rooms that no longer need attention.
+    func removeDeliveredNotifications(forRoomIDs roomIDs: Set<String>)
 }
 
 enum NotificationPermissionStatus: Equatable {
@@ -1323,10 +1324,12 @@ final class PlaceholderPushService: PushServicing {
         nil
     }
 
-    func applyIncomingBadge(from notificationPayload: [AnyHashable: Any]) {}
-
     func applyAppIconBadge(_ count: Int) {
         _ = count
+    }
+
+    func removeDeliveredNotifications(forRoomIDs roomIDs: Set<String>) {
+        _ = roomIDs
     }
 }
 
@@ -1966,8 +1969,8 @@ final class MockPushService: PushServicing {
     private(set) var configureCallCount = 0
     private(set) var routeCallCount = 0
     private(set) var badgeParseCallCount = 0
-    private(set) var badgeApplyCallCount = 0
     private(set) var appIconBadgeApplyCallCount = 0
+    private(set) var removedDeliveredNotificationRoomIDs: [Set<String>] = []
     private(set) var lastAppIconBadgeCount: Int?
     private(set) var tokenCallCount = 0
     private(set) var registrationFailureCallCount = 0
@@ -2064,16 +2067,13 @@ final class MockPushService: PushServicing {
         return nil
     }
 
-    func applyIncomingBadge(from notificationPayload: [AnyHashable: Any]) {
-        badgeApplyCallCount += 1
-        if let badge = parseBadgeCount(from: notificationPayload) {
-            applyAppIconBadge(badge)
-        }
-    }
-
     func applyAppIconBadge(_ count: Int) {
         appIconBadgeApplyCallCount += 1
         lastAppIconBadgeCount = max(0, count)
+    }
+
+    func removeDeliveredNotifications(forRoomIDs roomIDs: Set<String>) {
+        removedDeliveredNotificationRoomIDs.append(roomIDs)
     }
 }
 

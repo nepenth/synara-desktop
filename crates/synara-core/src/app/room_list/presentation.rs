@@ -261,6 +261,88 @@ pub fn summarize_badges(input: BadgeSummaryInput) -> BadgeSummary {
     }
 }
 
+/// One room's inputs to the app-icon badge.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "full-uniffi", derive(uniffi::Record))]
+pub struct AppIconBadgeRoom {
+    pub room_id: String,
+    /// Joined rooms only; invites and left rooms never count.
+    pub is_joined: bool,
+    pub is_space: bool,
+    /// Notification mode `Mute`.
+    pub is_muted: bool,
+    /// Unread mentions/highlights.
+    pub highlight_count: u64,
+    /// Unread events that notify under the room's push rules (the SDK's
+    /// unread notification count), not the plain message count.
+    pub notification_count: u64,
+    pub marked_unread: bool,
+}
+
+impl From<&RoomSummary> for AppIconBadgeRoom {
+    fn from(room: &RoomSummary) -> Self {
+        Self {
+            room_id: room.room_id.clone(),
+            is_joined: room.membership == Membership::Join,
+            is_space: room.is_space,
+            is_muted: room.notification_mode == Some(NotificationMode::Mute),
+            highlight_count: u64::from(room.highlight_count),
+            notification_count: u64::from(room.notification_count),
+            marked_unread: room.marked_unread,
+        }
+    }
+}
+
+/// Inputs to the app-icon badge.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "full-uniffi", derive(uniffi::Record))]
+pub struct AppIconBadgeInput {
+    pub rooms: Vec<AppIconBadgeRoom>,
+    /// Later reminders whose due time has arrived and that are not completed.
+    pub due_reminder_count: u64,
+}
+
+/// The app-icon number and the rooms it counted.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "full-uniffi", derive(uniffi::Record))]
+pub struct AppIconBadgeSummary {
+    pub count: u64,
+    /// Rooms that need attention, in input order without duplicates. The iOS
+    /// notification extension adds 1 only for a push from a room outside
+    /// this set.
+    pub attention_room_ids: Vec<String>,
+}
+
+/// True when a room adds 1 to the app icon: a joined, non-space, unmuted room
+/// with a mention, marked unread, or unread events that notify. A room in
+/// mentions-only mode with plain unread messages but no mention adds 0.
+pub fn room_needs_icon_attention(room: &AppIconBadgeRoom) -> bool {
+    room.is_joined
+        && !room.is_space
+        && !room.is_muted
+        && (room.highlight_count > 0 || room.marked_unread || room.notification_count > 0)
+}
+
+/// The app-icon badge counts conversations, not messages: 1 per room that
+/// needs attention ([`room_needs_icon_attention`]) plus 1 per due reminder.
+/// Invites and agent approvals stay off the icon.
+#[cfg_attr(feature = "full-uniffi", uniffi::export)]
+pub fn summarize_app_icon_badge(input: AppIconBadgeInput) -> AppIconBadgeSummary {
+    let mut seen = BTreeSet::new();
+    let attention_room_ids: Vec<String> = input
+        .rooms
+        .iter()
+        .filter(|room| room_needs_icon_attention(room))
+        .filter(|room| seen.insert(room.room_id.as_str()))
+        .map(|room| room.room_id.clone())
+        .collect();
+    let rooms = u64::try_from(attention_room_ids.len()).unwrap_or(u64::MAX);
+    AppIconBadgeSummary {
+        count: rooms.saturating_add(input.due_reminder_count),
+        attention_room_ids,
+    }
+}
+
 /// Everything the desktop room list renders from a snapshot without
 /// re-deriving room rules.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -471,6 +553,126 @@ mod tests {
         assert_eq!(summary.unread_count, 7);
         assert_eq!(summary.app_badge_count, 10);
         assert_eq!(summary.inbox_badge_count, 6);
+    }
+
+    fn icon_room(summary: &RoomSummary) -> AppIconBadgeRoom {
+        AppIconBadgeRoom::from(summary)
+    }
+
+    #[test]
+    fn icon_attention_counts_conversations_that_notify() {
+        let mut muted = room("!muted:x")
+            .unread(5, 1)
+            .notifications(5)
+            .build()
+            .unwrap();
+        muted.notification_mode = Some(NotificationMode::Mute);
+        let mut space = room("!space:x")
+            .unread(3, 0)
+            .notifications(3)
+            .build()
+            .unwrap();
+        space.is_space = true;
+        // Mentions-only room: plain messages are unread but none notifies.
+        let mut mentions_only = room("!quiet:x").unread(12, 0).build().unwrap();
+        mentions_only.notification_mode = Some(NotificationMode::Mentions);
+        let busy = room("!busy:x")
+            .unread(40, 0)
+            .notifications(40)
+            .build()
+            .unwrap();
+        let mut mention = room("!mention:x").unread(7, 1).build().unwrap();
+        mention.notification_mode = Some(NotificationMode::Mentions);
+        let marked = room("!marked:x").marked_unread(true).build().unwrap();
+        let invite = room("!invite:x")
+            .membership(Membership::Invite)
+            .unread(1, 1)
+            .notifications(1)
+            .build()
+            .unwrap();
+        let dm = room("!dm:x")
+            .direct(true)
+            .unread(2, 0)
+            .notifications(2)
+            .build()
+            .unwrap();
+        let read = room("!read:x").build().unwrap();
+
+        for (summary, expected) in [
+            (&muted, false),
+            (&space, false),
+            (&mentions_only, false),
+            (&busy, true),
+            (&mention, true),
+            (&marked, true),
+            (&invite, false),
+            (&dm, true),
+            (&read, false),
+        ] {
+            assert_eq!(
+                room_needs_icon_attention(&icon_room(summary)),
+                expected,
+                "{}",
+                summary.room_id
+            );
+        }
+
+        let badge = summarize_app_icon_badge(AppIconBadgeInput {
+            rooms: [
+                &muted,
+                &space,
+                &mentions_only,
+                &busy,
+                &mention,
+                &marked,
+                &invite,
+                &dm,
+                &read,
+            ]
+            .into_iter()
+            .map(icon_room)
+            .collect(),
+            due_reminder_count: 0,
+        });
+        // A room with 40 notifying messages adds 1, not 40.
+        assert_eq!(badge.count, 4);
+        assert_eq!(
+            badge.attention_room_ids,
+            ["!busy:x", "!mention:x", "!marked:x", "!dm:x"]
+        );
+    }
+
+    #[test]
+    fn icon_badge_adds_due_reminders_and_counts_a_room_once() {
+        let busy = room("!busy:x")
+            .unread(40, 2)
+            .notifications(40)
+            .build()
+            .unwrap();
+        let badge = summarize_app_icon_badge(AppIconBadgeInput {
+            rooms: vec![icon_room(&busy), icon_room(&busy)],
+            due_reminder_count: 2,
+        });
+        assert_eq!(badge.count, 3);
+        assert_eq!(badge.attention_room_ids, ["!busy:x"]);
+        assert_eq!(
+            summarize_app_icon_badge(AppIconBadgeInput::default()),
+            AppIconBadgeSummary::default()
+        );
+    }
+
+    #[test]
+    fn notification_count_stays_out_of_desktop_json() {
+        let summary = room("!busy:x")
+            .unread(4, 0)
+            .notifications(4)
+            .build()
+            .unwrap();
+        let json = serde_json::to_value(&summary).unwrap();
+        assert!(json.get("notificationCount").is_none());
+        let back: RoomSummary = serde_json::from_value(json).unwrap();
+        assert_eq!(back.notification_count, 0);
+        assert_eq!(back.unread_count, 4);
     }
 
     #[test]

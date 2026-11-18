@@ -68,8 +68,10 @@ pub use live::{
 };
 pub use presentation::{
     is_favorite_room, normalized_room_name, order_room_ids, room_attention, room_list_presentation,
-    summarize_badges, unread_attention_with_rollup, BadgeSummary, BadgeSummaryInput,
-    RoomBadgeSource, RoomListOrder, RoomListPresentation, RoomOrderInput, RoomUnreadAttention,
+    room_needs_icon_attention, summarize_app_icon_badge, summarize_badges,
+    unread_attention_with_rollup, AppIconBadgeInput, AppIconBadgeRoom, AppIconBadgeSummary,
+    BadgeSummary, BadgeSummaryInput, RoomBadgeSource, RoomListOrder, RoomListPresentation,
+    RoomOrderInput, RoomUnreadAttention,
 };
 pub use projection::{reconstruct, RoomListProjection};
 pub use server_highlights::{

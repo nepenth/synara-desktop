@@ -1,4 +1,5 @@
 import Foundation
+import SynaraCore
 import UserNotifications
 
 #if canImport(UIKit)
@@ -554,15 +555,12 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
             IntValueParser.parse(summary["count"])
     }
 
-    func applyIncomingBadge(from notificationPayload: [AnyHashable: Any]) {
-        guard let badge = parseBadgeCount(from: notificationPayload) else {
-            return
-        }
-        applyAppIconBadge(badge)
-    }
-
     func applyAppIconBadge(_ count: Int) {
         AppIconBadge.apply(count, logger: logger)
+    }
+
+    func removeDeliveredNotifications(forRoomIDs roomIDs: Set<String>) {
+        AppIconBadge.removeDeliveredNotifications(forRoomIDs: roomIDs)
     }
 
     private func schedulePusherReconciliation() {
@@ -795,33 +793,125 @@ enum AppIconBadge {
         return items
     }
 
+    /// The app owns the icon while it runs: activation, room-list updates and
+    /// entering the background apply Core's count. A snapshot that is not
+    /// ready keeps the current icon.
     static func applyCurrentSummary(
         roomList: RoomListServicing,
         later: LaterServicing,
-        push: PushServicing
+        push: PushServicing,
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults(),
+        now: Date = Date()
     ) async {
         let state = await roomList.loadRooms()
         let laterItems = await laterItems(from: later)
-        guard let count = NotificationBadgeSummary.appIconBadgeCount(
+        guard let summary = NotificationBadgeSummary.appIconBadge(
             roomListState: state,
-            laterItems: laterItems
+            laterItems: laterItems,
+            now: now
         ) else {
             return
         }
-        push.applyAppIconBadge(count)
+        let listedRooms: [RoomSummary]
+        if case .loaded(let rooms) = state {
+            listedRooms = rooms
+        } else {
+            listedRooms = []
+        }
+        apply(summary, listedRooms: listedRooms, push: push, defaults: defaults)
     }
 
     static func applyCurrentSummary(
         rooms: [RoomSummary],
         later: LaterServicing,
-        push: PushServicing
+        push: PushServicing,
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults(),
+        now: Date = Date()
     ) async {
         let laterItems = await laterItems(from: later)
-        let count = NotificationBadgeSummary.appBadgeCount(
+        let summary = NotificationBadgeSummary.appIconBadge(
             from: rooms,
-            laterActiveCount: NotificationBadgeSummary.laterActiveCount(from: laterItems)
+            dueReminderCount: NotificationBadgeSummary.dueReminderCount(from: laterItems, now: now)
         )
+        apply(summary, listedRooms: rooms, push: push, defaults: defaults)
+    }
+
+    /// Stores the count and counted rooms for the notification extension and
+    /// removes delivered notifications of listed rooms that needed attention
+    /// before and no longer do.
+    static func apply(
+        _ summary: AppIconBadgeSummary,
+        listedRooms: [RoomSummary],
+        push: PushServicing,
+        defaults: UserDefaults?
+    ) {
+        let count = Int(clamping: summary.count)
+        let attention = Set(summary.attentionRoomIds)
+        let previous = SynaraAppIconBadgeStore.replace(
+            count: count,
+            roomIDs: summary.attentionRoomIds,
+            defaults: defaults
+        )
+        // Only rooms the list shows as read: a room missing from a partial
+        // list has not been read.
+        let read = previous.subtracting(attention)
+            .intersection(listedRooms.map(\.id))
+        if read.isEmpty == false {
+            push.removeDeliveredNotifications(forRoomIDs: read)
+        }
         push.applyAppIconBadge(count)
+    }
+
+    /// A background push whose payload badge is 0 means the server counts
+    /// nothing unread: clear the icon and the stored rooms. Other payload
+    /// badges are in the gateway's per-message unit and are ignored.
+    static func applyBackgroundPayloadBadge(
+        _ payloadBadge: Int?,
+        push: PushServicing,
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
+    ) {
+        guard payloadBadge == 0 else {
+            return
+        }
+        SynaraAppIconBadgeStore.clear(defaults: defaults)
+        push.applyAppIconBadge(0)
+    }
+
+    /// Delivered notifications carry the gateway payload, whose `room_id`
+    /// the shared parser reads; `threadIdentifier` is checked too.
+    static func removeDeliveredNotifications(
+        forRoomIDs roomIDs: Set<String>,
+        center: UNUserNotificationCenter = .current()
+    ) {
+        guard roomIDs.isEmpty == false else {
+            return
+        }
+        center.getDeliveredNotifications { notifications in
+            let identifiers = deliveredNotificationIdentifiers(
+                notifications.map { ($0.request.identifier, $0.request.content) },
+                forRoomIDs: roomIDs
+            )
+            if identifiers.isEmpty == false {
+                center.removeDeliveredNotifications(withIdentifiers: identifiers)
+            }
+        }
+    }
+
+    static func deliveredNotificationIdentifiers(
+        _ notifications: [(identifier: String, content: UNNotificationContent)],
+        forRoomIDs roomIDs: Set<String>
+    ) -> [String] {
+        notifications.compactMap { notification in
+            if roomIDs.contains(notification.content.threadIdentifier) {
+                return notification.identifier
+            }
+            guard let roomID = try? SynaraNotificationPreviewPayloadParser
+                .reference(from: notification.content.userInfo, trimWhitespace: true).get().roomID,
+                  roomIDs.contains(roomID) else {
+                return nil
+            }
+            return notification.identifier
+        }
     }
 }
 

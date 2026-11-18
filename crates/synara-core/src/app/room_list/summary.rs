@@ -23,6 +23,7 @@ pub struct RoomSummaryBuilder {
     state_encrypted: bool,
     unread_count: u32,
     highlight_count: u32,
+    notification_count: u32,
     marked_unread: bool,
     last_activity_ts: Option<u64>,
     last_message_preview: Option<String>,
@@ -46,6 +47,7 @@ impl RoomSummaryBuilder {
             state_encrypted: false,
             unread_count: 0,
             highlight_count: 0,
+            notification_count: 0,
             marked_unread: false,
             last_activity_ts: None,
             last_message_preview: None,
@@ -118,6 +120,12 @@ impl RoomSummaryBuilder {
         self
     }
 
+    /// Unread events that notify under the room's push rules.
+    pub fn notifications(mut self, notification_count: u32) -> Self {
+        self.notification_count = notification_count;
+        self
+    }
+
     pub fn marked_unread(mut self, marked: bool) -> Self {
         self.marked_unread = marked;
         self
@@ -166,6 +174,7 @@ impl RoomSummaryBuilder {
             join_rule: None,
             unread_count: self.unread_count,
             highlight_count: self.highlight_count,
+            notification_count: self.notification_count,
             marked_unread: self.marked_unread,
             notification_mode: None,
             last_activity_ts: self.last_activity_ts,
