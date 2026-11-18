@@ -50,6 +50,23 @@ export const TIMELINE_ACTION_FAILED = {
   history: 'Synara could not load more messages. Try again.',
 } as const;
 
+/** Rust refuses saves over `MAX_MEDIA_DOWNLOAD_BYTES` (300 MB). */
+const DOWNLOAD_TOO_LARGE = 'v-send.r-media-download-too-large';
+
+/**
+ * A failed file save, shown on the file itself. Retrying cannot help a file
+ * over the save limit, so that one is not retryable.
+ */
+export const nativeTimelineDownloadFailure = (
+  error: unknown
+): { message: string; retryable: boolean } =>
+  coreDiagnosticId(error) === DOWNLOAD_TOO_LARGE
+    ? { message: 'This file is larger than Synara can save (300 MB).', retryable: false }
+    : {
+        message: nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.download),
+        retryable: true,
+      };
+
 /**
  * A specific sentence for a failed timeline action: Core's reason when it has
  * one, otherwise `fallback`. Internal "native …" renderer copy is never shown.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Desktop: downloading a file attachment now shows what is happening on the file itself. A download that takes more than a moment shows its percentage and a progress bar, then "Finishing…" while Synara decrypts and writes it. When it is done, a line under the file says "Saved to Downloads as …" with the name it got there and a Show in folder button (on Linux without a file manager service, Show in folder opens the Downloads folder). A failed download says why on the file, with Retry, instead of in the banner above the timeline. The media viewer's Save and the Markdown preview's Download show the same download and its result.
+- Desktop: two downloads of the same file name at once no longer fail; the second is saved as "name (1)". A download is written to a hidden temporary file and only takes its name once complete, so quitting mid-download no longer leaves a partial file in Downloads.
+
 ## [3.1.0] - 2026-11-17
 
 - Desktop (Linux): a new Balanced drawing mode is the default for the Arch package. Settings → Appearance → Window → Hardware acceleration is now Off / Balanced / Full. Off drew every frame on the CPU and copied it on the thread that also handles typing, so an animated "is typing…" indicator alone kept about a third of a core busy and typing stuttered. Balanced keeps GPU compositing and turns off only the DMABUF display path behind most NVIDIA blank-window reports.

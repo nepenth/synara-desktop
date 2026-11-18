@@ -170,7 +170,7 @@ test('timeline images and videos open the viewer, save, and fall back to the fil
   // The viewer shows the original handle, saves through the file-save path,
   // and is a modal dialog that returns focus to its opener.
   assert.match(viewer, /nativeTimelineMediaSrc\(\{ handleId: target\.handleId/);
-  assert.match(viewer, /saveNativeTimelineFileAttachment\(/);
+  assert.match(viewer, /startNativeTimelineFileSave\(/);
   assert.match(viewer, /import \{ Modal \} from '\.\.\/\.\.\/components\/modal-dialog'/);
   assert.match(viewer, /escapeDeactivates: stopPropagation/);
   assert.match(viewer, /setReturnFocus: \(previous\) => viewerReturnFocus\(target\) \?\? previous/);

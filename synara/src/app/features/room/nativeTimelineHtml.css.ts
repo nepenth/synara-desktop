@@ -538,6 +538,22 @@ export const FileDownload = style({
   },
 });
 
+/** The progress bar beside a file that is downloading. */
+export const FileSaveProgressBar = style({
+  display: 'block',
+  width: toRem(96),
+});
+
+/** A failed save's message on the file. */
+export const FileSaveFailed = style({
+  color: color.Critical.Main,
+});
+
+/** The saved or failed line under a file, with its text-link actions. */
+export const FileSaveStatus = style({
+  minHeight: toRem(24),
+});
+
 export const FilePreviewModal = style({
   width: 'min(52rem, 92vw)',
   maxHeight: '88vh',

@@ -15,10 +15,14 @@ import {
 import { Modal } from '../../components/modal-dialog';
 import { stopPropagation } from '../../utils/keyboard';
 import {
-  nativeTimelineActionErrorMessage,
-  TIMELINE_ACTION_FAILED,
-} from './nativeTimelineErrorCopy';
-import { saveNativeTimelineFileAttachment } from './nativeTimelineFileSave';
+  dismissNativeTimelineFileSave,
+  nativeTimelineFileSaveButtonLabel,
+  nativeTimelineFileSavedMessage,
+  startNativeTimelineFileSave,
+  useNativeTimelineFileSave,
+  useNativeTimelineFileSaveProgressVisible,
+} from './nativeTimelineFileSaveState';
+import { revealNativeTimelineSavedFile } from './NativeTimelineFileSaveStatus';
 import { nativeTimelineMediaSrc } from './nativeTimelineView';
 import { NativeTimelineNotice } from './NativeTimelineNotice';
 import * as htmlCss from './nativeTimelineHtml.css';
@@ -59,22 +63,19 @@ export function NativeTimelineMediaViewer({
 }) {
   const src = nativeTimelineMediaSrc({ handleId: target.handleId, mimeType: target.mimeType });
   const [failed, setFailed] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string>();
+  // The same save as the file in the timeline: one download, one result.
+  const saveState = useNativeTimelineFileSave(target.handleId);
+  const saving = saveState?.kind === 'downloading' || saveState?.kind === 'finishing';
+  const progressVisible = useNativeTimelineFileSaveProgressVisible(saveState);
+  const [revealError, setRevealError] = useState<string>();
 
   const save = () => {
-    if (saving) return;
-    setSaving(true);
-    setSaveError(undefined);
-    void saveNativeTimelineFileAttachment({
+    setRevealError(undefined);
+    void startNativeTimelineFileSave({
       handleId: target.handleId,
       filename: target.filename,
       mimeType: target.mimeType,
-    })
-      .catch((error) => {
-        setSaveError(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.download));
-      })
-      .finally(() => setSaving(false));
+    });
   };
 
   return (
@@ -113,19 +114,38 @@ export function NativeTimelineMediaViewer({
                   size="300"
                   radii="300"
                   disabled={saving}
+                  aria-busy={saving ? true : undefined}
                   data-native-timeline-media-save="true"
                   onClick={save}
                   aria-label={`Save ${target.label}`}
                 >
-                  <Text size="B300">{saving ? 'Saving…' : 'Save'}</Text>
+                  <Text size="B300">
+                    {nativeTimelineFileSaveButtonLabel(
+                      saveState,
+                      saving && progressVisible,
+                      'Save'
+                    )}
+                  </Text>
                 </Button>
               </Box>
             </Header>
-            {saveError ? (
+            {saveState?.kind === 'done' ? (
+              <NativeTimelineNotice
+                tone={revealError ? 'error' : 'info'}
+                message={revealError ?? nativeTimelineFileSavedMessage(saveState.filename)}
+                action={{
+                  label: 'Show in folder',
+                  onClick: () => revealNativeTimelineSavedFile(saveState.filename, setRevealError),
+                }}
+                onDismiss={() => dismissNativeTimelineFileSave(target.handleId)}
+              />
+            ) : null}
+            {saveState?.kind === 'failed' ? (
               <NativeTimelineNotice
                 tone="error"
-                message={saveError}
-                onDismiss={() => setSaveError(undefined)}
+                message={saveState.message}
+                action={saveState.retryable ? { label: 'Retry', onClick: save } : undefined}
+                onDismiss={() => dismissNativeTimelineFileSave(target.handleId)}
               />
             ) : null}
             <div className={htmlCss.MediaViewerBody}>

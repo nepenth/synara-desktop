@@ -1,4 +1,5 @@
 import type { EncryptedAttachmentInfo } from '../../types/matrix/common';
+import { Channel } from '@tauri-apps/api/core';
 import { convertDesktopFileSrc, invokeDesktopWithAvailability } from '../utils/desktop';
 import { mxcUrlToHttp } from '../utils/matrix';
 import {
@@ -151,13 +152,42 @@ export async function previewMatrixMediaText(
   }
 }
 
-/** Rust writes the file and returns its Downloads filename. No file bytes cross IPC. */
-export async function saveMatrixMediaFile(contentUri: string, filename: string): Promise<string> {
+/**
+ * Progress of one save (`MatrixMediaSaveEvent` in Rust's media commands).
+ * `total` is the Content-Length when the homeserver sent one; `finishing`
+ * follows the network part, while Rust decrypts and writes the file.
+ */
+export type MatrixMediaSaveEvent =
+  | { event: 'started'; data: { total?: number | null } }
+  | { event: 'progress'; data: { received: number } }
+  | { event: 'finishing' };
+
+/** A Tauri `Channel` for save progress, or undefined where the webview cannot make one. */
+const saveProgressChannel = (
+  onProgress: ((event: MatrixMediaSaveEvent) => void) | undefined
+): Channel<MatrixMediaSaveEvent> | undefined => {
+  if (!onProgress || typeof window.__TAURI_INTERNALS__?.transformCallback !== 'function') {
+    return undefined;
+  }
+  return new Channel<MatrixMediaSaveEvent>(onProgress);
+};
+
+/**
+ * Rust writes the file and returns its Downloads filename. No file bytes cross
+ * IPC. With `onProgress`, Rust also reports progress over a channel.
+ */
+export async function saveMatrixMediaFile(
+  contentUri: string,
+  filename: string,
+  onProgress?: (event: MatrixMediaSaveEvent) => void
+): Promise<string> {
   const resolved = originalMediaContentUri(contentUri);
   if (!resolved) throw new Error('File attachment is unavailable.');
+  const channel = saveProgressChannel(onProgress);
   const result = await invokeDesktopWithAvailability<{ filename?: unknown }>('matrix_media_save', {
     contentUri: resolved,
     filename,
+    ...(channel ? { onProgress: channel } : {}),
   });
   if (
     !result.available ||
@@ -168,6 +198,21 @@ export async function saveMatrixMediaFile(contentUri: string, filename: string):
     throw new Error('Native media save failed');
   }
   return result.value.filename;
+}
+
+/**
+ * Show a file saved by {@link saveMatrixMediaFile} in the file manager. Only
+ * the returned filename is sent; Rust rebuilds the Downloads path. Resolves
+ * to `folder` when only the Downloads folder could be opened.
+ */
+export async function revealSavedMatrixMediaFile(filename: string): Promise<'item' | 'folder'> {
+  const result = await invokeDesktopWithAvailability<unknown>('desktop_reveal_download', {
+    filename,
+  });
+  if (!result.available || (result.value !== 'item' && result.value !== 'folder')) {
+    throw new Error('Could not open Downloads.');
+  }
+  return result.value;
 }
 
 /** Leftover `mxc://` and opaque handles must not be used as `<img src>`. */

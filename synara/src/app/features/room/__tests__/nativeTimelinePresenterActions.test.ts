@@ -413,12 +413,17 @@ test('native timeline file attachments save through download+save, not protocol 
   const missingSrc = mediaFn.indexOf('if (!mediaSrc)');
   assert.ok(fileBranch >= 0, 'file attachments must have a dedicated branch');
   assert.ok(fileBranch < missingSrc, 'file chips must not depend on protocol mediaSrc');
-  assert.match(presenter, /saveNativeTimelineFileAttachment/);
+  // The chip starts the shared save (one per handle, kept across remounts),
+  // which saves through Rust; failures stay on the file, not in the banner.
+  assert.match(presenter, /startNativeTimelineFileSave\(\{ handleId, filename, mimeType \}\)/);
+  const saveState = readFileSync('src/app/features/room/nativeTimelineFileSaveState.ts', 'utf8');
+  assert.match(saveState, /save = saveNativeTimelineFileAttachment/);
+  assert.match(presenter, /<NativeTimelineFileSaveResult handleId=\{handleId\}/);
+  assert.doesNotMatch(presenter, /TIMELINE_ACTION_FAILED\.download/);
   assert.match(presenter, /isNativeTimelineMarkdownAttachment/);
   assert.match(presenter, /NativeTimelineMarkdownPreview/);
   assert.match(presenter, /data-native-timeline-file-download/);
   assert.match(presenter, /data-native-timeline-file-open/);
-  assert.match(presenter, /onActionError=\{onActionError\}/);
   assert.match(htmlCss, /export const FileDownload = style\(/);
   assert.match(htmlCss, /export const FilePreviewModal = style\(/);
   const previewUi = readFileSync('src/app/features/room/NativeTimelineMarkdownPreview.tsx', 'utf8');
