@@ -44,6 +44,7 @@
     "allow-desktop-save-file-chunk",
     "allow-desktop-save-file-end",
     "allow-desktop-save-file-abort",
+    "allow-desktop-reveal-download",
     "allow-desktop-read-dropped-files",
     "allow-desktop-read-dropped-file-chunk",
     "allow-desktop-read-dropped-file-end",

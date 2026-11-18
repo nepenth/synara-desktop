@@ -21,14 +21,18 @@ import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
 import { previewMatrixMediaText } from '../../matrix/media';
 import { stopPropagation } from '../../utils/keyboard';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
+import { nativeTimelineActionErrorMessage } from './nativeTimelineErrorCopy';
+import { nativeTimelineFileDownloadName } from './nativeTimelineFileSave';
 import {
-  nativeTimelineActionErrorMessage,
-  TIMELINE_ACTION_FAILED,
-} from './nativeTimelineErrorCopy';
-import {
-  nativeTimelineFileDownloadName,
-  saveNativeTimelineFileAttachment,
-} from './nativeTimelineFileSave';
+  dismissNativeTimelineFileSave,
+  nativeTimelineFileSaveButtonLabel,
+  nativeTimelineFileSavedMessage,
+  startNativeTimelineFileSave,
+  useNativeTimelineFileSave,
+  useNativeTimelineFileSaveProgressVisible,
+} from './nativeTimelineFileSaveState';
+import { revealNativeTimelineSavedFile } from './NativeTimelineFileSaveStatus';
+import { NativeTimelineNotice } from './NativeTimelineNotice';
 import {
   renderNativeTimelineMarkdownPreview,
   type NativeTimelineFilePreviewTarget,
@@ -38,14 +42,16 @@ import * as htmlCss from './nativeTimelineHtml.css';
 export function NativeTimelineMarkdownPreview({
   target,
   onClose,
-  onActionError,
 }: {
   target: NativeTimelineFilePreviewTarget;
   onClose: () => void;
-  onActionError?: (message: string) => void;
 }) {
   const label = nativeTimelineFileDownloadName(target.filename);
-  const [busySave, setBusySave] = useState(false);
+  // The same save as the file in the timeline: one download, one result.
+  const saveState = useNativeTimelineFileSave(target.handleId);
+  const busySave = saveState?.kind === 'downloading' || saveState?.kind === 'finishing';
+  const progressVisible = useNativeTimelineFileSaveProgressVisible(saveState);
+  const [revealError, setRevealError] = useState<string>();
   const [copied, setCopied] = useTimeoutToggle();
   const [status, setStatus] = useState<
     | { kind: 'loading' }
@@ -97,17 +103,12 @@ export function NativeTimelineMarkdownPreview({
   }, [status]);
 
   const download = () => {
-    if (busySave) return;
-    setBusySave(true);
-    void saveNativeTimelineFileAttachment({
+    setRevealError(undefined);
+    void startNativeTimelineFileSave({
       handleId: target.handleId,
       filename: target.filename,
       mimeType: target.mimeType,
-    })
-      .catch((error) => {
-        onActionError?.(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.download));
-      })
-      .finally(() => setBusySave(false));
+    });
   };
 
   return (
@@ -161,14 +162,41 @@ export function NativeTimelineMarkdownPreview({
                     size="300"
                     radii="300"
                     disabled={busySave}
+                    aria-busy={busySave ? true : undefined}
                     data-native-timeline-file-download="true"
                     onClick={download}
                     aria-label={`Download ${label}`}
                   >
-                    <Text size="B300">{busySave ? 'Downloading…' : 'Download'}</Text>
+                    <Text size="B300">
+                      {nativeTimelineFileSaveButtonLabel(
+                        saveState,
+                        busySave && progressVisible,
+                        'Download'
+                      )}
+                    </Text>
                   </Button>
                 </Box>
               </Header>
+              {saveState?.kind === 'done' ? (
+                <NativeTimelineNotice
+                  tone={revealError ? 'error' : 'info'}
+                  message={revealError ?? nativeTimelineFileSavedMessage(saveState.filename)}
+                  action={{
+                    label: 'Show in folder',
+                    onClick: () =>
+                      revealNativeTimelineSavedFile(saveState.filename, setRevealError),
+                  }}
+                  onDismiss={() => dismissNativeTimelineFileSave(target.handleId)}
+                />
+              ) : null}
+              {saveState?.kind === 'failed' ? (
+                <NativeTimelineNotice
+                  tone="error"
+                  message={saveState.message}
+                  action={saveState.retryable ? { label: 'Retry', onClick: download } : undefined}
+                  onDismiss={() => dismissNativeTimelineFileSave(target.handleId)}
+                />
+              ) : null}
               <Scroll hideTrack variant="Background" visibility="Hover">
                 <div className={htmlCss.FilePreviewBody}>
                   {status.kind === 'loading' ? (

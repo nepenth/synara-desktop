@@ -1,4 +1,4 @@
-import { saveMatrixMediaFile } from '../../matrix/media';
+import { saveMatrixMediaFile, type MatrixMediaSaveEvent } from '../../matrix/media';
 
 const FALLBACK_FILE_NAME = 'download';
 
@@ -13,19 +13,23 @@ export const nativeTimelineFileDownloadName = (filename?: string): string => {
  *
  * The synara-media protocol only serves magic-sniffed inline types (image,
  * audio, video, PDF). Generic files including `text/markdown` are not displayed
- * from that URL. Rust downloads and writes the file, then returns the filename.
+ * from that URL. Rust downloads and writes the file, then returns the name it
+ * got in Downloads (`name (1).ext` when the name was taken).
  */
-export const saveNativeTimelineFileAttachment = async ({
-  handleId,
-  filename,
-}: {
-  handleId: string;
-  filename?: string;
-  mimeType?: string;
-}): Promise<void> => {
+export const saveNativeTimelineFileAttachment = async (
+  {
+    handleId,
+    filename,
+  }: {
+    handleId: string;
+    filename?: string;
+    mimeType?: string;
+  },
+  onProgress?: (event: MatrixMediaSaveEvent) => void
+): Promise<string> => {
   const trimmedHandle = handleId.trim();
   if (!trimmedHandle) {
     throw new Error('File attachment is unavailable.');
   }
-  await saveMatrixMediaFile(trimmedHandle, nativeTimelineFileDownloadName(filename));
+  return saveMatrixMediaFile(trimmedHandle, nativeTimelineFileDownloadName(filename), onProgress);
 };

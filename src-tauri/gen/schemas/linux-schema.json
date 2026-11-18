@@ -507,6 +507,12 @@
           "markdownDescription": "Enables the desktop_request_notification_permission command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_reveal_download command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-reveal-download",
+          "markdownDescription": "Enables the desktop_reveal_download command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_save_file command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-save-file",
@@ -2173,6 +2179,12 @@
           "type": "string",
           "const": "deny-desktop-request-notification-permission",
           "markdownDescription": "Denies the desktop_request_notification_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_reveal_download command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-reveal-download",
+          "markdownDescription": "Denies the desktop_reveal_download command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_save_file command without any pre-configured scope.",

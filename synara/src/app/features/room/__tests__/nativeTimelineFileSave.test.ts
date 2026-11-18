@@ -84,6 +84,27 @@ test('generic file attachments use the same Rust save path', async () => {
   });
 });
 
+test('the save returns the name Rust gave the file in Downloads', async () => {
+  const progress: unknown[] = [];
+  await withDesktopInvoke(
+    async (command) => {
+      if (command === 'matrix_media_save') return { filename: 'archive (1).zip' };
+      throw new Error(`unexpected ${command}`);
+    },
+    async () => {
+      assert.equal(
+        await saveNativeTimelineFileAttachment(
+          { handleId: MARKDOWN_HANDLE, filename: 'archive.zip' },
+          (event) => progress.push(event)
+        ),
+        'archive (1).zip'
+      );
+    }
+  );
+  // No Tauri callback registry here, so no channel and no events.
+  assert.deepEqual(progress, []);
+});
+
 test('missing handle fails closed before invoking download', async () => {
   const calls: Array<{ command: string }> = [];
   await withDesktopInvoke(

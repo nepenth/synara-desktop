@@ -3200,7 +3200,7 @@ async fn media_config_desktop_owner_keeps_the_live_client_and_closed_no_session_
     }
     assert!(media_owner.contains("is_timeline_media_handle"));
     assert!(media_owner.contains("MediaFormat::File"));
-    assert!(media_owner.contains("download_media_bounded("));
+    assert!(media_owner.contains("download_media_bounded_with_progress("));
     assert!(media_owner.contains("MAX_MEDIA_DOWNLOAD_BYTES"));
     assert!(media_owner.contains("MAX_MEDIA_TEXT_PREVIEW_BYTES"));
     assert!(media_owner.contains("save_exclusive_download"));

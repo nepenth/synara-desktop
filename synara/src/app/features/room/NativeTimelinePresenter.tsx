@@ -64,7 +64,16 @@ import {
   selectNativeTimelinePinAction,
   toggleNativePollSelection,
 } from './nativeTimelineActions';
-import { saveNativeTimelineFileAttachment } from './nativeTimelineFileSave';
+import {
+  noteNativeTimelineFileSaveRoom,
+  startNativeTimelineFileSave,
+  useNativeTimelineFileSave,
+  useNativeTimelineFileSaveProgressVisible,
+} from './nativeTimelineFileSaveState';
+import {
+  NativeTimelineFileSaveProgress,
+  NativeTimelineFileSaveResult,
+} from './NativeTimelineFileSaveStatus';
 import { NativeTimelineMarkdownPreview } from './NativeTimelineMarkdownPreview';
 import {
   isNativeTimelineMarkdownAttachment,
@@ -1542,62 +1551,70 @@ const FOCUSED_OPEN_FAILED =
   'That message could not be opened. Showing the latest messages instead.';
 const STREAM_GAP_FAILED = 'Some new messages could not be loaded.';
 
+/**
+ * A file attachment: its name (preview or download), progress once a save
+ * takes a while, and the saved or failed line under it. The save lives in
+ * `nativeTimelineFileSaveState`, so it survives the row remounting and is the
+ * same save the media viewer and markdown preview show.
+ */
 const NativeTimelineFileChip = ({
   handleId,
   filename,
   mimeType,
-  onActionError,
   onOpenMarkdownPreview,
 }: {
   handleId: string;
   filename?: string;
   mimeType?: string;
-  onActionError?: (message: string) => void;
   onOpenMarkdownPreview?: (file: NativeTimelineFilePreviewTarget) => void;
 }) => {
-  const [busy, setBusy] = useState(false);
+  const save = useNativeTimelineFileSave(handleId);
+  const busy = save?.kind === 'downloading' || save?.kind === 'finishing';
+  const progressVisible = useNativeTimelineFileSaveProgressVisible(save);
   const label = filename?.trim() || 'Download file';
   const markdown = isNativeTimelineMarkdownAttachment({ filename, mimeType });
   const download = () => {
-    if (busy) return;
-    setBusy(true);
-    void saveNativeTimelineFileAttachment({ handleId, filename, mimeType })
-      .catch((error) => {
-        onActionError?.(nativeTimelineActionErrorMessage(error, TIMELINE_ACTION_FAILED.download));
-      })
-      .finally(() => setBusy(false));
+    void startNativeTimelineFileSave({ handleId, filename, mimeType });
   };
   return (
-    <Box gap="200" alignItems="Baseline" wrap="Wrap">
-      <button
-        type="button"
-        className={htmlCss.FileDownload}
-        data-native-timeline-file-open={markdown ? 'preview' : 'download'}
-        data-native-timeline-file-download={markdown ? undefined : 'true'}
-        aria-label={markdown ? `Preview ${label}` : `Download ${label}`}
-        disabled={busy}
-        onClick={() => {
-          if (markdown) {
-            onOpenMarkdownPreview?.({ handleId, filename, mimeType });
-            return;
-          }
-          download();
-        }}
-      >
-        {busy && !markdown ? 'Downloading…' : label}
-      </button>
-      {markdown ? (
+    <Box direction="Column" gap="100">
+      <Box gap="200" alignItems="Center" wrap="Wrap">
         <button
           type="button"
           className={htmlCss.FileDownload}
-          data-native-timeline-file-download="true"
-          aria-label={`Download ${label}`}
-          disabled={busy}
-          onClick={download}
+          data-native-timeline-file-open={markdown ? 'preview' : 'download'}
+          data-native-timeline-file-download={markdown ? undefined : 'true'}
+          aria-label={markdown ? `Preview ${label}` : `Download ${label}`}
+          aria-busy={!markdown && busy ? true : undefined}
+          disabled={!markdown && busy}
+          onClick={() => {
+            if (markdown) {
+              onOpenMarkdownPreview?.({ handleId, filename, mimeType });
+              return;
+            }
+            download();
+          }}
         >
-          {busy ? 'Downloading…' : 'Download'}
+          {label}
         </button>
-      ) : null}
+        {markdown ? (
+          <button
+            type="button"
+            className={htmlCss.FileDownload}
+            data-native-timeline-file-download="true"
+            aria-label={`Download ${label}`}
+            aria-busy={busy ? true : undefined}
+            disabled={busy}
+            onClick={download}
+          >
+            Download
+          </button>
+        ) : null}
+        {busy && progressVisible ? (
+          <NativeTimelineFileSaveProgress state={save} label={label} />
+        ) : null}
+      </Box>
+      <NativeTimelineFileSaveResult handleId={handleId} state={save} onRetry={download} />
     </Box>
   );
 };
@@ -1635,7 +1652,6 @@ const NativeTimelineMedia = ({
   caption,
   formattedCaption,
   sticker,
-  onActionError,
   onOpenMarkdownPreview,
   onOpenMediaViewer,
 }: {
@@ -1645,7 +1661,6 @@ const NativeTimelineMedia = ({
   caption?: string;
   formattedCaption?: string;
   sticker?: boolean;
-  onActionError?: (message: string) => void;
   onOpenMarkdownPreview?: (file: NativeTimelineFilePreviewTarget) => void;
   onOpenMediaViewer?: (target: NativeTimelineMediaViewerTarget) => void;
 }) => {
@@ -1683,7 +1698,6 @@ const NativeTimelineMedia = ({
           handleId={media.handleId}
           filename={filename}
           mimeType={media.mimeType}
-          onActionError={onActionError}
           onOpenMarkdownPreview={onOpenMarkdownPreview}
         />
         {captionView}
@@ -1748,7 +1762,6 @@ const NativeTimelineMedia = ({
           handleId={media.handleId}
           filename={filename}
           mimeType={media.mimeType}
-          onActionError={onActionError}
         />
         {captionView}
         <Text size="T200" className={htmlCss.Metadata}>
@@ -2626,7 +2639,6 @@ const NativeTimelineRowImpl = ({
                     filename={row.mediaFilename}
                     caption={row.mediaCaption}
                     formattedCaption={row.formattedBody}
-                    onActionError={onActionError}
                     onOpenMarkdownPreview={onOpenMarkdownPreview}
                     onOpenMediaViewer={onOpenMediaViewer}
                   />
@@ -3141,6 +3153,8 @@ export function NativeTimelinePresenter({
     setFilePreview(undefined);
     setMediaViewer(undefined);
   }, [eventId, roomId]);
+  // Saved and failed file lines stay until dismissed or the room changes.
+  useEffect(() => noteNativeTimelineFileSaveRoom(roomId), [roomId]);
   const pendingBackwardGrowRef = useRef(false);
   const lastParkedStartRef = useRef(-1);
   const lastClientHeightRef = useRef(0);
@@ -4747,7 +4761,6 @@ export function NativeTimelinePresenter({
             <NativeTimelineMarkdownPreview
               target={filePreview}
               onClose={() => setFilePreview(undefined)}
-              onActionError={showActionError}
             />
           ) : null}
           {mediaViewer ? (
