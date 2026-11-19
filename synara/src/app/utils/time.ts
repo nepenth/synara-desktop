@@ -18,8 +18,9 @@ export const timeMon = (ts: number): string => dayjs(ts).format('MMM');
 export const timeMonth = (ts: number): string => dayjs(ts).format('MMMM');
 export const timeYear = (ts: number): string => dayjs(ts).format('YYYY');
 
+/** `2:03 PM`, or `14:03` on the 24-hour clock. The 12-hour hour is not zero-padded. */
 export const timeHourMinute = (ts: number, hour24Clock: boolean): string =>
-  dayjs(ts).format(hour24Clock ? 'HH:mm' : 'hh:mm A');
+  dayjs(ts).format(hour24Clock ? 'HH:mm' : 'h:mm A');
 
 /**
  * The clock time for a timeline's left gutter, as Slack draws it: `8:22` or

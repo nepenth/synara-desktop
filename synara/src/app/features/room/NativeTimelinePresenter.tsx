@@ -1886,8 +1886,9 @@ const NativeTimelineSenderAvatar = ({ row }: { row: NativeTimelineViewRow }) => 
 };
 
 /**
- * A message's time: in the header beside the sender, or in the left gutter of
- * a grouped row (`gutter`). Hovering the time itself shows the full date and
+ * A message's time: in the header beside the sender (time only, `2:03 PM`; the
+ * day heading carries the date), or in the left gutter of a grouped row
+ * (`gutter`). Hovering the time itself shows the full date and
  * time above it; the message text never gets a tooltip. The gutter draws the
  * short clock (`8:22`) and gives screen readers the full date and time.
  */
@@ -1928,7 +1929,9 @@ const NativeTimelineTimestamp = ({
             <span className={htmlCss.VisuallyHidden}>{full}</span>
           </time>
         ) : (
+          // Time only: the day heading above carries the date.
           <Time
+            compact
             ref={triggerRef}
             ts={ts}
             hour24Clock={hour24Clock}

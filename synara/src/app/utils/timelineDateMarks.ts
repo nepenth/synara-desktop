@@ -29,9 +29,21 @@ export const formatTimelineDayLabel = (timestampMs: number): string => {
   return timeDayMonthYear(timestampMs);
 };
 
-/** A day heading in the timeline: "Today", "Yesterday" or the weekday and date. */
-export const formatTimelineDayHeading = (timestampMs: number): string => {
+const ordinalDay = (day: number): string => {
+  const teens = day % 100;
+  if (teens >= 11 && teens <= 13) return `${day}th`;
+  return `${day}${['th', 'st', 'nd', 'rd'][day % 10] ?? 'th'}`;
+};
+
+/**
+ * A day heading in the timeline, short as Slack's: "Today", "Yesterday",
+ * "Nov 14th", and "Nov 14th, 2025" for a day in another year. Messages under
+ * it show only their time, so this is where the date lives.
+ */
+export const formatTimelineDayHeading = (timestampMs: number, now: number = Date.now()): string => {
   if (today(timestampMs)) return 'Today';
   if (yesterday(timestampMs)) return 'Yesterday';
-  return dayjs(timestampMs).format('dddd, D MMMM YYYY');
+  const day = dayjs(timestampMs);
+  const label = `${day.format('MMM')} ${ordinalDay(day.date())}`;
+  return day.year() === dayjs(now).year() ? label : `${label}, ${day.year()}`;
 };
