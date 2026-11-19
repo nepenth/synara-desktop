@@ -34,7 +34,8 @@ test('the bar: four places, icons with tooltips, labels once the column is wide'
   await expect(barItem(page, 'home')).toHaveAttribute('aria-current', 'page');
   await expect(barItem(page, 'home')).toHaveAccessibleName('Home');
   await expect(barItem(page, 'activity')).toHaveAccessibleName('Activity');
-  await expect(barItem(page, 'account')).toHaveAttribute('aria-haspopup', 'menu');
+  // The avatar opens Settings itself (a dialog), not a menu.
+  await expect(barItem(page, 'account')).toHaveAttribute('aria-haspopup', 'dialog');
   // One pending approval from Core: a red count, and the name says so.
   await expect(barItem(page, 'approvals')).toHaveAccessibleName(/^Approvals · 1 pending/);
   await expect(barItem(page, 'approvals').locator('[data-badge-role="mention"]')).toHaveText('1');
@@ -60,7 +61,7 @@ test('the bar: four places, icons with tooltips, labels once the column is wide'
   await expect(bar(page)).toContainText('Home');
   await expect(bar(page)).toContainText('Activity');
   await expect(bar(page)).toContainText('Approvals');
-  await expect(bar(page)).toContainText('Account');
+  await expect(bar(page)).toContainText('Settings');
 
   // The bar sits at the bottom of the list column, below the scrolling list.
   const paneBox = (await pane(page).boundingBox())!;
@@ -96,25 +97,24 @@ test('Home: badge, right-click and Shift+F10 open "Mark as read"', async ({ page
   await expect(page.locator('body')).toHaveAttribute('data-read-rooms', /!room-00:example\.test/);
 });
 
-test('the account menu: Settings and Log out, focus back on the avatar', async ({ page }) => {
+test('the Settings avatar toggles Settings, with no menu', async ({ page }) => {
   await open(page);
-  // No cross-signing to offer in the fixture: no warning and no verify entry.
-  await expect(barItem(page, 'account')).toHaveAccessibleName('Account');
-  await barItem(page, 'account').click();
-  await expect(barItem(page, 'account')).toHaveAttribute('aria-expanded', 'true');
-  const settings = page.getByRole('button', { name: /^Settings/ });
-  await expect(settings).toBeVisible();
-  await expect(settings).toHaveAttribute(
+  // No cross-signing to offer in the fixture: no warning, and the plain name.
+  const avatar = barItem(page, 'account');
+  await expect(avatar).toHaveAccessibleName('Settings');
+  await expect(avatar).toHaveAttribute(
     'aria-keyshortcuts',
     (await isMac(page)) ? 'Control+4' : 'Alt+4'
   );
-  await expect(page.getByRole('button', { name: 'Log out', exact: true })).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: /^(Verify this device|Review unverified)/ })
-  ).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await expect(settings).toHaveCount(0);
-  await expect(barItem(page, 'account')).toBeFocused();
+  await expect(avatar).toHaveAttribute('aria-expanded', 'false');
+  // This fixture has no Settings dialog mounted, so the press only toggles
+  // the open state; e2e/settings-entry.spec.ts covers the dialog itself.
+  await avatar.click();
+  await expect(avatar).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Log out', exact: true })).toHaveCount(0);
+  await avatar.click();
+  await expect(avatar).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('the switcher lists Home and every space, with folders and a filter', async ({ page }) => {

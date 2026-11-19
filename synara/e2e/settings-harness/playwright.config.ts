@@ -9,6 +9,7 @@ export default defineConfig({
   testMatch: [
     'settings-layout.spec.ts',
     'settings-screens.spec.ts',
+    'settings-entry.spec.ts',
     'device-verification-prompt.spec.ts',
     'viewport-matrix.spec.ts',
   ],

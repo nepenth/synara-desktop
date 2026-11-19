@@ -12,6 +12,8 @@ import {
 import { SettingsSection } from '../../../components/settings-layout';
 import { composerErrorMessage } from '../../room/composerSendError';
 import { InlineMessage } from '../../../components/inline-message';
+import { useSetting } from '../../../state/hooks/settings';
+import { settingsAtom } from '../../../state/settings';
 
 const categories = [
   ['notifyToolActivity', 'Notify for tool activity', 'Messages starting with “🛠 Tool activity”.'],
@@ -31,6 +33,10 @@ export function AgentNotifications() {
   const [message, setMessage] = useState<{ tone: 'success' | 'critical'; text: string }>();
   const savingRef = useRef(false);
   const agentIdInput = useId();
+  const [showApprovalDetails, setShowApprovalDetails] = useSetting(
+    settingsAtom,
+    'showApprovalNotificationDetails'
+  );
 
   const refresh = useCallback(async () => {
     if (savingRef.current) return;
@@ -107,7 +113,7 @@ export function AgentNotifications() {
   return (
     <SettingsSection
       title="Agent notifications"
-      description="Changes save to your account and apply on every Synara client."
+      description="Agent accounts and categories save to your account and apply on every Synara client. Show approval details applies to this device only."
     >
       <SequenceCard
         className={SequenceCardStyle}
@@ -220,6 +226,13 @@ export function AgentNotifications() {
           </Box>
         )}
         {!saving && message && <InlineMessage tone={message.tone}>{message.text}</InlineMessage>}
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Show approval details"
+          description="Show the reason and requested command in agent approval notifications. When off, approval notifications only name the room."
+          after={<Switch value={showApprovalDetails} onChange={setShowApprovalDetails} />}
+        />
       </SequenceCard>
     </SettingsSection>
   );

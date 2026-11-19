@@ -183,7 +183,7 @@ test('hiding typing and read receipts still marks the visible tail read privatel
   );
   assert.match(view, /publicReceipt: readReceiptsArePublic\(\)/);
   const general = readFileSync(
-    join(process.cwd(), 'src/app/features/settings/general/General.tsx'),
+    join(process.cwd(), 'src/app/features/settings/privacy/Privacy.tsx'),
     'utf8'
   );
   assert.match(general, /still marks rooms as read privately/);

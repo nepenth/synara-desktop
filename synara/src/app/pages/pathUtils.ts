@@ -17,6 +17,7 @@ import {
   REGISTER_PATH,
   RESET_PASSWORD_PATH,
   ROOT_PATH,
+  SETTINGS_PAGE_PATH,
   SETTINGS_PATH,
   CREATE_PATH,
 } from './paths';
@@ -160,4 +161,13 @@ export const getInboxPath = (): string => INBOX_PATH;
 export const getInboxNotificationsPath = (): string => INBOX_NOTIFICATIONS_PATH;
 export const getInboxInvitesPath = (): string => INBOX_INVITES_PATH;
 export const getInboxLaterPath = (): string => INBOX_LATER_PATH;
-export const getSettingsPath = (): string => SETTINGS_PATH;
+/**
+ * App Settings; with a page slug, that page, and with a row title, that row.
+ * `getSettingsPath()` keeps opening the last page viewed.
+ */
+export const getSettingsPath = (page?: string, setting?: string): string => {
+  if (!page) return SETTINGS_PATH;
+  // generatePath drops the trailing slash the route is written with.
+  const path = `${trimTrailingSlash(generatePath(SETTINGS_PAGE_PATH, { page }))}/`;
+  return setting ? `${path}?${new URLSearchParams({ setting }).toString()}` : path;
+};

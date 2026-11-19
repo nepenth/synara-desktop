@@ -33,7 +33,7 @@ import {
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent } from '../../../components/page';
 import { NavPaneHeader } from '../../../features/nav-pane/NavPaneHeader';
-import { NavBottomBar } from '../../../features/nav-pane/NavBottomBar';
+import { NavBottomBarSlot } from '../../../features/nav-pane/NavBottomBarSlot';
 import { HideRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 import { stopPropagation } from '../../../utils/keyboard';
 import * as depthCss from '../../../styles/Depth.css';
@@ -180,7 +180,7 @@ export function Explore() {
     <PageNav
       label="Explore"
       header={<NavPaneHeader title="Explore rooms" actions={<HideRoomListButton />} />}
-      footer={<NavBottomBar />}
+      footer={<NavBottomBarSlot />}
     >
       <PageNavContent>
         <Box direction="Column" gap="300">

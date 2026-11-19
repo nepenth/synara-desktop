@@ -12,6 +12,8 @@ type InfoCardProps = {
   before?: ReactNode;
   after?: ReactNode;
   children?: ReactNode;
+  /** A settings row in its own right: settings search can scroll to it by title. */
+  settingRow?: boolean;
 };
 export function InfoCard({
   variant = 'Primary',
@@ -20,12 +22,14 @@ export function InfoCard({
   before,
   after,
   children,
+  settingRow,
 }: InfoCardProps) {
   return (
     <Box
       direction="Column"
       className={classNames(css.InfoCard, ContainerClr({ variant }))}
       gap="300"
+      data-setting-title={settingRow && typeof title === 'string' ? title : undefined}
     >
       <Box gap="200" alignItems="Center">
         {before && (

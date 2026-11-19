@@ -78,7 +78,8 @@
       },
       "trending": "Trending",
       "command_description": "Search for a GIF to send. Example: /gif high five",
-      "command_disabled": "Turn on GIF Search in Settings > General to use /gif.",
+      "command_disabled": "Turn on GIF search in Settings → Media & links to use /gif.",
+      "open_settings": "Open settings",
       "command_unconfigured": "GIF search is not set up for this app."
     },
     "later": {

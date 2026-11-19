@@ -177,7 +177,8 @@ test('honest call availability copy does not offer join or start', () => {
 test('call chrome never writes call membership or set_call', () => {
   const header = readFileSync('src/app/features/room/RoomViewHeader.tsx', 'utf8');
   const voice = readFileSync('src/app/features/room/VoiceRoom.tsx', 'utf8');
-  const general = readFileSync('src/app/features/settings/general/General.tsx', 'utf8');
+  // The call status and transport rows live on Settings › Advanced › Calls.
+  const general = readFileSync('src/app/features/settings/advanced/Advanced.tsx', 'utf8');
   const chip = readFileSync('src/app/features/room-nav/LiveCallChip.tsx', 'utf8');
   for (const [name, source] of Object.entries({ header, voice, general, chip })) {
     assert.doesNotMatch(source, /set_call/, name);

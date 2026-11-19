@@ -916,10 +916,6 @@ function TextAndZoom() {
       <FontSettings />
 
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-        <ThreadDisplaySetting />
-      </SequenceCard>
-
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title="Page zoom"
           description="Scale the whole interface, from 75% to 200%. Press Enter to apply."
@@ -1095,7 +1091,7 @@ function MessageDisplay() {
   );
 
   return (
-    <SettingsSection title="Messages">
+    <SettingsSection title="Message display">
       {!isNativeMatrixSession() && (
         <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
           <SettingTile title="Message layout" after={<SelectMessageLayout />} />
@@ -1103,6 +1099,9 @@ function MessageDisplay() {
       )}
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile title="Message spacing" after={<SelectMessageSpacing />} />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <ThreadDisplaySetting />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
