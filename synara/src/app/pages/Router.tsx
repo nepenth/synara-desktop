@@ -77,6 +77,7 @@ import { SearchModalRenderer } from '../features/search';
 import { getActiveSession } from '../state/sessionBootstrap';
 import { AppSettingsRenderer, Settings } from '../features/settings';
 import { NavBottomBarHost } from '../features/nav-pane/NavBottomBarSlot';
+import { WhatsNewHost } from '../features/whats-new/WhatsNewCard';
 import { settingsPageFromSlug } from '../features/settings/settingsPages';
 import { SettingsModal } from '../components/settings-layout';
 import { RouteError } from './RouteError';
@@ -184,6 +185,8 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                       <ClientNonUIFeatures>
                         <ClientLayout>
                           <Outlet />
+                          {/* "What's new" after an update, in the shell's corner. */}
+                          <WhatsNewHost />
                         </ClientLayout>
                         <SearchModalRenderer />
                         <UserRoomProfileRenderer />

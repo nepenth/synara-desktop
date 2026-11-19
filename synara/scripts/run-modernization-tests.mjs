@@ -107,6 +107,7 @@ const tests = [
   'src/app/pages/__tests__/leftoverBrowserClientGuard.test.ts',
   'src/app/utils/__tests__/desktop.test.ts',
   'src/app/utils/__tests__/desktopUpdater.test.ts',
+  'src/app/features/whats-new/__tests__/whatsNewNotes.test.ts',
   'src/app/platform/__tests__/platform.test.ts',
   'src/app/platform/__tests__/legacyServiceWorkers.test.ts',
   'src/app/platform/__tests__/agentActions.test.ts',

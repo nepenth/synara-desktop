@@ -151,7 +151,12 @@ test('a page name lists its settings, and a page with none still appears', () =>
   const about = search('about');
   assert.equal(about.length, 1);
   assert.equal(about[0].pageName, 'About');
-  assert.equal(about[0].results[0].title, 'Credits');
+  assert.deepEqual(
+    about[0].results.map((result) => result.title),
+    ["What's new", 'Credits']
+  );
+  assert.deepEqual(first('release notes'), { page: 'About', title: "What's new" });
+  assert.deepEqual(first("what's new"), { page: 'About', title: "What's new" });
 
   const bare = searchSettings(
     [{ id: 'members', name: 'Members', keywords: ['people'] }],

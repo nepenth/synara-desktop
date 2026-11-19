@@ -558,7 +558,11 @@ export const SETTINGS_INVENTORY: InventoryPage[] = [
   {
     page: 'About',
     group: 'Advanced',
-    sections: [{ title: 'Credits', was: 'About › Credits', rows: [] }],
+    sections: [
+      // New in 3.2: this version's bundled "What's new" notes, read-only.
+      { title: "What's new", was: "About › What's new", rows: [] },
+      { title: 'Credits', was: 'About › Credits', rows: [] },
+    ],
   },
 ];
 

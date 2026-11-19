@@ -27,6 +27,7 @@ import {
   shouldShowDeviceVerificationPrompt,
   VERIFY_DEVICE_PROMPT_COPY,
 } from './nativeIdentityReset';
+import { useBlockWhatsNew } from '../../state/whatsNew';
 
 function RecoveryKeyStep() {
   const { status, loading, refresh } = useNativeSecretStorage();
@@ -70,6 +71,8 @@ export function DeviceVerificationPromptRenderer() {
     if (chosen.current === 'reset' || chosen.current === 'hidden') return;
     choose('hidden');
   };
+  // "Verify This Device" (and Reset Identity after it) comes before "What's new".
+  useBlockWhatsNew(view !== 'hidden');
 
   if (view === 'hidden') return null;
   if (view === 'reset') return <IdentityResetDialog onClose={() => setView('hidden')} />;
