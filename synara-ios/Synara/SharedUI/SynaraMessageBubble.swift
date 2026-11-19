@@ -401,15 +401,39 @@ enum SynaraPlainTextLinks {
         let ns = text as NSString
         let matches = detector.matches(in: text, range: NSRange(location: 0, length: ns.length))
         return matches.compactMap { match in
-            guard let url = match.url,
-                  let scheme = url.scheme?.lowercased(),
-                  allowedSchemes.contains(scheme),
-                  scheme == "mailto" || isIntendedLink(ns.substring(with: match.range), in: ns, at: match.range.location)
+            guard let detected = match.url,
+                  let scheme = detected.scheme?.lowercased(),
+                  allowedSchemes.contains(scheme)
             else {
                 return nil
             }
-            return (match.range, url)
+            if scheme == "mailto" {
+                return (match.range, detected)
+            }
+            let written = ns.substring(with: match.range)
+            guard isIntendedLink(written, in: ns, at: match.range.location) else {
+                return nil
+            }
+            return (match.range, webURL(written: written, detected: detected))
         }
+    }
+
+    /// The address a detected web link opens. One written with its scheme
+    /// keeps it. A bare one (`example.com`, `www.example.com`) opens over
+    /// `http://`, as desktop's linkify does: the data detector picks the
+    /// scheme itself and changed it to `https://` in iOS 27.2, so the same
+    /// message would otherwise open differently by OS version and client.
+    static func webURL(written: String, detected: URL) -> URL {
+        if written.lowercased().range(of: "^[a-z][a-z0-9+.-]*:", options: .regularExpression) != nil {
+            return detected
+        }
+        guard var components = URLComponents(url: detected, resolvingAgainstBaseURL: false),
+              components.scheme?.lowercased() == "https"
+        else {
+            return detected
+        }
+        components.scheme = "http"
+        return components.url ?? detected
     }
 
     /// Endings that are real top-level domains but, written bare, almost

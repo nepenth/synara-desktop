@@ -425,6 +425,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The Xcode 27 image can unmount a simulator runtime shortly after
+      # CoreSimulator first starts (synara-ios/scripts/ci-simulator.sh). Start
+      # it now so that happens during the Rust build, and log what the image has.
+      - name: Settle iOS simulator runtimes
+        run: synara-ios/scripts/ci-simulator.sh settle || echo "::warning::iOS simulator runtimes did not settle; the test step boots and checks its own runtime"
+
       - name: Install Rust 1.96 and Apple targets
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
@@ -460,6 +466,12 @@ jobs:
           RUN_IOS_TESTS: "1"
           IOS_TEST_SUITE: unit
           IOS_TEST_RETRY_ON_FAILURE: "1"
+          # One fresh, booted iPhone 17 on the iOS 27.2 runtime (the newest the
+          # image lists for Xcode 27.2), serially: parallel testing boots extra
+          # clones, which timed out on the preview image and add nothing to a
+          # suite that runs in seconds.
+          IOS_SIMULATOR_RUNTIME: "27.2"
+          IOS_PARALLEL_TESTING: "NO"
           SYNARA_CORE_APPLE_SLICES: ${{ github.event_name == 'workflow_dispatch' && (inputs.apple_slices == 'all' || inputs.check_ios_device_release) && 'all' || 'simulator-arm64' }}
           CHECK_IOS_DEVICE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.check_ios_device_release && '1' || '0' }}
 
@@ -500,6 +512,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The Xcode 27 image can unmount a simulator runtime shortly after
+      # CoreSimulator first starts (synara-ios/scripts/ci-simulator.sh). Start
+      # it now so that happens during the Rust build, and log what the image has.
+      - name: Settle iOS simulator runtimes
+        run: synara-ios/scripts/ci-simulator.sh settle || echo "::warning::iOS simulator runtimes did not settle; the test step boots and checks its own runtime"
+
       - name: Install Rust 1.96 and Apple targets
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
@@ -535,6 +553,7 @@ jobs:
           RUN_IOS_TESTS: "1"
           IOS_TEST_SUITE: ui
           IOS_TEST_RETRY_ON_FAILURE: "1"
+          IOS_SIMULATOR_RUNTIME: "27.2"
           SYNARA_CORE_APPLE_SLICES: simulator-arm64
 
       - name: Upload iOS UI result bundles

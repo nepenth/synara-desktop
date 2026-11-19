@@ -330,6 +330,22 @@ listed in the [Xcode 27 runner image](https://github.com/actions/runner-images/b
 so the app is built with the iOS 27 SDK. That image is a public preview on
 GitHub; if a job fails on the runner itself, check the image's announcements
 before the code. The deployment target stays iOS 16.
+
+The simulator test jobs set `IOS_SIMULATOR_RUNTIME=27.2`: `synara-ios/scripts/ci-build.sh`
+then creates a fresh iPhone 17 on exactly that runtime with
+`synara-ios/scripts/ci-simulator.sh boot`, waits for `simctl bootstatus`, and
+tests on its UDID, rather than on whichever "iPhone 17" xcodebuild picks by
+name. The unit suite runs on that one device without parallel clones. Each job
+first runs `ci-simulator.sh settle`, which starts CoreSimulator and waits for
+the runtimes to be mounted: on this image `simdiskimaged` can unmount a runtime
+soon after CoreSimulator starts
+([runner-images#14946](https://github.com/actions/runner-images/issues/14946),
+[#15334](https://github.com/actions/runner-images/issues/15334)), which showed
+up as "The iOS 27.2 simulator runtime is not available" and as clones that never
+answered. A failed test step prints the runtime state and the `simdiskimaged`
+log. The App Store requirement is the SDK the app is built with, not the
+simulator OS, so if 27.2 stays unreliable on the image, `IOS_SIMULATOR_RUNTIME`
+can drop to 27.0 while the build keeps the iOS 27.2 SDK.
 The selected version is checked before Swift cache work; the nightly device
 cache seed checks it directly. Apple Rust cache identities include
 `DEVELOPER_DIR`, Xcode build, macOS/iOS/simulator SDK versions and Rust compiler,

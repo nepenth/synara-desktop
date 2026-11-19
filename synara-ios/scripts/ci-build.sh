@@ -270,6 +270,13 @@ xcodebuild \
   "${UNSIGNED_BUILD_ARGS[@]}"
 
 if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
+  # CI names the simulator runtime (IOS_SIMULATOR_RUNTIME, e.g. 27.2): test on
+  # a fresh device on exactly that runtime, booted before xcodebuild starts,
+  # instead of whichever "iPhone 17" xcodebuild resolves by name.
+  if [[ -n "${IOS_SIMULATOR_RUNTIME:-}" ]]; then
+    simulator_udid="$("$SCRIPT_DIR/ci-simulator.sh" boot "$IOS_SIMULATOR_RUNTIME" "${IOS_SIMULATOR_DEVICE:-iPhone 17}")"
+    TEST_DESTINATION="platform=iOS Simulator,id=$simulator_udid"
+  fi
   test_command=(
     xcodebuild
     -project Synara.xcodeproj
@@ -293,7 +300,14 @@ if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
     test-without-building
     "${UNSIGNED_BUILD_ARGS[@]}"
   )
-  "${test_command[@]}"
+  test_status=0
+  "${test_command[@]}" || test_status=$?
+  if [[ "$test_status" -ne 0 ]]; then
+    if [[ -n "${IOS_SIMULATOR_RUNTIME:-}" ]]; then
+      "$SCRIPT_DIR/ci-simulator.sh" diagnose || true
+    fi
+    exit "$test_status"
+  fi
 fi
 
 # The simulator product cannot prove the architecture, linkage, or stripped
