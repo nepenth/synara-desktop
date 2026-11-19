@@ -157,6 +157,7 @@ test('the composer keeps its GIF item with GIF search off, and /gif leads to the
   await gif.click();
   const prompt = page.getByTestId('gif-enable-prompt');
   await expect(prompt).toContainText('Enable GIFs?');
+  await shot(page, 'composer-enable-gifs-prompt');
   await prompt.getByRole('button', { name: 'Open settings' }).click();
   await expect(pageTitle(page)).toHaveText('Media & links');
   await expect(page.locator('[data-setting-title="GIF search"]').first()).toBeInViewport();
@@ -171,6 +172,7 @@ test('the composer keeps its GIF item with GIF search off, and /gif leads to the
   await page.keyboard.press('Enter');
   const alert = page.getByRole('alert').filter({ hasText: 'GIF search' });
   await expect(alert).toContainText('Turn on GIF search in Settings → Media & links to use /gif.');
+  await shot(page, 'composer-gif-command-off');
   await alert.getByRole('button', { name: 'Open settings' }).click();
   await expect(pageTitle(page)).toHaveText('Media & links');
 });
