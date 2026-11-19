@@ -47,6 +47,14 @@ struct RoomSummary: Identifiable, Equatable {
     /// `notification_count`), apart from `unreadCount`, which also counts
     /// plain messages. Only the app-icon rule reads it.
     let unreadNotificationCount: Int
+    /// The user's room folder holding this room (`in.synara.room_folders`),
+    /// from Core. Set only for joined rooms that are neither DMs nor spaces;
+    /// favorites keep theirs. Which section shows the room is Core's
+    /// `roomSectionPlacement`, not this field alone.
+    let folderID: String?
+    /// Core's highlight (mention) count; `hasHighlight` is `highlightCount > 0`
+    /// for Core rows. Rows built without it count one mention when highlighted.
+    let highlightCount: Int
 
     /// Legacy display convenience. Unknown never becomes authoritative cleartext.
     var isEncrypted: Bool { encryptionStatus == .encrypted }
@@ -79,7 +87,9 @@ struct RoomSummary: Identifiable, Equatable {
         isEncrypted: Bool? = nil,
         encryptionStatus: SynaraRoomEncryptionStatus? = nil,
         notificationMode: SynaraRoomNotificationMode = .default,
-        unreadNotificationCount: Int = 0
+        unreadNotificationCount: Int = 0,
+        folderID: String? = nil,
+        highlightCount: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -105,6 +115,8 @@ struct RoomSummary: Identifiable, Equatable {
         self.directUserId = directUserId
         self.notificationMode = notificationMode
         self.unreadNotificationCount = unreadNotificationCount
+        self.folderID = folderID
+        self.highlightCount = max(0, highlightCount ?? (hasHighlight ? 1 : 0))
         if let encryptionStatus {
             self.encryptionStatus = encryptionStatus
         } else if let isEncrypted {
@@ -146,6 +158,39 @@ struct RoomSummary: Identifiable, Equatable {
 
     var spaceName: String? {
         primaryParentSpace?.name
+    }
+
+    /// The same row filed in `folderID` (nil: unfiled).
+    func withFolderID(_ folderID: String?) -> RoomSummary {
+        RoomSummary(
+            id: id,
+            name: name,
+            lastMessagePreview: lastMessagePreview,
+            lastMessageIsAgentApproval: lastMessageIsAgentApproval,
+            unreadCount: unreadCount,
+            hasHighlight: hasHighlight,
+            isMarkedUnread: isMarkedUnread,
+            kind: kind,
+            membership: membership,
+            lastActivityAt: lastActivityAt,
+            parentSpaces: parentSpaces,
+            avatarURL: avatarURL,
+            hasAgentActivity: hasAgentActivity,
+            latestAgentCard: latestAgentCard,
+            latestAgentCardEventID: latestAgentCardEventID,
+            pendingAgentApprovals: pendingAgentApprovals,
+            isFavorite: isFavorite,
+            isLowPriority: isLowPriority,
+            isCall: isCall,
+            hasActiveCall: hasActiveCall,
+            activeCallParticipantCount: activeCallParticipantCount,
+            directUserId: directUserId,
+            encryptionStatus: encryptionStatus,
+            notificationMode: notificationMode,
+            unreadNotificationCount: unreadNotificationCount,
+            folderID: folderID,
+            highlightCount: highlightCount
+        )
     }
 }
 
@@ -265,21 +310,41 @@ enum RoomListFavorites {
         let channels: [RoomSummary]
         let directs: [RoomSummary]
         let lowPriority: [RoomSummary]
+        /// Rows Core places in a folder, by folder id, unsorted. They are in
+        /// none of the default sections above.
+        var filed: [String: [RoomSummary]] = [:]
     }
 
     /// Rows per section, unsorted. Spaces are navigation (the space chips)
-    /// and get no row, as on desktop. Joined `m.lowpriority` rooms that are
-    /// not favourites get their own section after the others; Core's section
-    /// orders put them last on desktop too.
-    static func sections(from rooms: [RoomSummary]) -> Sections {
-        let partition = partition(from: rooms.filter { $0.kind != .space })
-        let lowPriority = partition.remaining.filter { $0.membership == .joined && $0.isLowPriority }
-        let rest = partition.remaining.filter { $0.membership != .joined || $0.isLowPriority == false }
+    /// and get no row, as on desktop. Core's `roomSectionPlacement` decides
+    /// Favorites, a folder, or the default sections; a room filed in a folder
+    /// the list does not know (yet) stays in its default section. Joined
+    /// `m.lowpriority` rooms that are not favourites and not filed get their
+    /// own section after the others; Core's section orders put them last on
+    /// desktop too (and inside a folder).
+    static func sections(from rooms: [RoomSummary], folders: [RoomFolderSection] = []) -> Sections {
+        let knownFolderIDs = Set(folders.map(\.id))
+        var favorites: [RoomSummary] = []
+        var filed: [String: [RoomSummary]] = [:]
+        var remaining: [RoomSummary] = []
+        for room in rooms where room.kind != .space {
+            switch RoomListFolders.placement(of: room) {
+            case .favorites:
+                favorites.append(room)
+            case .folder(let folderID) where knownFolderIDs.contains(folderID):
+                filed[folderID, default: []].append(room)
+            case .folder, .default:
+                remaining.append(room)
+            }
+        }
+        let lowPriority = remaining.filter { $0.membership == .joined && $0.isLowPriority }
+        let rest = remaining.filter { $0.membership != .joined || $0.isLowPriority == false }
         return Sections(
-            favorites: partition.favorites,
+            favorites: favorites,
             channels: rest.filter { $0.kind == .room },
             directs: rest.filter { $0.kind == .directMessage },
-            lowPriority: lowPriority
+            lowPriority: lowPriority,
+            filed: filed
         )
     }
 
@@ -319,6 +384,169 @@ enum RoomListFavorites {
     }
 }
 
+/// One user room folder as the room list shows it, from Core's room-list
+/// snapshot (`RoomListSnapshotDto.folders`, `docs/design/room-folders.md`).
+/// Core already applied the section rule: `roomIDs` holds the folder's rooms
+/// that show in it (joined, listed, not DMs or spaces, favorites excluded),
+/// and the orders and unread rollup are over those rooms.
+struct RoomFolderSection: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let roomIDs: [String]
+    let recentOrder: [String]
+    let nameOrder: [String]
+    let unreadHighlight: Int
+    let unreadTotal: Int
+    let unreadRoomIDs: [String]
+
+    init(
+        id: String,
+        name: String,
+        roomIDs: [String] = [],
+        recentOrder: [String]? = nil,
+        nameOrder: [String]? = nil,
+        unreadHighlight: Int = 0,
+        unreadTotal: Int = 0,
+        unreadRoomIDs: [String] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.roomIDs = roomIDs
+        self.recentOrder = recentOrder ?? roomIDs
+        self.nameOrder = nameOrder ?? roomIDs
+        self.unreadHighlight = unreadHighlight
+        self.unreadTotal = unreadTotal
+        self.unreadRoomIDs = unreadRoomIDs
+    }
+
+    init(_ dto: RoomFolderSectionDto) {
+        self.init(
+            id: dto.id,
+            name: dto.name,
+            roomIDs: dto.roomIds,
+            recentOrder: dto.recentOrder,
+            nameOrder: dto.nameOrder,
+            unreadHighlight: Int(dto.unreadHighlight),
+            unreadTotal: Int(dto.unreadTotal),
+            unreadRoomIDs: dto.unreadRoomIds
+        )
+    }
+}
+
+/// Room folder sections of the Rooms list. Core decides which rooms belong
+/// to a folder and their orders; this only picks the rows the open view
+/// lists and which folders show.
+enum RoomListFolders {
+    /// Unread of a folder section, for its header while collapsed.
+    struct Unread: Equatable {
+        let highlight: Int
+        let total: Int
+
+        static let none = Unread(highlight: 0, total: 0)
+
+        var hasUnread: Bool { highlight > 0 || total > 0 }
+    }
+
+    struct Section: Identifiable, Equatable {
+        let folder: RoomFolderSection
+        /// Position among all folders (display order), for Move up / Move down.
+        let index: Int
+        let folderCount: Int
+        /// The rows this view lists, in the list's sort order.
+        let rooms: [RoomSummary]
+        let unread: Unread
+
+        var id: String { folder.id }
+        var key: String { RoomListSectionKey.folder(folder.id) }
+    }
+
+    /// Core's section rule (`room_section_placement`), shared with desktop.
+    static func placement(of room: RoomSummary) -> RoomSectionPlacement {
+        roomSectionPlacement(input: RoomSectionInput(
+            isJoined: room.membership == .joined,
+            isDirect: room.kind == .directMessage,
+            isSpace: room.kind == .space,
+            isFavorite: room.isFavorite,
+            folderId: room.folderID
+        ))
+    }
+
+    /// Core files joined rooms that are neither DMs nor spaces; favorites
+    /// too. Gates the "Move to folder" menu.
+    static func canFile(_ room: RoomSummary) -> Bool {
+        room.membership == .joined && room.kind == .room
+    }
+
+    /// One section per folder, in folder order.
+    ///
+    /// - `filed`: the rows of this view (space and filter chip applied) that
+    ///   Core places in each folder (`RoomListFavorites.Sections.filed`).
+    /// - `isFiltered`: a filter chip other than All, or a search, is active.
+    ///   A folder with no matching rows is then hidden, like any section.
+    /// - Otherwise a folder with no rows here shows (as "No rooms"): always
+    ///   with no space selected; in a space only when the folder holds no
+    ///   rooms anywhere, so a new folder is visible (desktop's rule).
+    static func sections(
+        folders: [RoomFolderSection],
+        filed: [String: [RoomSummary]],
+        order: RoomListSortOrder,
+        selectedSpaceID: String?,
+        isFiltered: Bool
+    ) -> [Section] {
+        folders.enumerated().compactMap { index, folder in
+            let rows = filed[folder.id] ?? []
+            if rows.isEmpty {
+                if isFiltered {
+                    return nil
+                }
+                if selectedSpaceID != nil, folder.roomIDs.isEmpty == false {
+                    return nil
+                }
+            }
+            return Section(
+                folder: folder,
+                index: index,
+                folderCount: folders.count,
+                rooms: ordered(rows, in: folder, order: order),
+                unread: unread(of: folder, rows: rows)
+            )
+        }
+    }
+
+    /// Core's Recent or Name order for the folder (the list's shared sort).
+    /// A row Core did not order (none expected) follows, in Core's general
+    /// order.
+    static func ordered(_ rows: [RoomSummary], in folder: RoomFolderSection, order: RoomListSortOrder) -> [RoomSummary] {
+        let byID = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let ids = order == .name ? folder.nameOrder : folder.recentOrder
+        let ordered = ids.compactMap { byID[$0] }
+        guard ordered.count < byID.count else {
+            return ordered
+        }
+        let placed = Set(ordered.map(\.id))
+        return ordered + RoomListFavorites.sorted(rows.filter { placed.contains($0.id) == false }, order: order)
+    }
+
+    /// Core's rollup when the section lists every room of the folder;
+    /// otherwise (a space or a filter shows some of them) the same rooms'
+    /// counts over the rows shown. Which rooms carry attention (muted rooms
+    /// none) is Core's `unreadRoomIDs` in both cases.
+    static func unread(of folder: RoomFolderSection, rows: [RoomSummary]) -> Unread {
+        let shown = Set(rows.map(\.id))
+        if shown == Set(folder.roomIDs) {
+            return Unread(highlight: folder.unreadHighlight, total: folder.unreadTotal)
+        }
+        let attention = Set(folder.unreadRoomIDs)
+        var highlight = 0
+        var total = 0
+        for row in rows where attention.contains(row.id) {
+            highlight += row.highlightCount
+            total += max(row.unreadBadgeCount, row.highlightCount)
+        }
+        return Unread(highlight: highlight, total: total)
+    }
+}
+
 enum RoomActivityTimestamp {
     static func resolve(latest: Date?, previous: Date?) -> Date {
         switch (latest, previous) {
@@ -350,6 +578,11 @@ protocol RoomListServicing: AnyObject {
     func hasUnreadMessages(roomID: String) -> Bool
     /// The last listed summary of a room, if the list has it.
     func roomSummary(roomID: String) -> RoomSummary?
+    /// The room folders of the last room-list snapshot (Core's
+    /// `RoomListSnapshotDto.folders`), in display order. Read with each
+    /// delivered state: a rename changes no room row, so the state alone
+    /// can be unchanged.
+    func roomFolderSections() -> [RoomFolderSection]
     func clearCache()
 }
 
@@ -380,6 +613,10 @@ extension RoomListServicing {
 
     func roomSummary(roomID: String) -> RoomSummary? {
         nil
+    }
+
+    func roomFolderSections() -> [RoomFolderSection] {
+        []
     }
 }
 
@@ -1248,19 +1485,29 @@ final class MockRoomMembershipService: RoomMembershipServicing {
 final class MockRoomListService: RoomListServicing {
     var state: RoomListState
     var updateStates: [RoomListState] = []
+    /// Folders for previews and UI tests; the rows carry its filing.
+    let folderStore: MockRoomFolderStore?
     private(set) var loadCallCount = 0
     private(set) var clearCallCount = 0
 
-    init(state: RoomListState = .loaded(RoomListFixtures.small())) {
+    init(state: RoomListState = .loaded(RoomListFixtures.small()), folderStore: MockRoomFolderStore? = nil) {
         self.state = state
+        self.folderStore = folderStore
     }
 
     func loadRooms() async -> RoomListState {
         loadCallCount += 1
         if case .loaded(let rooms) = state {
-            return .loaded(RoomListFixtures.sorted(rooms))
+            return .loaded(RoomListFixtures.sorted(folderStore?.filing(rooms) ?? rooms))
         }
         return state
+    }
+
+    func roomFolderSections() -> [RoomFolderSection] {
+        guard let folderStore, case .loaded(let rooms) = state else {
+            return []
+        }
+        return folderStore.sections(rooms: rooms)
     }
 
     func roomDisplayName(roomID: String) -> String? {
