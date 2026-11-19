@@ -40,6 +40,7 @@ export const IOS_TEST_INPUT_PATHS = [
   ".github/actions/setup-rust-cache",
   ".github/actions/setup-xcode-cache",
   ".github/actions/save-xcode-cache",
+  ".github/actions/install-xcodegen",
   // Rust compilation cache wrappers.
   ".kache.toml",
   "scripts/ci-rust-cache-identity.sh",

@@ -1,0 +1,27 @@
+name: Install pinned XcodeGen
+description: Install the checksummed XcodeGen 2.46.0 release binary; Homebrew only offers its latest version.
+runs:
+  using: composite
+  steps:
+    - name: Install XcodeGen 2.46.0
+      shell: bash
+      env:
+        XCODEGEN_VERSION: 2.46.0
+        # sha256 of xcodegen.zip, as GitHub lists it for the 2.46.0 release asset.
+        XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+      run: |
+        set -euo pipefail
+        archive="$RUNNER_TEMP/xcodegen-$XCODEGEN_VERSION.zip"
+        curl --fail --silent --show-error --location --retry 3 --output "$archive" \
+          "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
+        echo "$XCODEGEN_SHA256  $archive" | shasum -a 256 -c -
+        install_dir="$RUNNER_TEMP/xcodegen-$XCODEGEN_VERSION"
+        rm -rf "$install_dir"
+        mkdir -p "$install_dir"
+        unzip -q "$archive" -d "$install_dir"
+        # The archive keeps bin/ next to share/xcodegen, where XcodeGen reads
+        # its setting presets.
+        binary="$(find "$install_dir" -type f -path '*/bin/xcodegen' -print -quit)"
+        test -x "$binary"
+        echo "$(dirname "$binary")" >> "$GITHUB_PATH"
+        test "$("$binary" --version)" = "Version: $XCODEGEN_VERSION"
