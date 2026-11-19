@@ -238,6 +238,54 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertFalse(store.isBannerVisible)
     }
 
+    func testRestartAfterAVisibleLossKeepsTheBandInPlace() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.connected)
+        store.update(.disconnected)
+        XCTAssertTrue(store.isBannerVisible)
+
+        // Retry or a path change restarts sync, which reports Connecting….
+        store.update(.starting)
+        XCTAssertTrue(store.presentsBanner, "the band must not drop out and move the screen")
+        XCTAssertTrue(
+            ConnectionStatusBanner.isActionable(store.status, slidingSyncUnsupported: false),
+            "the band keeps a lost status, not Connecting…"
+        )
+
+        let reconnecting = ConnectionStatusStore(reconnectingHold: 0)
+        reconnecting.update(.connected)
+        reconnecting.update(.reconnecting)
+        reconnecting.update(.starting)
+        XCTAssertEqual(reconnecting.status, .reconnecting)
+        XCTAssertTrue(reconnecting.isBannerVisible)
+        reconnecting.update(.connected)
+        XCTAssertEqual(reconnecting.status, .connected)
+    }
+
+    func testContinuingVisibleLossOnlyRewritesARestartUnderALostBand() {
+        XCTAssertEqual(
+            ConnectionStatusCopy.continuingVisibleLoss(.starting, presented: .disconnected, bannerVisible: true),
+            .reconnecting
+        )
+        XCTAssertEqual(
+            ConnectionStatusCopy.continuingVisibleLoss(.starting, presented: .disconnected, bannerVisible: false),
+            .starting
+        )
+        XCTAssertEqual(
+            ConnectionStatusCopy.continuingVisibleLoss(.starting, presented: .connected, bannerVisible: true),
+            .starting,
+            "the Connected flash is not a loss"
+        )
+        XCTAssertEqual(
+            ConnectionStatusCopy.continuingVisibleLoss(.starting, presented: .restoreFailed, bannerVisible: true),
+            .starting
+        )
+        XCTAssertEqual(
+            ConnectionStatusCopy.continuingVisibleLoss(.connected, presented: .disconnected, bannerVisible: true),
+            .connected
+        )
+    }
+
     func testRestoreFailedShowsImmediatelyDuringHold() {
         let store = ConnectionStatusStore(reconnectingHold: 4)
         store.update(.connected)
