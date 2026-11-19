@@ -135,6 +135,8 @@ import { gifPickerEnabled, gifSearchAvailable, gifSendsAsLink } from '../../util
 import type { GifResult } from '../../utils/gifProvider';
 import { GifPicker } from './gif/GifPicker';
 import { typedCommandName } from './typedGifCommand';
+import { GIF_SEARCH_SETTING } from '../settings/settingsPages';
+import { useOpenAppSettings } from '../../state/appSettings';
 import {
   clearRoomDraft,
   loadRoomDraft,
@@ -476,6 +478,15 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const gifPickerAvailable = gifSearchAvailable(clientConfig.gifPicker, gifSearchEnabled);
     const gifOnboardingVisible =
       gifProviderAvailable && !gifSearchEnabled && !gifOnboardingDismissed;
+    // With a provider but GIF search off (also after "Not now"), the "+" menu
+    // keeps its GIF item and opens the "Enable GIFs?" prompt, so GIFs stay
+    // findable. Without a provider there is nothing to turn on: no item.
+    const gifPromptAvailable = gifProviderAvailable && !gifSearchEnabled;
+    const gifCommandDisabledMessage = t(
+      'modernization.gif.command_disabled',
+      'Turn on GIF search in Settings → Media & links to use /gif.'
+    );
+    const openAppSettings = useOpenAppSettings();
 
     const sendTypingStatus = useTypingStatusUpdater(roomId);
 
@@ -1152,10 +1163,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           if (!gifPickerAvailable && !gifOnboardingVisible) {
             setSendError(
               gifProviderAvailable
-                ? t(
-                    'modernization.gif.command_disabled',
-                    'Turn on GIF Search in Settings > General to use /gif.'
-                  )
+                ? gifCommandDisabledMessage
                 : t(
                     'modernization.gif.command_unconfigured',
                     'GIF search is not set up for this app.'
@@ -1318,6 +1326,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         gifPickerAvailable,
         gifOnboardingVisible,
         gifProviderAvailable,
+        gifCommandDisabledMessage,
         withTypedMentions,
       ]
     );
@@ -1589,6 +1598,20 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             <Box grow="Yes">
               <Text size="T200">{sendError}</Text>
             </Box>
+            {sendError === gifCommandDisabledMessage && (
+              <Button
+                size="300"
+                variant="Secondary"
+                fill="Soft"
+                radii="300"
+                onClick={() => {
+                  setSendError(undefined);
+                  openAppSettings(GIF_SEARCH_SETTING);
+                }}
+              >
+                <Text size="B300">{t('modernization.gif.open_settings', 'Open settings')}</Text>
+              </Button>
+            )}
             <IconButton
               onClick={() => setSendError(undefined)}
               variant="Critical"
@@ -1850,7 +1873,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                       >
                         <Text size="T300">Attach file</Text>
                       </MenuItem>
-                      {(gifPickerAvailable || gifOnboardingVisible) && (
+                      {(gifPickerAvailable || gifPromptAvailable) && (
                         <MenuItem
                           className={depthCss.quietInteractiveSurface}
                           size="300"
@@ -1960,7 +1983,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   <Icon src={Icons.Smile} filled={emojiBoardOpen} />
                 </IconButton>
               </PopOut>
-              {(gifPickerAvailable || gifOnboardingVisible) && (
+              {(gifPickerAvailable || gifPromptAvailable) && (
                 <PopOut
                   offset={16}
                   alignOffset={-44}
@@ -1993,9 +2016,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                           gap="300"
                           style={{
                             padding: config.space.S400,
-                            width: toRem(280),
+                            width: toRem(320),
                             borderRadius: config.radii.R400,
                           }}
+                          data-testid="gif-enable-prompt"
                         >
                           <Text size="H5">
                             {t('modernization.gif.onboarding.title', 'Enable GIFs?')}
@@ -2011,7 +2035,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                                   'GIF search downloads your selected GIF privately, uploads it to Matrix media, then sends an mxc:// attachment.'
                                 )}
                           </Text>
-                          <Box justifyContent="End" gap="200">
+                          <Box justifyContent="End" alignItems="Center" gap="200">
+                            <Button
+                              size="300"
+                              variant="Secondary"
+                              fill="None"
+                              style={{ marginRight: 'auto' }}
+                              onClick={() => {
+                                setGifPickerAnchor(undefined);
+                                openAppSettings(GIF_SEARCH_SETTING);
+                              }}
+                            >
+                              <Text size="B300">
+                                {t('modernization.gif.open_settings', 'Open settings')}
+                              </Text>
+                            </Button>
                             <Button
                               size="300"
                               variant="Secondary"
