@@ -45,6 +45,11 @@ Desktop-only shortcut and diagnostic fields are not shared settings:
 - `desktopDiagnosticsSession`
 - `desktopDiagnosticsRoomState`
 - `desktopDiagnosticsOverlay`
+- `whatsNewSeenVersion`: the last version whose "What's new" notes this
+  device showed, or `''` before the first record. A fresh install records
+  its version without showing anything. It stays per device so every
+  computer shows the notes once; it is not cleared on sign-out. See
+  [What's new notes](../../docs/whats-new-notes.md).
 
 ## iOS Notes
 
