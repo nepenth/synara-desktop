@@ -1,16 +1,17 @@
 import React, { useCallback, useRef } from 'react';
 import { Box, Text, config } from 'folds';
+import type { Editor } from 'slate';
 import { ReactEditor } from 'slate-react';
 import { isKeyHotkey } from 'is-hotkey';
 import { useStateEvent } from '../../hooks/useStateEvent';
 import { StateEvent } from '../../../types/matrix/room';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
-import { useEditor } from '../../components/editor';
 import { RoomInputPlaceholder } from './RoomInputPlaceholder';
 import { NativeTimelinePresenter } from './NativeTimelinePresenter';
 import { RoomViewTyping } from './RoomViewTyping';
 import { RoomTombstone } from './RoomTombstone';
-import { RoomInput } from './RoomInput';
+import { RoomInput, useKeepRoomInputDraft } from './RoomInput';
+import { ComposerSafetyNet } from './ComposerSafetyNet';
 import { RoomIdentityWarningBanner } from './RoomIdentityWarningBanner';
 import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
 import { Page } from '../../components/page';
@@ -77,7 +78,9 @@ export function RoomView({
 
   const room = useRoom();
   const { roomId } = room;
-  const editor = useEditor();
+  // The composer's editor; the safety net replaces it if the composer fails.
+  const editorRef = useRef<Editor | undefined>(undefined);
+  const keepComposerDraft = useKeepRoomInputDraft(roomId);
   const { navigateRoom, navigateThread } = useRoomNavigate();
 
   // The native room facade has no state events, so the upgrade comes from
@@ -93,19 +96,18 @@ export function RoomView({
 
   useKeyDown(
     window,
-    useCallback(
-      (evt) => {
-        if (editableActiveElement()) return;
-        const portalContainer = document.getElementById('portalContainer');
-        if (portalContainer && portalContainer.children.length > 0) {
-          return;
-        }
-        if (shouldFocusMessageField(evt) || isKeyHotkey('mod+v', evt)) {
-          ReactEditor.focus(editor);
-        }
-      },
-      [editor]
-    )
+    useCallback((evt) => {
+      if (editableActiveElement()) return;
+      const portalContainer = document.getElementById('portalContainer');
+      if (portalContainer && portalContainer.children.length > 0) {
+        return;
+      }
+      const editor = editorRef.current;
+      if (!editor) return;
+      if (shouldFocusMessageField(evt) || isKeyHotkey('mod+v', evt)) {
+        ReactEditor.focus(editor);
+      }
+    }, [])
   );
 
   return (
@@ -137,7 +139,21 @@ export function RoomView({
             <>
               <RoomIdentityWarningBanner roomId={roomId} />
               {canMessage && (
-                <RoomInput room={room} editor={editor} roomId={roomId} ref={roomInputRef} />
+                <ComposerSafetyNet
+                  surface="room"
+                  editorRef={editorRef}
+                  keepDraft={keepComposerDraft}
+                >
+                  {({ editor, restore }) => (
+                    <RoomInput
+                      room={room}
+                      editor={editor}
+                      restore={restore}
+                      roomId={roomId}
+                      ref={roomInputRef}
+                    />
+                  )}
+                </ComposerSafetyNet>
               )}
               {!canMessage && (
                 <RoomInputPlaceholder

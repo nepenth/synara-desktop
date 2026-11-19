@@ -127,7 +127,8 @@ test('a verification violation wins and offers Withdraw verification', () => {
 test('the banner sits above the composer and reports failures', () => {
   const view = readFileSync('src/app/features/room/RoomView.tsx', 'utf8');
   assert.ok(
-    view.indexOf('<RoomIdentityWarningBanner roomId={roomId} />') < view.indexOf('<RoomInput room')
+    view.indexOf('<RoomIdentityWarningBanner roomId={roomId} />') <
+      view.search(/<RoomInput\s+room=/)
   );
   const banner = readFileSync('src/app/features/room/RoomIdentityWarningBanner.tsx', 'utf8');
   assert.match(banner, /Couldn't update this identity change\./);

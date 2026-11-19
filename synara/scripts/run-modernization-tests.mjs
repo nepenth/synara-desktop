@@ -70,6 +70,7 @@ const tests = [
   'src/app/utils/__tests__/drafts.test.ts',
   'src/app/features/room/__tests__/nativeDraftSync.test.ts',
   'src/app/features/room/__tests__/composerDraftPersistence.test.ts',
+  'src/app/features/room/__tests__/composerSafetyNet.test.ts',
   'src/app/utils/__tests__/polls.test.ts',
   'src/app/utils/__tests__/dom.test.ts',
   'src/app/utils/__tests__/appLinks.test.ts',

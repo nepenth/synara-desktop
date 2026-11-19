@@ -36,8 +36,12 @@ const initialValue: CustomElement[] = [
   },
 ];
 
+/** A new composer editor: Slate with React, history and the composer plugins. */
+export const createComposerEditor = (): Editor =>
+  withComposer(withReact(withHistory(createEditor())));
+
 export const useEditor = (): Editor => {
-  const [editor] = useState(() => withComposer(withReact(withHistory(createEditor()))));
+  const [editor] = useState(createComposerEditor);
   return editor;
 };
 
