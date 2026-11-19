@@ -346,6 +346,11 @@ answered. A failed test step prints the runtime state and the `simdiskimaged`
 log. The App Store requirement is the SDK the app is built with, not the
 simulator OS, so if 27.2 stays unreliable on the image, `IOS_SIMULATOR_RUNTIME`
 can drop to 27.0 while the build keeps the iOS 27.2 SDK.
+
+The simulator and compile jobs install XcodeGen 2.46.0 from its GitHub release
+with a pinned SHA-256 (`.github/actions/install-xcodegen`), because Homebrew
+only installs the newest XcodeGen; a version bump is a reviewed change to that
+action.
 The selected version is checked before Swift cache work; the nightly device
 cache seed checks it directly. Apple Rust cache identities include
 `DEVELOPER_DIR`, Xcode build, macOS/iOS/simulator SDK versions and Rust compiler,
