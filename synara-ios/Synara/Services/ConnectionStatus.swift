@@ -141,6 +141,27 @@ enum ConnectionStatusCopy {
         }
     }
 
+    /// A sync restart (Retry, a network path change) reports Connecting…
+    /// while a Connection Lost band is on screen. Connecting… has no band,
+    /// so the band would drop out, the screen below would jump up, and the
+    /// band would come back after the lost hold. Until the connection is
+    /// back, that restart is still reconnecting.
+    static func continuingVisibleLoss(
+        _ status: MatrixSyncStatus,
+        presented: MatrixSyncStatus,
+        bannerVisible: Bool
+    ) -> MatrixSyncStatus {
+        guard status == .starting, bannerVisible else {
+            return status
+        }
+        switch presented {
+        case .reconnecting, .disconnected, .failed:
+            return .reconnecting
+        case .connected, .syncing, .starting, .stopped, .restoreFailed:
+            return status
+        }
+    }
+
     static func holdsBeforeBanner(_ status: MatrixSyncStatus) -> Bool {
         switch status {
         case .reconnecting:
@@ -284,6 +305,11 @@ final class ConnectionStatusStore: ObservableObject {
         if status == .stopped {
             applySlidingSyncUnsupported(false)
         }
+        let status = ConnectionStatusCopy.continuingVisibleLoss(
+            status,
+            presented: self.status,
+            bannerVisible: isBannerVisible
+        )
         if shouldDelay(status) {
             if ConnectionStatusCopy.holdsBeforeBanner(self.status) {
                 present(status)
