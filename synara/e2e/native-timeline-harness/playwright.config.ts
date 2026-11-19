@@ -30,6 +30,7 @@ export default defineConfig({
         'native-timeline-hermes-layout.spec.ts',
         'native-timeline-redact-confirm.spec.ts',
         'native-timeline-timestamps.spec.ts',
+        'native-timeline-edit-in-place.spec.ts',
       ],
       use: { ...devices['Desktop Safari'] },
     },

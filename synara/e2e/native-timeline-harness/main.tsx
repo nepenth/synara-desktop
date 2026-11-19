@@ -185,6 +185,20 @@ const makeRow = (index: number) => ({
   },
 });
 let rows = Array.from({ length: sequence }, (_, index) => makeRow(index + 1));
+// `richEdit`: message 4 has several blocks (paragraph, quote, list, code), so
+// the in-place editor opens on a multi-block document.
+if (params.has('richEdit')) {
+  rows = rows.map((row) =>
+    row.eventId === '$4'
+      ? {
+          ...row,
+          body: 'Intro line\n> quoted\n- one\n- two\n```\ncode()\n```',
+          formattedBody:
+            '<p>Intro line</p><blockquote>quoted</blockquote><ul><li>one</li><li>two</li></ul><pre><code>code()</code></pre>',
+        }
+      : row
+  );
+}
 // `scenario=embeds`: the last two messages are a GIF link and an X link; the
 // X post comes from the mocked `desktop_x_post` below.
 const EMBED_GIF_URL = 'https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif';
