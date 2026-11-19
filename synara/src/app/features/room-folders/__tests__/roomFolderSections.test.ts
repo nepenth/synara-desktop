@@ -200,7 +200,7 @@ test('in a space: only folders with rooms of that space, in the space order', ()
     order: ['!s1', '!s2', '!s3'],
     closedCategories: new Set(),
     hasUnread: none,
-    keepEmpty: false,
+    keepEmpty: 'unfiled',
   });
   assert.deepEqual(
     sections.map((section) => [section.id, section.categoryId, section.roomIds]),
@@ -212,6 +212,24 @@ test('in a space: only folders with rooms of that space, in the space order', ()
   );
   // Position among all folders, for Move up / Move down.
   assert.deepEqual(sections[0].folder, { id: 'work', name: 'Work', index: 0, count: 2 });
+
+  // A folder with no rooms anywhere (just created) shows in the space too.
+  const withNew = buildRoomFolderSections({
+    presentation: {
+      ...spacePresentation,
+      folders: [...spacePresentation.folders, folder('new', 'New', [])],
+    },
+    scope: '!space',
+    inView: (roomId) => inSpace.has(roomId),
+    order: ['!s1', '!s2', '!s3'],
+    closedCategories: new Set(),
+    hasUnread: none,
+    keepEmpty: 'unfiled',
+  });
+  assert.deepEqual(
+    withNew.map((section) => section.id),
+    ['folder:work', 'folder:new']
+  );
 });
 
 test("a folder's unread is Core's rollup, or the shown rooms' rows in a narrower view", () => {

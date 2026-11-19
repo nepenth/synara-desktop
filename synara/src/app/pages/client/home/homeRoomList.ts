@@ -140,7 +140,7 @@ export const buildHomeRoomListSections = ({
     closedCategories,
     hasUnread,
     selectedRoomId,
-    keepEmpty: true,
+    keepEmpty: 'all',
   });
   const filed = roomIdsInFolderSections(folders);
   const section = (kind: RoomListSection, ids: readonly string[]): RoomListSectionModel[] => {

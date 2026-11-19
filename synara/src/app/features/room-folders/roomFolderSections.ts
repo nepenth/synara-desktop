@@ -102,8 +102,13 @@ export type RoomFolderSectionsInput = {
   closedCategories: ReadonlySet<string>;
   hasUnread: (roomId: string) => boolean;
   selectedRoomId?: string;
-  /** Home keeps folders with no rooms here, so they can be found and managed. */
-  keepEmpty: boolean;
+  /**
+   * Which folders with no rooms in this view still show. Home keeps them all,
+   * so they can be found and managed. A space keeps only a folder that holds
+   * no rooms anywhere (`unfiled`), so one just created from the space's menu
+   * appears; a folder whose rooms are elsewhere stays out of the space.
+   */
+  keepEmpty: 'all' | 'unfiled';
 };
 
 /** One section per folder, in folder order. */
@@ -120,7 +125,7 @@ export const buildRoomFolderSections = ({
   const count = presentation.folders.length;
   return presentation.folders.flatMap((folder, index) => {
     const roomIds = roomFolderRoomIdsInView(folder, inView, order);
-    if (roomIds.length === 0 && !keepEmpty) return [];
+    if (roomIds.length === 0 && keepEmpty === 'unfiled' && folder.roomIds.length > 0) return [];
     const categoryId = roomFolderCategoryId(scope, folder.id);
     const closed = closedCategories.has(categoryId);
     return [
@@ -142,7 +147,7 @@ export const buildRoomFolderSections = ({
 export const roomIdsInFolderSections = (sections: readonly RoomListSectionModel[]): Set<string> =>
   new Set(sections.flatMap((section) => (section.kind === 'folder' ? section.roomIds : [])));
 
-/** An open folder with no rooms in this view shows one quiet "No rooms" line (Home only). */
+/** An open folder with no rooms in this view shows one quiet "No rooms" line. */
 export const showsEmptyFolderLine = (section: RoomListSectionModel): boolean =>
   section.kind === 'folder' && section.roomIds.length === 0 && !section.closed;
 

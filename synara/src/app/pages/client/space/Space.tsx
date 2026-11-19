@@ -36,6 +36,7 @@ type RoomJoinRulesEventContent = {
 };
 import FocusTrap from '../../../components/FocusTrap';
 import { useTranslation } from 'react-i18next';
+import * as navCss from '../../../components/nav/styles.css';
 import { useNavigate } from 'react-router-dom';
 import {
   NavCategory,
@@ -124,6 +125,7 @@ import {
   roomFoldersSignature,
   roomIdsInFolderSections,
   roomListNavSections,
+  showsEmptyFolderLine,
 } from '../../../features/room-folders/roomFolderSections';
 import {
   VirtualRoomSection,
@@ -131,7 +133,11 @@ import {
 } from '../../../features/room-nav/VirtualRoomSection';
 import { RoomFolderSectionHeader } from '../../../features/room-folders/RoomFolderSectionHeader';
 import { RoomFolderDialogs } from '../../../features/room-folders/RoomFolderDialogs';
-import { useRoomFoldersSnapshotLoader } from '../../../features/room-folders/roomFolderState';
+import {
+  useOpenRoomFolderDialog,
+  useRoomFoldersReadOnly,
+  useRoomFoldersSnapshotLoader,
+} from '../../../features/room-folders/roomFolderState';
 type SpaceMenuProps = {
   room: EventedRoomReading;
   requestClose: () => void;
@@ -147,6 +153,8 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
   const { navigateRoom } = useRoomNavigate();
 
   const [invitePrompt, setInvitePrompt] = useState(false);
+  const foldersReadOnly = useRoomFoldersReadOnly();
+  const openFolderDialog = useOpenRoomFolderDialog();
 
   const allChild = useSpaceChildren(
     allRoomsAtom,
@@ -205,13 +213,30 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
           disabled={!unread}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Mark as Read
+            Mark as read
           </Text>
         </MenuItem>
         {markReadError && (
           <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
             {markReadError}
           </Text>
+        )}
+        {!foldersReadOnly && (
+          <MenuItem
+            variant="Surface"
+            fill="None"
+            onClick={() => {
+              requestClose();
+              openFolderDialog({ kind: 'create' });
+            }}
+            size="300"
+            after={<Icon size="100" src={Icons.Plus} />}
+            radii="300"
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              New folder
+            </Text>
+          </MenuItem>
         )}
       </Box>
       <Line variant="Surface" size="300" />
@@ -240,7 +265,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
           radii="300"
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Copy Link
+            Copy link
           </Text>
         </MenuItem>
         <MenuItem
@@ -252,7 +277,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
           radii="300"
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Space Settings
+            Space settings
           </Text>
         </MenuItem>
         {developerTools && (
@@ -265,7 +290,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
             radii="300"
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              Event Timeline
+              Event timeline
             </Text>
           </MenuItem>
         )}
@@ -285,7 +310,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
                 aria-pressed={promptLeave}
               >
                 <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-                  Leave Space
+                  Leave space
                 </Text>
               </MenuItem>
               {promptLeave && (
@@ -566,7 +591,7 @@ export function Space() {
       closedCategories,
       hasUnread,
       selectedRoomId,
-      keepEmpty: false,
+      keepEmpty: 'unfiled',
     });
   }, [
     spaceRoomIds,
@@ -808,6 +833,19 @@ export function Space() {
                   }
                   rows={section.rows}
                   renderRoom={renderSpaceRoom}
+                  empty={
+                    showsEmptyFolderLine(section) ? (
+                      <Text
+                        as="p"
+                        size="T200"
+                        priority="300"
+                        className={navCss.NavSectionEmpty}
+                        data-room-folder-empty=""
+                      >
+                        {t('modernization.nav.folder_no_rooms', 'No rooms')}
+                      </Text>
+                    ) : undefined
+                  }
                   onReveal={revealSetter(section.id)}
                 />
               ) : null

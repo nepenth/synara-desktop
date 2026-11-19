@@ -154,7 +154,7 @@ test('direct messages offer no folders', async ({ page }) => {
   await pane(page)
     .locator(`a[data-room-nav-id="${roomId('dm-bob')}"]`)
     .click({ button: 'right' });
-  await expect(page.getByRole('button', { name: 'Add to Favorites' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add to favorites' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Move to folder' })).toHaveCount(0);
 });
 
@@ -285,7 +285,7 @@ test('a favorite stays in Favorites, keeps its folder, and returns to it', async
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await row(page, 'announcements').click({ button: 'right' });
-  await page.getByRole('button', { name: 'Remove from Favorites' }).click();
+  await page.getByRole('button', { name: 'Remove from favorites' }).click();
   await expect.poll(() => rowsOf(page, 'folder:work')).toContain(roomId('announcements'));
   expect(await rowsOf(page, 'favorites')).toEqual([roomId('standup')]);
 });
@@ -347,7 +347,7 @@ test('read-only (a newer client format): the folders show, every management acti
   await header(page, 'folder:work').click({ button: 'right' });
   await expect(page.getByTestId('room-folder-menu')).toHaveCount(0);
   await row(page, 'general').click({ button: 'right' });
-  await expect(page.getByRole('button', { name: 'Add to Favorites' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add to favorites' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Move to folder' })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await pane(page).getByRole('button', { name: 'Home options' }).click();
@@ -371,7 +371,9 @@ test('a space lists its rooms of each folder after Favorites, and only those fol
   await open(page, '&space');
   await expect(pane(page).getByRole('link', { name: 'Lobby' })).toBeVisible();
   await expect(row(page, 'brand')).toBeVisible();
-  expect(await sectionOrder(page)).toEqual(['folder:work', 'rooms']);
+  // Work has rooms here; Reading list holds no rooms anywhere, so it shows too.
+  // Side projects has rooms, but none in this space, so it stays out.
+  expect(await sectionOrder(page)).toEqual(['folder:work', 'folder:reading', 'rooms']);
   expect(await rowsOf(page, 'folder:work')).toEqual([
     roomId('design-system'),
     roomId('ux-research'),
@@ -388,8 +390,30 @@ test('a space lists its rooms of each folder after Favorites, and only those fol
   // Filing from the space's list works the same.
   const submenu = await openRoomMenu(page, 'icons');
   await submenu.getByRole('button', { name: 'Side projects' }).click();
-  await expect.poll(() => sectionOrder(page)).toEqual(['folder:work', 'folder:side', 'rooms']);
+  await expect
+    .poll(() => sectionOrder(page))
+    .toEqual(['folder:work', 'folder:side', 'folder:reading', 'rooms']);
   expect(await rowsOf(page, 'folder:side')).toEqual([roomId('icons')]);
+});
+
+test("a space's options menu creates a folder, which shows there while it is empty", async ({
+  page,
+}) => {
+  await open(page, '&space');
+  await expect(row(page, 'brand')).toBeVisible();
+  await pane(page)
+    .getByRole('button', { name: /options$/ })
+    .first()
+    .click();
+  await page.getByRole('button', { name: 'New folder' }).click();
+  const dialog = page.getByRole('alertdialog', { name: 'New folder' });
+  await dialog.getByRole('textbox').fill('Launch');
+  await page.keyboard.press('Enter');
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => sectionOrder(page)).toContain('folder:work');
+  // Reading list and the new folder are both empty.
+  await expect(pane(page).locator('[data-room-folder-empty]')).toHaveCount(2);
+  await expect(pane(page).getByRole('button', { name: 'Launch folder options' })).toHaveCount(1);
 });
 
 for (const theme of ['dark', 'light'] as const) {
