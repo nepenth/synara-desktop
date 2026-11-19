@@ -199,7 +199,8 @@ test('the selected row is anchored: Primary container fill, on-container name, s
   const item = fav.locator('[data-selected="true"]');
   await expect(item).toHaveCount(1);
   await expect(item).toHaveCSS('box-shadow', 'none');
-  expect(await weight(fav)).toBe('600');
+  // A read selected row keeps the read weight: bold means unread, not selected.
+  expect(await weight(fav)).toBe('400');
   // Dark Primary.Container #1F3A63, OnContainer #DCE7FB.
   await expect(item).toHaveCSS('background-color', 'rgb(31, 58, 99)');
   expect(await color(fav)).toBe('rgb(220, 231, 251)');

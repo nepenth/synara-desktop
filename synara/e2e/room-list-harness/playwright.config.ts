@@ -15,6 +15,7 @@ export default defineConfig({
     'room-list-keyboard.spec.ts',
     'nav-pane.spec.ts',
     'nav-pane-viewport.spec.ts',
+    'room-folders.spec.ts',
   ],
   fullyParallel: false,
   retries: 0,
@@ -35,7 +36,11 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     {
       name: 'webkit',
-      testMatch: ['navigation-unread.spec.ts', 'room-list-collapse.spec.ts'],
+      testMatch: [
+        'navigation-unread.spec.ts',
+        'room-list-collapse.spec.ts',
+        'room-folders.spec.ts',
+      ],
       use: { ...devices['Desktop Safari'] },
     },
   ],

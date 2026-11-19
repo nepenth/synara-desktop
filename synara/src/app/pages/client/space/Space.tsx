@@ -36,6 +36,7 @@ type RoomJoinRulesEventContent = {
 };
 import FocusTrap from '../../../components/FocusTrap';
 import { useTranslation } from 'react-i18next';
+import * as navCss from '../../../components/nav/styles.css';
 import { useNavigate } from 'react-router-dom';
 import {
   NavCategory,
@@ -119,6 +120,24 @@ import {
   useRoomListNavSource,
   type RoomListNavSource,
 } from '../../../features/desktop-keyboard/roomListNavigation';
+import {
+  buildRoomFolderSections,
+  roomFoldersSignature,
+  roomIdsInFolderSections,
+  roomListNavSections,
+  showsEmptyFolderLine,
+} from '../../../features/room-folders/roomFolderSections';
+import {
+  VirtualRoomSection,
+  type RoomSectionReveal,
+} from '../../../features/room-nav/VirtualRoomSection';
+import { RoomFolderSectionHeader } from '../../../features/room-folders/RoomFolderSectionHeader';
+import { RoomFolderDialogs } from '../../../features/room-folders/RoomFolderDialogs';
+import {
+  useOpenRoomFolderDialog,
+  useRoomFoldersReadOnly,
+  useRoomFoldersSnapshotLoader,
+} from '../../../features/room-folders/roomFolderState';
 type SpaceMenuProps = {
   room: EventedRoomReading;
   requestClose: () => void;
@@ -134,6 +153,8 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
   const { navigateRoom } = useRoomNavigate();
 
   const [invitePrompt, setInvitePrompt] = useState(false);
+  const foldersReadOnly = useRoomFoldersReadOnly();
+  const openFolderDialog = useOpenRoomFolderDialog();
 
   const allChild = useSpaceChildren(
     allRoomsAtom,
@@ -192,13 +213,30 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
           disabled={!unread}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Mark as Read
+            Mark as read
           </Text>
         </MenuItem>
         {markReadError && (
           <Text as="p" size="T200" role="alert" style={{ paddingInline: config.space.S200 }}>
             {markReadError}
           </Text>
+        )}
+        {!foldersReadOnly && (
+          <MenuItem
+            variant="Surface"
+            fill="None"
+            onClick={() => {
+              requestClose();
+              openFolderDialog({ kind: 'create' });
+            }}
+            size="300"
+            after={<Icon size="100" src={Icons.Plus} />}
+            radii="300"
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              New folder
+            </Text>
+          </MenuItem>
         )}
       </Box>
       <Line variant="Surface" size="300" />
@@ -227,7 +265,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
           radii="300"
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Copy Link
+            Copy link
           </Text>
         </MenuItem>
         <MenuItem
@@ -239,7 +277,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
           radii="300"
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Space Settings
+            Space settings
           </Text>
         </MenuItem>
         {developerTools && (
@@ -252,7 +290,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
             radii="300"
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              Event Timeline
+              Event timeline
             </Text>
           </MenuItem>
         )}
@@ -272,7 +310,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
                 aria-pressed={promptLeave}
               >
                 <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-                  Leave Space
+                  Leave space
                 </Text>
               </MenuItem>
               {promptLeave && (
@@ -526,28 +564,6 @@ export function Space() {
     [allJoinedRooms]
   );
 
-  // Favourites move out of their sub-space into the Favorites section; a
-  // collapsed section (either kind) keeps unread and selected rows visible.
-  const hierarchy = useSpaceJoinedHierarchy(
-    space.roomId,
-    getRoom,
-    useCallback(
-      (parentId, roomId) => {
-        if (favoriteIds.has(roomId)) return true;
-        if (!closedCategories.has(makeNavCategoryId(space.roomId, parentId))) {
-          return false;
-        }
-        const showRoomAnyway = roomToUnread.has(roomId) || roomId === selectedRoomId;
-        return !showRoomAnyway;
-      },
-      [space.roomId, closedCategories, roomToUnread, selectedRoomId, favoriteIds]
-    ),
-    useCallback(
-      (sId) => (closedCategories.has(makeNavCategoryId(space.roomId, sId)) ? 'recent' : spaceSort),
-      [closedCategories, space.roomId, spaceSort]
-    )
-  );
-
   const fullHierarchy = useSpaceJoinedHierarchy(
     space.roomId,
     getRoom,
@@ -555,9 +571,62 @@ export function Space() {
     useCallback(() => 'space' as const, [])
   );
   const spaceRoomIds = useMemo(
-    () => fullHierarchy.filter((item) => !('space' in item)).map((item) => item.roomId),
+    () =>
+      Array.from(new Set(fullHierarchy.flatMap((item) => ('space' in item ? [] : [item.roomId])))),
     [fullHierarchy]
   );
+
+  // Room folders with rooms in this space, after Favorites and before the
+  // space's own groups. Rooms follow the space sort (Core's folder orders for
+  // Recent and Name); a folder with none of this space's rooms is not shown.
+  useRoomFoldersSnapshotLoader(roomFoldersSignature(nativeRoomList.presentation));
+  const hasUnread = useCallback((rId: string) => roomToUnread.has(rId), [roomToUnread]);
+  const folderSections = useMemo(() => {
+    const inSpace = new Set(spaceRoomIds);
+    return buildRoomFolderSections({
+      presentation: nativeRoomList.presentation,
+      scope: space.roomId,
+      inView: (roomId) => inSpace.has(roomId) && !favoriteIds.has(roomId),
+      order: spaceSort === 'space' ? spaceRoomIds : spaceSort,
+      closedCategories,
+      hasUnread,
+      selectedRoomId,
+      keepEmpty: 'unfiled',
+    });
+  }, [
+    spaceRoomIds,
+    nativeRoomList.presentation,
+    space.roomId,
+    favoriteIds,
+    spaceSort,
+    closedCategories,
+    hasUnread,
+    selectedRoomId,
+  ]);
+  const filedRoomIds = useMemo(() => roomIdsInFolderSections(folderSections), [folderSections]);
+
+  // Favourites and filed rooms move out of their sub-space into their own
+  // sections; a collapsed section (any kind) keeps unread and selected rows visible.
+  const hierarchy = useSpaceJoinedHierarchy(
+    space.roomId,
+    getRoom,
+    useCallback(
+      (parentId, roomId) => {
+        if (favoriteIds.has(roomId) || filedRoomIds.has(roomId)) return true;
+        if (!closedCategories.has(makeNavCategoryId(space.roomId, parentId))) {
+          return false;
+        }
+        const showRoomAnyway = roomToUnread.has(roomId) || roomId === selectedRoomId;
+        return !showRoomAnyway;
+      },
+      [space.roomId, closedCategories, roomToUnread, selectedRoomId, favoriteIds, filedRoomIds]
+    ),
+    useCallback(
+      (sId) => (closedCategories.has(makeNavCategoryId(space.roomId, sId)) ? 'recent' : spaceSort),
+      [closedCategories, space.roomId, spaceSort]
+    )
+  );
+
   const favoriteRoomIds = useMemo(() => {
     const ids = spaceRoomIds.filter((roomId) => favoriteIds.has(roomId));
     const order =
@@ -592,7 +661,23 @@ export function Space() {
     32
   );
 
-  // Previous/next (unread) room walk these rows, not the rendered ones.
+  // Each folder section's virtual list registers how to scroll a row into view.
+  const reveals = useRef(new Map<string, RoomSectionReveal>());
+  const revealSetters = useRef(new Map<string, (reveal?: RoomSectionReveal) => void>());
+  const revealSetter = (sectionId: string) => {
+    let setter = revealSetters.current.get(sectionId);
+    if (!setter) {
+      setter = (reveal) => {
+        if (reveal) reveals.current.set(sectionId, reveal);
+        else reveals.current.delete(sectionId);
+      };
+      revealSetters.current.set(sectionId, setter);
+    }
+    return setter;
+  };
+
+  // Previous/next (unread) room walk these rows, not the rendered ones:
+  // Favorites, each folder, then the space's own groups.
   useRoomListNavSource(
     useMemo<RoomListNavSource>(() => {
       const pathFor = (roomId: string) =>
@@ -601,6 +686,9 @@ export function Space() {
         selectedRoomId,
         sections: [
           { rows: visibleFavoriteRoomIds, pathFor },
+          ...roomListNavSections(folderSections, pathFor, (sectionId, index) =>
+            reveals.current.get(sectionId)?.(index)
+          ),
           {
             // Sub-space headers are rows of the same virtual list.
             rows: hierarchy.map((item) => ('space' in item ? undefined : item.roomId)),
@@ -609,7 +697,14 @@ export function Space() {
           },
         ],
       };
-    }, [selectedRoomId, spaceIdOrAlias, visibleFavoriteRoomIds, hierarchy, virtualizer])
+    }, [
+      selectedRoomId,
+      spaceIdOrAlias,
+      visibleFavoriteRoomIds,
+      folderSections,
+      hierarchy,
+      virtualizer,
+    ])
   );
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
@@ -618,6 +713,18 @@ export function Space() {
 
   const getToLink = (roomId: string) =>
     getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(roomId));
+  const renderSpaceRoom = (roomId: string) => {
+    const room = getNativeRoom(roomId);
+    if (!room) return null;
+    return (
+      <RoomNavItem
+        room={room}
+        selected={selectedRoomId === roomId}
+        linkPath={getToLink(roomId)}
+        notificationMode={getRoomNotificationMode(notificationPreferences, room.roomId)}
+      />
+    );
+  };
   const lobbyPath = getSpaceLobbyPath(getCanonicalAliasOrRoomId(space.roomId));
   const roomsLabel = t('modernization.nav.rooms', 'Rooms');
   const favoritesLabel = t('modernization.nav.favorites', 'Favorites');
@@ -681,6 +788,7 @@ export function Space() {
             {favoriteRoomIds.length > 0 && (
               <NavCategory>
                 <NavSectionHeader
+                  sectionId="favorites"
                   label={favoritesLabel}
                   closed={favoritesClosed}
                   categoryId={favoritesCategoryId}
@@ -704,7 +812,46 @@ export function Space() {
                 })}
               </NavCategory>
             )}
+            {/* Spaced by the column's gap, as this pane's Favorites are. */}
+            {folderSections.map((section) =>
+              section.folder ? (
+                <VirtualRoomSection
+                  key={section.id}
+                  sectionId={section.id}
+                  scrollRef={scrollRef}
+                  header={
+                    <RoomFolderSectionHeader
+                      folderId={section.folder.id}
+                      name={section.folder.name}
+                      index={section.folder.index}
+                      folderCount={section.folder.count}
+                      categoryId={section.categoryId}
+                      closed={section.closed}
+                      onToggle={handleCategoryClick}
+                      unread={section.unread}
+                    />
+                  }
+                  rows={section.rows}
+                  renderRoom={renderSpaceRoom}
+                  empty={
+                    showsEmptyFolderLine(section) ? (
+                      <Text
+                        as="p"
+                        size="T200"
+                        priority="300"
+                        className={navCss.NavSectionEmpty}
+                        data-room-folder-empty=""
+                      >
+                        {t('modernization.nav.folder_no_rooms', 'No rooms')}
+                      </Text>
+                    ) : undefined
+                  }
+                  onReveal={revealSetter(section.id)}
+                />
+              ) : null
+            )}
             <NavCategory
+              data-testid="space-room-list"
               ref={listRef}
               style={{
                 height: virtualizer.getTotalSize(),
@@ -730,6 +877,7 @@ export function Space() {
                         style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S500 }}
                       >
                         <NavSectionHeader
+                          sectionId={roomId === space.roomId ? 'rooms' : `space:${roomId}`}
                           label={roomId === space.roomId ? roomsLabel : room?.name}
                           closed={closedCategories.has(categoryId)}
                           categoryId={categoryId}
@@ -773,6 +921,7 @@ export function Space() {
           </Box>
         </PageNavContent>
       )}
+      <RoomFolderDialogs />
     </PageNav>
   );
 }

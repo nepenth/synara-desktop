@@ -468,7 +468,7 @@ function RoomNotificationsGroupBody({
               disabled={markReadState.status === AsyncStatus.Loading}
               before={<Icon size="100" src={Icons.CheckTwice} />}
             >
-              <Text size="T200">Mark as Read</Text>
+              <Text size="T200">Mark as read</Text>
             </Chip>
           )}
         </Box>

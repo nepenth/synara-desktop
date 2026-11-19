@@ -126,6 +126,8 @@ mod realtime;
 use realtime::*;
 mod room_administration;
 use room_administration::*;
+mod room_folders;
+use room_folders::*;
 mod session_crypto;
 #[cfg(test)]
 use crate::transport::{CommandEnvelope, CommandFuture, CommandRegistry, CommandResponseEnvelope};
@@ -149,6 +151,11 @@ pub mod api {
     pub use super::profile_media::*;
     pub use super::realtime::*;
     pub use super::room_administration::*;
+    pub use super::room_folders::{
+        MatrixRoomFoldersCreateRequest, MatrixRoomFoldersDeleteRequest,
+        MatrixRoomFoldersMoveRequest, MatrixRoomFoldersRenameRequest,
+        MatrixRoomFoldersSetRoomRequest,
+    };
     pub use super::session_crypto::*;
 }
 pub use session_crypto::{MatrixCrossSigningState, MatrixCryptoStatus, MatrixSessionSnapshot};
@@ -1166,6 +1173,7 @@ fn built_in_registry() -> CommandRegistry {
     room_administration::register_commands(&mut registry);
     notifications::register_commands(&mut registry);
     account_data::register_commands(&mut registry);
+    room_folders::register_commands(&mut registry);
     messaging::register_commands(&mut registry);
     profile_media::register_commands(&mut registry);
     realtime::register_commands(&mut registry);

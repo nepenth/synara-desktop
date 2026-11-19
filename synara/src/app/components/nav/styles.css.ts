@@ -131,7 +131,9 @@ export type RoomSelectorVariants = RecipeVariants<typeof NavItem>;
 
 /**
  * One type scale with the timeline: 15px names on a 20px line. Read rows are
- * W400 so they recede; unread and selected rows are W600. Rows stay 32px.
+ * W400 so they recede; only unread rows are W600. Weight means "needs you"
+ * and nothing else: the selected row is marked by its fill and on-container
+ * text, at the weight its read state gives it. Rows stay 32px.
  */
 export const NavItemContent = style({
   paddingLeft: config.space.S200,
@@ -149,7 +151,7 @@ export const NavItemContent = style({
     '&:hover': {
       textDecoration: 'unset',
     },
-    [`.${NavItemBase}[data-highlight=true] &, .${NavItemBase}[data-selected=true] &`]: {
+    [`.${NavItemBase}[data-highlight=true] &`]: {
       fontWeight: config.fontWeight.W600,
     },
   },
@@ -255,6 +257,26 @@ export const NavSectionLabel = style({
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
+});
+
+/** A collapsed section's unread, at the toggle's end (the rows' badge column). */
+export const NavSectionBadge = style({
+  display: 'flex',
+  alignItems: 'center',
+  marginLeft: 'auto',
+  flexShrink: 0,
+  paddingRight: config.space.S100,
+});
+
+/** A section with no rows here (an empty folder): one quiet line in the name column. */
+export const NavSectionEmpty = style({
+  display: 'flex',
+  alignItems: 'center',
+  minHeight: toRem(28),
+  margin: 0,
+  // The rows' glyph column (18px) plus its gap, so the text lines up with room names.
+  paddingLeft: `calc(${config.space.S100} * 2 + ${toRem(18)} + ${config.space.S200})`,
+  color: 'var(--synara-content-tertiary, var(--synara-content-secondary))',
 });
 
 /** The rows' 18px glyph column, so the chevron centres over the glyphs. */

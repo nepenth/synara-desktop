@@ -180,6 +180,9 @@ pub struct SyncServiceOwner {
     /// Room-list rows and space graph reused between snapshots, with the
     /// change revision; the room-list owner marks what changed.
     room_list_cache: Arc<crate::app::room_list::RoomListSnapshotCache>,
+    /// `in.synara.room_folders` projection and mutation lock, shared by the
+    /// folder commands and room-list snapshots.
+    room_folders: Arc<crate::app::account_data::RoomFoldersState>,
 }
 
 #[derive(Default)]
@@ -355,6 +358,11 @@ impl SyncServiceOwner {
     /// Room-list snapshot cache and change revision for this session.
     pub(crate) fn room_list_cache(&self) -> &Arc<crate::app::room_list::RoomListSnapshotCache> {
         &self.room_list_cache
+    }
+
+    /// The session's room folders (`in.synara.room_folders`).
+    pub fn room_folders(&self) -> &Arc<crate::app::account_data::RoomFoldersState> {
+        &self.room_folders
     }
 
     /// Keep the SDK's latest-event calculation active for the current room-list
@@ -536,6 +544,7 @@ pub(crate) async fn build_sync_service_with_heartbeat(
         session_change_task,
         server_highlights: Arc::default(),
         room_list_cache: Arc::default(),
+        room_folders: Arc::default(),
     })
 }
 

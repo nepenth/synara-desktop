@@ -388,7 +388,7 @@ test('room read state stays a single contextual overflow action', () => {
   const header = readFileSync('src/app/features/room/RoomViewHeader.tsx', 'utf8');
 
   assert.match(header, /aria-label="More Options"/);
-  assert.match(header, /unread \? 'Mark as Read' : 'Mark as Unread'/);
+  assert.match(header, /unread \? 'Mark as read' : 'Mark as unread'/);
   assert.match(header, /unread \? Icons\.CheckTwice : Icons\.MessageUnread/);
 });
 

@@ -68,15 +68,6 @@ pub fn room_matches_scope(room: &RoomSummary, scope: RoomListScope) -> bool {
     }
 }
 
-/// Rooms in an explicit product folder (exact folder_id match).
-pub fn select_rooms_in_folder(rooms: &[RoomSummary], folder_id: &str) -> Vec<RoomSummary> {
-    rooms
-        .iter()
-        .filter(|r| r.folder_id.as_deref() == Some(folder_id))
-        .cloned()
-        .collect()
-}
-
 /// Filter an ordered projection slice by scope (preserves order).
 pub fn filter_rooms_by_scope<'a>(
     rooms: impl IntoIterator<Item = &'a RoomSummary>,

@@ -71,6 +71,7 @@ const sameRoomSummary = (left: RoomSummary, right: RoomSummary): boolean =>
   left.lastMessageIsAgentApproval === right.lastMessageIsAgentApproval &&
   left.tombstoneSuccessorRoomId === right.tombstoneSuccessorRoomId &&
   left.joinRule === right.joinRule &&
+  left.folderId === right.folderId &&
   sameHeroes(left.heroes, right.heroes);
 
 const sameHeroes = (left: RoomSummary['heroes'], right: RoomSummary['heroes']): boolean => {

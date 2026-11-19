@@ -402,9 +402,26 @@ fn p4_4_favorite_low_priority_folder_filters() {
         select_rooms_by_scope(&rooms, RoomListScope::LowPriority).len(),
         1
     );
-    let folder = select_rooms_in_folder(&rooms, "work");
-    assert_eq!(folder.len(), 1);
-    assert_eq!(folder[0].room_id.as_str(), "!folder:example.org");
+    // Room folders: the core section rule; favorites win over folders.
+    let sections: Vec<_> = rooms.iter().map(room_section_placement_for).collect();
+    assert_eq!(
+        sections,
+        [
+            RoomSectionPlacement::Favorites,
+            RoomSectionPlacement::Default,
+            RoomSectionPlacement::Folder {
+                folder_id: "work".to_owned()
+            },
+            RoomSectionPlacement::Default,
+        ]
+    );
+    // The desktop wire carries `folderId` only when the room is filed.
+    let json = serde_json::to_value(&rooms[2]).unwrap();
+    assert_eq!(json["folderId"], "work");
+    assert!(serde_json::to_value(&rooms[3])
+        .unwrap()
+        .get("folderId")
+        .is_none());
 }
 
 #[test]

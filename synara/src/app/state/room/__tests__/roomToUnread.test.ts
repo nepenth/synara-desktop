@@ -68,6 +68,29 @@ test('presentation parsing defaults an absent field and rejects malformed rows',
   assert.deepEqual(parseRoomListPresentation(presentation), presentation);
 });
 
+test('presentation parsing keeps room folders, defaults them for an older Core, rejects bad ones', () => {
+  const folder = {
+    id: 'f1',
+    name: 'Work',
+    roomIds: ['!a:example.org'],
+    recentOrder: ['!a:example.org'],
+    nameOrder: ['!a:example.org'],
+    unreadHighlight: 1,
+    unreadTotal: 2,
+    unreadRoomIds: ['!a:example.org'],
+  };
+  const withFolders = { ...presentation, folders: [folder] };
+  assert.deepEqual(parseRoomListPresentation(withFolders), withFolders);
+  const older: Record<string, unknown> = { ...presentation };
+  delete older.folders;
+  assert.deepEqual(parseRoomListPresentation(older)?.folders, []);
+  assert.equal(
+    parseRoomListPresentation({ ...presentation, folders: [{ ...folder, unreadTotal: -1 }] }),
+    null
+  );
+  assert.equal(parseRoomListPresentation({ ...presentation, folders: 'nope' }), null);
+});
+
 test('ordering keeps ids Core did not list at the end in their original order', () => {
   const order = { ...EMPTY_ROOM_LIST_PRESENTATION, recentOrder: ['!b', '!a'] };
   assert.deepEqual(orderRoomIdsByPresentation(['!x', '!a', '!y', '!b'], order, 'recent'), [

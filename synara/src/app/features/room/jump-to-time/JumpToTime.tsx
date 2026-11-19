@@ -106,7 +106,7 @@ export function JumpToTime({ onCancel, onSubmit }: JumpToTimeProps) {
               size="500"
             >
               <Box grow="Yes">
-                <Text size="H4">Jump to Time</Text>
+                <Text size="H4">Jump to time</Text>
               </Box>
               <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
                 <Icon src={Icons.Cross} />

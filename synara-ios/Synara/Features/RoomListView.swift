@@ -32,6 +32,16 @@ struct RoomListView: View {
     @State private var peerCallStatusGeneration: UInt64 = 0
     /// Direct-message peers' presence from Core; a missing entry is unknown.
     @State private var peerPresence: [String: RoomListPeerPresence] = [:]
+    /// The room folders of the last delivered room-list snapshot (Core's
+    /// sections, display order). Read with every delivery: a rename changes
+    /// no room row.
+    @State private var folderSections: [RoomFolderSection] = []
+    /// A newer client's folder format is stored: every management action hides.
+    @State private var foldersReadOnly = false
+    @State private var folderPrompt: RoomFolderPrompt?
+    @State private var folderPendingDelete: RoomFolderSection?
+    /// A failed folder change from a menu, shown in an alert.
+    @State private var folderError: String?
     @FocusState private var isSearchFocused: Bool
     /// "What's New" after an update, once, at the top of the list.
     @ObservedObject private var whatsNew = WhatsNewPresentation.shared
@@ -96,7 +106,15 @@ struct RoomListView: View {
                 .synaraConnectionChrome()
             case .loaded(let rooms):
                 let filteredRooms = filteredRooms(from: rooms)
-                let sections = RoomListFavorites.sections(from: filteredRooms)
+                let sections = RoomListFavorites.sections(from: filteredRooms, folders: folderSections)
+                let folderListSections = RoomListFolders.sections(
+                    folders: folderSections,
+                    filed: sections.filed,
+                    order: sortOrder,
+                    selectedSpaceID: selectedSpaceID,
+                    isFiltered: selectedFilter != .all
+                        || searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                )
                 let favoriteRooms = RoomListFavorites.sorted(sections.favorites, order: sortOrder)
                 let channelRooms = RoomListFavorites.sorted(sections.channels, order: sortOrder)
                 let directRooms = RoomListFavorites.sorted(sections.directs, order: sortOrder)
@@ -111,13 +129,14 @@ struct RoomListView: View {
                 let ungroupedChannelRooms = RoomListSpaceGrouping.ungroupedChannelRooms(from: channelRooms)
                 // The first visible section's header gets no top spacing.
                 let firstSectionKey = Self.firstSectionKey(
-                    favorites: favoriteRooms,
-                    middle: selectedSpaceTitle != nil && selectedSpaceID != nil
-                        ? [(RoomListSectionKey.space(selectedSpaceID ?? ""), channelRooms)]
-                        : spaceChannelGroups.map { (RoomListSectionKey.space($0.space.id), $0.rooms) }
-                            + [(RoomListSectionKey.channels, ungroupedChannelRooms)],
-                    directs: directRooms,
-                    lowPriority: lowPriorityRooms
+                    hasFavorites: favoriteRooms.isEmpty == false,
+                    folderKeys: folderListSections.map(\.key),
+                    selectedSpaceID: selectedSpaceTitle != nil ? selectedSpaceID : nil,
+                    hasChannels: channelRooms.isEmpty == false,
+                    spaceGroups: spaceChannelGroups,
+                    hasUngroupedChannels: ungroupedChannelRooms.isEmpty == false,
+                    hasDirects: directRooms.isEmpty == false,
+                    hasLowPriority: lowPriorityRooms.isEmpty == false
                 )
                 VStack(spacing: 0) {
                     roomListChrome(
@@ -161,6 +180,10 @@ struct RoomListView: View {
                         }
 
                         roomSection(RoomListSectionKey.favorites, title: String(localized: "Favorites"), rooms: favoriteRooms, firstKey: firstSectionKey)
+
+                        ForEach(folderListSections) { folder in
+                            folderSection(folder, firstKey: firstSectionKey)
+                        }
 
                         if let selectedSpaceTitle, let selectedSpaceID {
                             roomSection(RoomListSectionKey.space(selectedSpaceID), title: selectedSpaceTitle, rooms: channelRooms, firstKey: firstSectionKey)
@@ -252,6 +275,57 @@ struct RoomListView: View {
                 Text("\(roomPendingLeave.name) will be removed from your joined room list.")
             }
         }
+        .sheet(item: $folderPrompt) { prompt in
+            RoomFolderNameSheet(prompt: prompt, service: environment.roomFolders) { result in
+                switch result {
+                case .saved(let snapshot):
+                    folderPrompt = nil
+                    foldersReadOnly = snapshot.readOnly
+                    SynaraHaptics.trigger(.lightImpact)
+                    loadRooms(showLoading: false)
+                case .readOnly:
+                    foldersReadOnly = true
+                }
+            }
+        }
+        .confirmationDialog(
+            Text("Delete the \(folderPendingDelete?.name ?? "") folder?"),
+            isPresented: Binding(
+                get: { folderPendingDelete != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        folderPendingDelete = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible,
+            presenting: folderPendingDelete
+        ) { folder in
+            Button("Delete folder", role: .destructive) {
+                runFolderChange { try await $0.delete(folderID: folder.id) }
+            }
+            .accessibilityIdentifier("RoomFolderDeleteConfirm-\(folder.id)")
+            Button("Cancel", role: .cancel) {
+                folderPendingDelete = nil
+            }
+        } message: { _ in
+            Text("Its rooms go back to Rooms. You stay in every room, and your other devices update too.")
+        }
+        .alert(
+            Text(folderError ?? ""),
+            isPresented: Binding(
+                get: { folderError != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        folderError = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                folderError = nil
+            }
+        }
         .task(id: peerCallStatusKey) {
             await refreshPeerCallStatus(peerIDs: peerCallStatusKey.peerIDs)
         }
@@ -272,6 +346,7 @@ struct RoomListView: View {
                 return
             }
             startRoomUpdates()
+            await refreshFoldersReadOnly()
         }
         .onDisappear {
             loadRoomsTask?.cancel()
@@ -300,7 +375,8 @@ struct RoomListView: View {
                 sortOrder: $sortOrder,
                 onAccount: { environment.router.present(.accountSwitcher) },
                 onSearch: { presentSearch() },
-                onNewRoom: { isRoomManagementSheetPresented = true }
+                onNewRoom: { isRoomManagementSheetPresented = true },
+                onNewFolder: foldersReadOnly ? nil : { folderPrompt = .create(roomID: nil) }
             )
             if isSearchPresented {
                 RoomSearchField(text: $searchQuery, isFocused: $isSearchFocused) {
@@ -327,27 +403,50 @@ struct RoomListView: View {
     }
 
     /// The key of the first section that will draw (empty sections are
-    /// skipped), so only later headers carry the top spacing.
+    /// skipped), so only later headers carry the top spacing. Built step by
+    /// step with explicit types: as one concatenated expression it was too
+    /// much for the Xcode 26 type checker.
     private static func firstSectionKey(
-        favorites: [RoomSummary],
-        middle: [(String, [RoomSummary])],
-        directs: [RoomSummary],
-        lowPriority: [RoomSummary]
+        hasFavorites: Bool,
+        folderKeys: [String],
+        selectedSpaceID: String?,
+        hasChannels: Bool,
+        spaceGroups: [SpaceChannelGroup],
+        hasUngroupedChannels: Bool,
+        hasDirects: Bool,
+        hasLowPriority: Bool
     ) -> String? {
-        var sections: [(String, [RoomSummary])] = [(RoomListSectionKey.favorites, favorites)]
-        sections.append(contentsOf: middle)
-        sections.append((RoomListSectionKey.directs, directs))
-        sections.append((RoomListSectionKey.lowPriority, lowPriority))
-        return sections.first { $0.1.isEmpty == false }?.0
+        var sections: [(key: String, shows: Bool)] = []
+        sections.append((key: RoomListSectionKey.favorites, shows: hasFavorites))
+        // A folder section draws even without rows ("No rooms").
+        for key in folderKeys {
+            sections.append((key: key, shows: true))
+        }
+        if let selectedSpaceID {
+            sections.append((key: RoomListSectionKey.space(selectedSpaceID), shows: hasChannels))
+        } else {
+            for group in spaceGroups {
+                sections.append((key: RoomListSectionKey.space(group.space.id), shows: group.rooms.isEmpty == false))
+            }
+            sections.append((key: RoomListSectionKey.channels, shows: hasUngroupedChannels))
+        }
+        sections.append((key: RoomListSectionKey.directs, shows: hasDirects))
+        sections.append((key: RoomListSectionKey.lowPriority, shows: hasLowPriority))
+        return sections.first { $0.shows }?.key
+    }
+
+    /// The open conversation on a split canvas, kept visible in a collapsed section.
+    private var selectedRowID: String? {
+        canvasLayout == .split ? selectedConversationID : nil
     }
 
     /// A collapsible section. Collapsing hides the read rows only; unread
-    /// rooms stay listed, as in Slack's sidebar.
+    /// rooms (and the open conversation) stay listed, as in Slack's sidebar.
     @ViewBuilder
     private func roomSection(_ key: String, title: String, rooms: [RoomSummary], firstKey: String?) -> some View {
         if rooms.isEmpty == false {
             let isCollapsed = collapsedSections.contains(key)
-            let visibleRooms = isCollapsed ? rooms.filter(\.hasUnreadActivity) : rooms
+            let visibleRooms = RoomListSectionCollapse.visibleRooms(rooms, isCollapsed: isCollapsed, selectedRoomID: selectedRowID)
             Section {
                 ForEach(visibleRooms) { room in
                     roomRow(room)
@@ -371,6 +470,200 @@ struct RoomListView: View {
                     trailing: SynaraSpacing.small + SynaraSpacing.medium
                 ))
             }
+        }
+    }
+
+    /// A room folder's section: the shared header (count, collapse, the
+    /// folder's unread while collapsed) with a folder menu behind its
+    /// ellipsis and on long-press, its rows, or one quiet "No rooms" row.
+    @ViewBuilder
+    private func folderSection(_ section: RoomListFolders.Section, firstKey: String?) -> some View {
+        let key = section.key
+        let folder = section.folder
+        let isCollapsed = collapsedSections.contains(key)
+        let visibleRooms = RoomListSectionCollapse.visibleRooms(
+            section.rooms,
+            isCollapsed: isCollapsed,
+            selectedRoomID: selectedRowID
+        )
+        Section {
+            if section.rooms.isEmpty && isCollapsed == false {
+                Text("No rooms")
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.tertiaryText)
+                    .padding(.leading, SynaraSpacing.medium + SynaraMetrics.roomGlyph + SynaraSpacing.medium)
+                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 0, leading: SynaraSpacing.small, bottom: 0, trailing: SynaraSpacing.small))
+                    .listRowBackground(SynaraChrome.roomList)
+                    .accessibilityIdentifier("RoomListFolderEmpty-\(folder.id)")
+            }
+            ForEach(visibleRooms) { room in
+                roomRow(room)
+            }
+        } header: {
+            HStack(alignment: .bottom, spacing: 0) {
+                RoomListSectionHeader(
+                    title: folder.name,
+                    count: section.rooms.count,
+                    isCollapsed: isCollapsed,
+                    identifier: key,
+                    isFirst: key == firstKey,
+                    collapsedUnread: section.unread,
+                    accessibilityIdentifierOverride: "RoomListFolderHeader-\(folder.id)"
+                ) {
+                    toggleSection(key)
+                }
+                if foldersReadOnly == false {
+                    Menu {
+                        folderMenuItems(section)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(SynaraTypography.sectionCaption.weight(.bold))
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .frame(width: 36, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(Text("\(folder.name) folder options"))
+                    .accessibilityIdentifier("RoomListFolderMenu-\(folder.id)")
+                }
+            }
+            .contextMenu {
+                if foldersReadOnly == false {
+                    folderMenuItems(section)
+                }
+            }
+            .listRowInsets(EdgeInsets(
+                top: 0,
+                leading: SynaraSpacing.small + SynaraSpacing.medium,
+                bottom: 0,
+                trailing: SynaraSpacing.small
+            ))
+        }
+    }
+
+    /// Rename, Move up, Move down and Delete folder: the header's ellipsis
+    /// menu and its long-press menu (desktop's folder menu).
+    @ViewBuilder
+    private func folderMenuItems(_ section: RoomListFolders.Section) -> some View {
+        let folder = section.folder
+        Button {
+            folderPrompt = .rename(folderID: folder.id, name: folder.name)
+        } label: {
+            Label(String(localized: "Rename"), systemImage: "pencil")
+        }
+        .accessibilityIdentifier("RoomFolderRename-\(folder.id)")
+        Button {
+            runFolderChange { try await $0.move(folderID: folder.id, toIndex: section.index - 1) }
+        } label: {
+            Label(String(localized: "Move up"), systemImage: "arrow.up")
+        }
+        .disabled(section.index <= 0)
+        .accessibilityIdentifier("RoomFolderMoveUp-\(folder.id)")
+        Button {
+            runFolderChange { try await $0.move(folderID: folder.id, toIndex: section.index + 1) }
+        } label: {
+            Label(String(localized: "Move down"), systemImage: "arrow.down")
+        }
+        .disabled(section.index >= section.folderCount - 1)
+        .accessibilityIdentifier("RoomFolderMoveDown-\(folder.id)")
+        Divider()
+        Button(role: .destructive) {
+            folderPendingDelete = folder
+        } label: {
+            Label(String(localized: "Delete folder"), systemImage: "trash")
+        }
+        .accessibilityIdentifier("RoomFolderDelete-\(folder.id)")
+    }
+
+    /// "Move to folder" in a room's long-press menu: every folder (a check
+    /// on the current one), New folder… (creates it with the room in one
+    /// command) and, when filed, Remove from folder. Not for DMs or while a
+    /// newer client's folder format is stored.
+    @ViewBuilder
+    private func moveToFolderMenu(_ room: RoomSummary) -> some View {
+        if foldersReadOnly == false, RoomListFolders.canFile(room) {
+            Menu {
+                Section {
+                    ForEach(folderSections) { folder in
+                        Button {
+                            fileRoom(room, in: folder.id)
+                        } label: {
+                            if folder.id == room.folderID {
+                                Label(folder.name, systemImage: "checkmark")
+                            } else {
+                                Text(folder.name)
+                            }
+                        }
+                        .accessibilityAddTraits(folder.id == room.folderID ? .isSelected : [])
+                        .accessibilityIdentifier("MoveToFolder-\(room.id)-\(folder.id)")
+                    }
+                }
+                Section {
+                    Button {
+                        folderPrompt = .create(roomID: room.id)
+                    } label: {
+                        Label(String(localized: "New folder…"), systemImage: "folder.badge.plus")
+                    }
+                    .accessibilityIdentifier("NewFolderForRoom-\(room.id)")
+                    if room.folderID != nil {
+                        Button {
+                            fileRoom(room, in: nil)
+                        } label: {
+                            Label(String(localized: "Remove from folder"), systemImage: "folder.badge.minus")
+                        }
+                        .accessibilityIdentifier("RemoveFromFolder-\(room.id)")
+                    }
+                }
+            } label: {
+                Label(String(localized: "Move to folder"), systemImage: "folder")
+            }
+            .accessibilityIdentifier("MoveToFolder-\(room.id)")
+        }
+    }
+
+    private func fileRoom(_ room: RoomSummary, in folderID: String?) {
+        // Choosing the current folder changes nothing (desktop closes too).
+        if let folderID, folderID == room.folderID {
+            return
+        }
+        runFolderChange { try await $0.setRoom(roomID: room.id, folderID: folderID) }
+    }
+
+    /// Runs one folder command. Success reloads the list (Core's room-list
+    /// signal also fires); a failure says why in an alert, never silently.
+    private func runFolderChange(_ command: @escaping (RoomFoldersServicing) async throws -> RoomFoldersSnapshot) {
+        let service = environment.roomFolders
+        Task {
+            do {
+                let snapshot = try await command(service)
+                await MainActor.run {
+                    foldersReadOnly = snapshot.readOnly
+                    folderPendingDelete = nil
+                    SynaraHaptics.trigger(.lightImpact)
+                    loadRooms(showLoading: false)
+                }
+            } catch {
+                let failure = RoomFolderError(error)
+                await MainActor.run {
+                    folderPendingDelete = nil
+                    if failure.isReadOnly {
+                        foldersReadOnly = true
+                    }
+                    folderError = failure.localizedDescription
+                }
+            }
+        }
+    }
+
+    /// Whether management shows. A failed read keeps the current state;
+    /// a write would fail with the read-only copy anyway.
+    private func refreshFoldersReadOnly() async {
+        guard let snapshot = try? await environment.roomFolders.snapshot(), Task.isCancelled == false else {
+            return
+        }
+        await MainActor.run {
+            foldersReadOnly = snapshot.readOnly
         }
     }
 
@@ -451,7 +744,7 @@ struct RoomListView: View {
             return
         }
         await MainActor.run {
-            state = loadedState
+            apply(loadedState)
             autoOpenRoomIfRequested(from: loadedState)
             startRoomUpdatesIfReady(for: loadedState)
         }
@@ -474,7 +767,7 @@ struct RoomListView: View {
                 return
             }
             await MainActor.run {
-                state = loadedState
+                apply(loadedState)
                 autoOpenRoomIfRequested(from: loadedState)
                 if startUpdatesAfterLoad {
                     startRoomUpdatesIfReady(for: loadedState)
@@ -513,8 +806,17 @@ struct RoomListView: View {
 
     private func startRoomUpdates() {
         liveUpdates.start(service: environment.roomList) { updatedState in
-            state = updatedState
+            apply(updatedState)
             autoOpenRoomIfRequested(from: updatedState)
+        }
+    }
+
+    /// One delivered snapshot: the rows and the folders read with them.
+    private func apply(_ newState: RoomListState) {
+        state = newState
+        let folders = environment.roomList.roomFolderSections()
+        if folders != folderSections {
+            folderSections = folders
         }
     }
 
@@ -713,6 +1015,7 @@ struct RoomListView: View {
                         systemImage: room.isFavorite ? "star.slash" : "star"
                     )
                 }
+                moveToFolderMenu(room)
                 Button {
                     toggleMute(room)
                 } label: {
@@ -853,6 +1156,11 @@ enum RoomListSectionKey {
     static func space(_ id: String) -> String {
         "space:\(id)"
     }
+
+    /// A user room folder; collapses per device like the other sections.
+    static func folder(_ id: String) -> String {
+        "folder:\(id)"
+    }
 }
 
 /// Collapsed sections survive relaunch, like the sort order. UI tests start
@@ -869,6 +1177,15 @@ enum RoomListSectionCollapse {
 
     static func persist(_ keys: Set<String>, defaults: UserDefaults = .standard) {
         defaults.set(Array(keys).sorted(), forKey: storageKey)
+    }
+
+    /// A collapsed section keeps its unread rows and the open conversation
+    /// (desktop's `visibleWhenClosed`).
+    static func visibleRooms(_ rooms: [RoomSummary], isCollapsed: Bool, selectedRoomID: String?) -> [RoomSummary] {
+        guard isCollapsed else {
+            return rooms
+        }
+        return rooms.filter { $0.hasUnreadActivity || $0.id == selectedRoomID }
     }
 }
 
@@ -918,6 +1235,8 @@ private struct RoomListHeader: View {
     let onAccount: () -> Void
     let onSearch: () -> Void
     let onNewRoom: () -> Void
+    /// New folder (nil while folders are read-only).
+    var onNewFolder: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: SynaraSpacing.small) {
@@ -1015,6 +1334,15 @@ private struct RoomListHeader: View {
                 }
             } header: {
                 Text("Sort by")
+            }
+
+            if let onNewFolder {
+                Section {
+                    Button(action: onNewFolder) {
+                        Label(String(localized: "New folder"), systemImage: "folder.badge.plus")
+                    }
+                    .accessibilityIdentifier("RoomListNewFolderButton")
+                }
             }
         } label: {
             HStack(spacing: SynaraSpacing.xSmall) {
@@ -1392,7 +1720,35 @@ struct RoomListSectionHeader: View {
     /// The list's first header sits flush; later ones get
     /// `SynaraMetrics.roomListSectionHeaderTopSpacing` above them.
     var isFirst = false
+    /// A room folder's unread, shown only while the section is collapsed:
+    /// the mention count as a badge, otherwise the quiet unread mark.
+    var collapsedUnread: RoomListFolders.Unread? = nil
+    /// The full accessibility identifier, instead of `RoomListSectionHeader-…`.
+    var accessibilityIdentifierOverride: String? = nil
     var onToggle: (() -> Void)? = nil
+
+    private var fullIdentifier: String {
+        accessibilityIdentifierOverride ?? "RoomListSectionHeader-\(identifier ?? title)"
+    }
+
+    /// The unread the collapsed header carries, if any.
+    private var shownUnread: RoomListFolders.Unread? {
+        guard isCollapsed, let collapsedUnread, collapsedUnread.hasUnread else {
+            return nil
+        }
+        return collapsedUnread
+    }
+
+    /// "Work, 2 mentions" or "Work, unread" while collapsed with unread.
+    private var spokenTitle: String {
+        guard let unread = shownUnread else {
+            return title
+        }
+        if unread.highlight > 0 {
+            return String(localized: "\(title), \(unread.highlight) mentions")
+        }
+        return String(localized: "\(title), unread")
+    }
 
     var body: some View {
         if let onToggle {
@@ -1400,14 +1756,16 @@ struct RoomListSectionHeader: View {
                 label
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(title))
+            .accessibilityLabel(Text(spokenTitle))
             .accessibilityValue(isCollapsed ? Text("Collapsed") : Text("Expanded"))
             .accessibilityHint(isCollapsed ? Text("Expands this section") : Text("Collapses this section"))
-            .accessibilityIdentifier("RoomListSectionHeader-\(identifier ?? title)")
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier(fullIdentifier)
         } else {
             label
                 .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("RoomListSectionHeader-\(identifier ?? title)")
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier(fullIdentifier)
         }
     }
 
@@ -1435,6 +1793,20 @@ struct RoomListSectionHeader: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: SynaraSpacing.small)
+            if let unread = shownUnread {
+                Group {
+                    if unread.highlight > 0 {
+                        SynaraUnreadBadge(count: unread.highlight, highlighted: true)
+                    } else {
+                        // The rows' quiet unread mark, as a dot.
+                        Circle()
+                            .fill(SynaraColor.headingText)
+                            .frame(width: 6, height: 6)
+                    }
+                }
+                .accessibilityHidden(true)
+                .accessibilityIdentifier("RoomListSectionUnread-\(identifier ?? title)")
+            }
             Text("\(count)")
                 .font(SynaraTypography.messageMeta)
                 .monospacedDigit()

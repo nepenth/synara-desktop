@@ -307,7 +307,7 @@ const assertIndexed = <T>(dir: string, page: T | T[], index: SettingsSearchEntry
   });
 };
 
-test('the Room and Space Settings indexes list every title their pages render', () => {
+test('the Room and Space settings indexes list every title their pages render', () => {
   const pages = { general: 0, permissions: 2, emojis: 3, developer: 4 };
   (['room', 'space'] as const).forEach((kind) => {
     const index = commonSettingsSearchIndex(kind, pages);

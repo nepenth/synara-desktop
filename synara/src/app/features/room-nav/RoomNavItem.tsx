@@ -65,6 +65,7 @@ import { isLinuxDesktopShell } from '../../hooks/useTilingMode';
 import { handleVimListKey, resolveVimListKeys } from '../desktop-keyboard/vimListKeys';
 import * as depthCss from '../../styles/Depth.css';
 import { PersonGlyph, roomGlyphFor } from '../../components/room-glyph';
+import { RoomFolderMenuItem } from '../room-folders/RoomFolderMenuItem';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -182,7 +183,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             radii="300"
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              {unread ? 'Mark as Read' : 'Mark as Unread'}
+              {unread ? 'Mark as read' : 'Mark as unread'}
             </Text>
           </MenuItem>
           {readError && (
@@ -208,7 +209,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             radii="300"
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+              {isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             </Text>
           </MenuItem>
           {favoriteError && (
@@ -216,6 +217,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
               {favoriteError}
             </Text>
           )}
+          <RoomFolderMenuItem roomId={room.roomId} requestClose={requestClose} />
           <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
             {(handleOpen, opened, changing) => (
               <MenuItem
@@ -266,7 +268,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             radii="300"
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              Copy Link
+              Copy link
             </Text>
           </MenuItem>
           <MenuItem
@@ -278,7 +280,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             radii="300"
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              Room Settings
+              Room settings
             </Text>
           </MenuItem>
         </Box>
@@ -297,7 +299,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
                   aria-pressed={promptLeave}
                 >
                   <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-                    Leave Room
+                    Leave room
                   </Text>
                 </MenuItem>
                 {promptLeave && (
