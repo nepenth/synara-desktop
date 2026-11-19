@@ -18,6 +18,9 @@ extension AgentQuestionAnswerRouteDto: Sendable
 extension AgentQuestionAnswerStatusDto: Sendable
 extension AgentQuestionSourceDto: Sendable
 extension AgentQuestionStateDto: Sendable
+extension AppIconBadgeInput: Sendable
+extension AppIconBadgeRoom: Sendable
+extension AppIconBadgeSummary: Sendable
 extension BackupActionDto: Sendable
 extension BackupAvailabilityDto: Sendable
 extension BackupDeviceStateDto: Sendable
@@ -1154,6 +1157,7 @@ public func planMemberActions(context: MemberActionContext) -> MemberActionPlan
 public func registerFlows(homeserverUrl: String, appVersion: String) async throws -> RegisterFlowsDto
 public func resolveHomeserver(serverNameOrUrl: String, appVersion: String) async throws -> ResolvedHomeserverDto
 public func roomUnreadPresentation(membership: RoomUnreadMembership, numUnreadMessages: UInt64, numUnreadNotifications: UInt64, numUnreadMentions: UInt64, isMarkedUnread: Bool) -> RoomUnreadPresentationDto
+public func summarizeAppIconBadge(input: AppIconBadgeInput) -> AppIconBadgeSummary
 public func summarizeBadges(input: BadgeSummaryInput) -> BadgeSummary
 public protocol HttpPusherOwnerProtocol: AnyObject, Sendable
   func deleteHttpPusher(pushKey: String, appId: String) async throws -> PusherWriteDto
@@ -1436,6 +1440,23 @@ public struct AgentQuestionAnswerResultDto: Equatable, Hashable
   public var status: AgentQuestionAnswerStatusDto
   public var route: AgentQuestionAnswerRouteDto?
   public init(roomId: String, eventId: String, status: AgentQuestionAnswerStatusDto, route: AgentQuestionAnswerRouteDto?)
+public struct AppIconBadgeInput: Equatable, Hashable
+  public var rooms: [AppIconBadgeRoom]
+  public var dueReminderCount: UInt64
+  public init(rooms: [AppIconBadgeRoom], dueReminderCount: UInt64)
+public struct AppIconBadgeRoom: Equatable, Hashable
+  public var roomId: String
+  public var isJoined: Bool
+  public var isSpace: Bool
+  public var isMuted: Bool
+  public var highlightCount: UInt64
+  public var notificationCount: UInt64
+  public var markedUnread: Bool
+  public init(roomId: String, isJoined: Bool, isSpace: Bool, isMuted: Bool, highlightCount: UInt64, notificationCount: UInt64, markedUnread: Bool)
+public struct AppIconBadgeSummary: Equatable, Hashable
+  public var count: UInt64
+  public var attentionRoomIds: [String]
+  public init(count: UInt64, attentionRoomIds: [String])
 public struct BackupStatusDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var availability: BackupAvailabilityDto
@@ -1936,6 +1957,7 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var activeCallParticipantCount: UInt32
   public var unreadCount: UInt32
   public var highlightCount: UInt32
+  public var notificationCount: UInt32
   public var markedUnread: Bool
   public var lastActivityTs: UInt64?
   public var lastMessagePreview: String?
@@ -1943,7 +1965,7 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var isEncrypted: Bool
   public var encryptionStatus: RoomEncryptionStatus
   public var notificationMode: String?
-  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: RoomMembershipDto, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isLowPriority: Bool, isAgentRoom: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
+  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: RoomMembershipDto, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isLowPriority: Bool, isAgentRoom: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, notificationCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
 public struct RoomListSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var orderedRoomIds: [String]

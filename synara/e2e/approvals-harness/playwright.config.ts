@@ -16,6 +16,7 @@ export default defineConfig({
     'approvals-provider-lifecycle.spec.ts',
     'composer-formatting.spec.ts',
     'composer-mention.spec.ts',
+    'composer-emoji.spec.ts',
     'question-cards.spec.ts',
     'approvals-viewport-matrix.spec.ts',
   ],

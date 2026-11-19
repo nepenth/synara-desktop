@@ -665,6 +665,99 @@ enum SynaraApprovalAlertRateLimit {
     }
 }
 
+/// The app-icon badge in the app's unit: conversations that need attention
+/// plus due reminders (Core's `summarize_app_icon_badge`). While it runs, the
+/// app is the only writer of the icon and stores its last count and the rooms
+/// it counted here. The notification service extension reads it so a push in
+/// the background moves the icon in the same unit instead of applying the
+/// gateway's per-message `aps.badge`.
+enum SynaraAppIconBadgeStore {
+    struct State: Equatable {
+        var count: Int
+        var roomIDs: [String]
+    }
+
+    static let storageKey = "synara.notification.appIconBadge.v1"
+    private static let countKey = "count"
+    private static let roomsKey = "rooms"
+    /// Bounds the set if the app does not run for a long time.
+    static let maxTrackedRooms = 512
+    /// Pushes may be handled concurrently in one extension process.
+    private static let lock = NSLock()
+
+    static func load(defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()) -> State? {
+        lock.lock()
+        defer { lock.unlock() }
+        return loadWithoutLock(defaults: defaults)
+    }
+
+    /// The app's fresh count. Returns the rooms the previous state counted,
+    /// so the caller can tell which rooms stopped needing attention.
+    @discardableResult
+    static func replace(
+        count: Int,
+        roomIDs: [String],
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
+    ) -> Set<String> {
+        lock.lock()
+        defer { lock.unlock() }
+        let previous = loadWithoutLock(defaults: defaults)?.roomIDs ?? []
+        save(State(count: max(0, count), roomIDs: roomIDs), defaults: defaults)
+        return Set(previous)
+    }
+
+    /// The server says everything is read (`aps.badge` 0).
+    static func clear(defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()) {
+        lock.lock()
+        defer { lock.unlock() }
+        save(State(count: 0, roomIDs: []), defaults: defaults)
+    }
+
+    /// The icon number for a notifying push in the extension. A payload badge
+    /// of 0 sets 0 and clears the stored rooms. Otherwise, with stored state,
+    /// a push for a room the stored count already includes keeps the count
+    /// and any other room adds 1 and joins the set, so pushes for several
+    /// rooms accumulate. Without stored state (the app never ran since this
+    /// version) the gateway's badge passes through.
+    static func badgeForIncomingPush(
+        roomID: String?,
+        payloadBadge: NSNumber?,
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
+    ) -> NSNumber? {
+        lock.lock()
+        defer { lock.unlock() }
+        if payloadBadge?.intValue == 0 {
+            save(State(count: 0, roomIDs: []), defaults: defaults)
+            return 0
+        }
+        guard var state = loadWithoutLock(defaults: defaults) else {
+            return payloadBadge
+        }
+        guard let roomID, state.roomIDs.contains(roomID) == false else {
+            return NSNumber(value: state.count)
+        }
+        state.count += 1
+        state.roomIDs.append(roomID)
+        save(state, defaults: defaults)
+        return NSNumber(value: state.count)
+    }
+
+    private static func loadWithoutLock(defaults: UserDefaults?) -> State? {
+        guard let stored = defaults?.dictionary(forKey: storageKey),
+              let count = stored[countKey] as? Int else {
+            return nil
+        }
+        return State(count: max(0, count), roomIDs: stored[roomsKey] as? [String] ?? [])
+    }
+
+    private static func save(_ state: State, defaults: UserDefaults?) {
+        defaults?.set(
+            [countKey: state.count, roomsKey: Array(state.roomIDs.suffix(maxTrackedRooms))],
+            forKey: storageKey
+        )
+    }
+}
+
 enum SynaraAgentApprovalFreshness {
     static let ttlMilliseconds: UInt64 = 5 * 60 * 1_000
     static let futureToleranceMilliseconds: UInt64 = 60 * 1_000

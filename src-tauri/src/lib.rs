@@ -697,6 +697,7 @@ pub fn run() {
             desktop_file_transfer::desktop_save_file_chunk,
             desktop_file_transfer::desktop_save_file_end,
             desktop_file_transfer::desktop_save_file_abort,
+            desktop_file_transfer::desktop_reveal_download,
             desktop_file_transfer::desktop_read_dropped_files,
             desktop_file_transfer::desktop_read_dropped_file_chunk,
             desktop_file_transfer::desktop_read_dropped_file_end,

@@ -253,7 +253,10 @@ final class NotificationPreviewSupportTests: XCTestCase {
         XCTAssertEqual(stage, .resolvedWithoutPreview)
     }
 
-    func testNotificationServiceExtensionDoesNotWriteAppIconBadge() throws {
+    /// The extension computes the push's badge in the app's unit (from the
+    /// shared store) instead of passing the gateway's count through, but it
+    /// still only sets the content badge and never writes the icon itself.
+    func testNotificationServiceExtensionComputesBadgeFromSharedStoreOnly() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -261,6 +264,86 @@ final class NotificationPreviewSupportTests: XCTestCase {
         let source = try String(contentsOf: url, encoding: .utf8)
         XCTAssertFalse(source.contains("setBadgeCount"))
         XCTAssertFalse(source.contains("applyAppIconBadge"))
+        XCTAssertTrue(source.contains("SynaraAppIconBadgeStore.badgeForIncomingPush("))
+    }
+
+    private func badgeDefaults() throws -> (UserDefaults, () -> Void) {
+        let suite = "SynaraAppIconBadgeStoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        return (defaults, { defaults.removePersistentDomain(forName: suite) })
+    }
+
+    func testExtensionBadgePassesGatewayBadgeThroughWithoutStoredState() throws {
+        let (defaults, cleanup) = try badgeDefaults()
+        defer { cleanup() }
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.badgeForIncomingPush(roomID: "!a:x", payloadBadge: 23, defaults: defaults),
+            23
+        )
+        XCTAssertNil(SynaraAppIconBadgeStore.badgeForIncomingPush(roomID: "!a:x", payloadBadge: nil, defaults: defaults))
+        XCTAssertNil(SynaraAppIconBadgeStore.load(defaults: defaults))
+    }
+
+    func testExtensionBadgeAddsOnePerNewRoomAndAccumulates() throws {
+        let (defaults, cleanup) = try badgeDefaults()
+        defer { cleanup() }
+        SynaraAppIconBadgeStore.replace(count: 2, roomIDs: ["!a:x"], defaults: defaults)
+
+        // A room the app already counted keeps the count; the gateway's
+        // per-message badge is not used.
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.badgeForIncomingPush(roomID: "!a:x", payloadBadge: 23, defaults: defaults),
+            2
+        )
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.badgeForIncomingPush(roomID: "!b:x", payloadBadge: 24, defaults: defaults),
+            3
+        )
+        // A second push for the same new room does not add again.
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.badgeForIncomingPush(roomID: "!b:x", payloadBadge: 25, defaults: defaults),
+            3
+        )
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.badgeForIncomingPush(roomID: "!c:x", payloadBadge: nil, defaults: defaults),
+            4
+        )
+        // Without a room id the count stays.
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.badgeForIncomingPush(roomID: nil, payloadBadge: 26, defaults: defaults),
+            4
+        )
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.load(defaults: defaults),
+            .init(count: 4, roomIDs: ["!a:x", "!b:x", "!c:x"])
+        )
+    }
+
+    func testExtensionBadgeZeroClearsCountAndRooms() throws {
+        let (defaults, cleanup) = try badgeDefaults()
+        defer { cleanup() }
+        SynaraAppIconBadgeStore.replace(count: 3, roomIDs: ["!a:x", "!b:x"], defaults: defaults)
+
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.badgeForIncomingPush(roomID: "!a:x", payloadBadge: 0, defaults: defaults),
+            0
+        )
+        XCTAssertEqual(SynaraAppIconBadgeStore.load(defaults: defaults), .init(count: 0, roomIDs: []))
+        // Later pushes accumulate from zero.
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.badgeForIncomingPush(roomID: "!a:x", payloadBadge: 5, defaults: defaults),
+            1
+        )
+    }
+
+    func testReplaceReturnsPreviouslyCountedRooms() throws {
+        let (defaults, cleanup) = try badgeDefaults()
+        defer { cleanup() }
+        XCTAssertEqual(SynaraAppIconBadgeStore.replace(count: 1, roomIDs: ["!a:x"], defaults: defaults), [])
+        XCTAssertEqual(
+            SynaraAppIconBadgeStore.replace(count: 0, roomIDs: [], defaults: defaults),
+            ["!a:x"]
+        )
     }
 
     func testPreviewFailureDiagnosticsKeepOnlyAllowlistedReasons() {

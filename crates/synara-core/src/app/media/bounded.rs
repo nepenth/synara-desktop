@@ -27,6 +27,25 @@ use reqwest::{Response, StatusCode, Url};
 /// Longest wait for response headers or for the next body chunk.
 const MEDIA_STALL_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// What a download has reached, for callers that show progress.
+///
+/// `Started` comes once the homeserver accepted the request, with its
+/// Content-Length when it sent one (ciphertext size for encrypted media).
+/// `Received` follows every body chunk with the running byte count, so callers
+/// throttle it themselves. `Downloaded` marks the end of the network part;
+/// decryption, if any, runs after it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MediaDownloadProgress {
+    Started { total: Option<u64> },
+    Received { received: u64 },
+    Downloaded,
+}
+
+/// A progress observer; [`no_progress`] for callers that do not show any.
+pub type MediaProgressSink<'a> = &'a mut (dyn FnMut(MediaDownloadProgress) + Send);
+
+fn no_progress(_: MediaDownloadProgress) {}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BoundedMediaError {
     InvalidUri,
@@ -116,7 +135,14 @@ async fn send_media_request(
 const MAX_ERROR_BODY_BYTES: usize = 16 * 1024;
 
 async fn is_unknown_token_response(response: Response, stall_timeout: Duration) -> bool {
-    let Ok(body) = read_body_bounded(response, MAX_ERROR_BODY_BYTES, stall_timeout).await else {
+    let Ok(body) = read_body_bounded(
+        response,
+        MAX_ERROR_BODY_BYTES,
+        stall_timeout,
+        &mut no_progress,
+    )
+    .await
+    else {
         return false;
     };
     serde_json::from_slice::<serde_json::Value>(&body)
@@ -181,17 +207,19 @@ async fn read_response_bounded(
     response: Response,
     max_bytes: usize,
     stall_timeout: Duration,
+    on_progress: MediaProgressSink<'_>,
 ) -> Result<Vec<u8>, BoundedMediaError> {
     if !response.status().is_success() {
         return Err(BoundedMediaError::RequestFailed);
     }
-    read_body_bounded(response, max_bytes, stall_timeout).await
+    read_body_bounded(response, max_bytes, stall_timeout, on_progress).await
 }
 
 async fn read_body_bounded(
     response: Response,
     max_bytes: usize,
     stall_timeout: Duration,
+    on_progress: MediaProgressSink<'_>,
 ) -> Result<Vec<u8>, BoundedMediaError> {
     if response
         .content_length()
@@ -199,6 +227,9 @@ async fn read_body_bounded(
     {
         return Err(BoundedMediaError::TooLarge);
     }
+    on_progress(MediaDownloadProgress::Started {
+        total: response.content_length(),
+    });
 
     let mut bytes = Vec::with_capacity(
         response
@@ -213,6 +244,9 @@ async fn read_body_bounded(
     {
         let chunk = chunk.map_err(|_| BoundedMediaError::RequestFailed)?;
         extend_bounded(&mut bytes, &chunk, max_bytes)?;
+        on_progress(MediaDownloadProgress::Received {
+            received: bytes.len() as u64,
+        });
     }
     Ok(bytes)
 }
@@ -249,7 +283,27 @@ pub async fn download_media_bounded(
     request: &MediaRequestParameters,
     max_bytes: usize,
 ) -> Result<Vec<u8>, BoundedMediaError> {
-    let ciphertext = download_network_bytes_bounded(client, request, max_bytes).await?;
+    download_media_bounded_with_progress(client, request, max_bytes, &mut no_progress).await
+}
+
+/// [`download_media_bounded`] that reports [`MediaDownloadProgress`] as the
+/// body arrives. Only the final successful response is reported, not a
+/// refused or legacy-fallback attempt.
+pub async fn download_media_bounded_with_progress(
+    client: &Client,
+    request: &MediaRequestParameters,
+    max_bytes: usize,
+    on_progress: MediaProgressSink<'_>,
+) -> Result<Vec<u8>, BoundedMediaError> {
+    let ciphertext = download_network_bytes_within(
+        client,
+        request,
+        max_bytes,
+        MEDIA_STALL_TIMEOUT,
+        &mut *on_progress,
+    )
+    .await?;
+    on_progress(MediaDownloadProgress::Downloaded);
     let MediaSource::Encrypted(file) = &request.source else {
         return Ok(ciphertext);
     };
@@ -263,7 +317,14 @@ pub(super) async fn download_network_bytes_bounded(
     request: &MediaRequestParameters,
     max_bytes: usize,
 ) -> Result<Vec<u8>, BoundedMediaError> {
-    download_network_bytes_within(client, request, max_bytes, MEDIA_STALL_TIMEOUT).await
+    download_network_bytes_within(
+        client,
+        request,
+        max_bytes,
+        MEDIA_STALL_TIMEOUT,
+        &mut no_progress,
+    )
+    .await
 }
 
 async fn download_network_bytes_within(
@@ -271,6 +332,7 @@ async fn download_network_bytes_within(
     request: &MediaRequestParameters,
     max_bytes: usize,
     stall_timeout: Duration,
+    on_progress: MediaProgressSink<'_>,
 ) -> Result<Vec<u8>, BoundedMediaError> {
     let uri = request.uri();
     let mut response = request_media(client, uri, &request.format, true, stall_timeout).await?;
@@ -280,7 +342,7 @@ async fn download_network_bytes_within(
     ) {
         response = request_media(client, uri, &request.format, false, stall_timeout).await?;
     }
-    read_response_bounded(response, max_bytes, stall_timeout).await
+    read_response_bounded(response, max_bytes, stall_timeout, on_progress).await
 }
 
 #[cfg(test)]
@@ -569,6 +631,142 @@ mod tests {
         })
         .await
         .expect("authenticated loopback proof timed out");
+    }
+
+    /// Downloads `request` and returns the bytes with every progress event.
+    async fn download_recording_progress(
+        client: &Client,
+        request: &MediaRequestParameters,
+        max_bytes: usize,
+    ) -> (
+        Result<Vec<u8>, BoundedMediaError>,
+        Vec<MediaDownloadProgress>,
+    ) {
+        let mut events = Vec::new();
+        let mut record = |event| events.push(event);
+        let result =
+            download_media_bounded_with_progress(client, request, max_bytes, &mut record).await;
+        (result, events)
+    }
+
+    #[tokio::test]
+    async fn progress_reports_the_content_length_each_chunk_and_the_end_of_the_network_part() {
+        tokio::time::timeout(LOOPBACK_TEST_TIMEOUT, async {
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind progress server");
+            let client = restored_client(&listener).await;
+            let server = tokio::spawn(serve_responses(
+                listener,
+                vec![response("200 OK", b"measured-media")],
+            ));
+            let (result, events) = download_recording_progress(&client, &media_request(), 64).await;
+            server.await.expect("progress server");
+
+            assert_eq!(result.expect("download"), b"measured-media");
+            assert_eq!(
+                events.first(),
+                Some(&MediaDownloadProgress::Started { total: Some(14) })
+            );
+            assert_eq!(events.last(), Some(&MediaDownloadProgress::Downloaded));
+            let received = events
+                .iter()
+                .filter_map(|event| match event {
+                    MediaDownloadProgress::Received { received } => Some(*received),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert!(!received.is_empty());
+            assert!(received.windows(2).all(|pair| pair[0] < pair[1]));
+            assert_eq!(received.last(), Some(&14));
+        })
+        .await
+        .expect("progress loopback proof timed out");
+    }
+
+    #[tokio::test]
+    async fn progress_without_content_length_reports_an_unknown_total() {
+        tokio::time::timeout(LOOPBACK_TEST_TIMEOUT, async {
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind chunked progress server");
+            let client = restored_client(&listener).await;
+            let server = tokio::spawn(serve_paced_chunks(
+                listener,
+                b"part",
+                3,
+                Duration::from_millis(20),
+                false,
+            ));
+            let (result, events) = download_recording_progress(&client, &media_request(), 64).await;
+            server.await.expect("chunked progress server");
+
+            assert_eq!(result.expect("download"), b"part".repeat(3));
+            assert_eq!(
+                events.first(),
+                Some(&MediaDownloadProgress::Started { total: None })
+            );
+            assert_eq!(
+                events[events.len() - 2..],
+                [
+                    MediaDownloadProgress::Received { received: 12 },
+                    MediaDownloadProgress::Downloaded,
+                ]
+            );
+        })
+        .await
+        .expect("chunked progress loopback proof timed out");
+    }
+
+    #[tokio::test]
+    async fn progress_skips_the_refused_attempt_and_stops_at_the_cap() {
+        tokio::time::timeout(LOOPBACK_TEST_TIMEOUT, async {
+            // The legacy-endpoint fallback starts once, for the response that is read.
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind fallback progress server");
+            let client = restored_client(&listener).await;
+            let server = tokio::spawn(serve_responses(
+                listener,
+                vec![
+                    response("404 Not Found", b"missing"),
+                    response("200 OK", b"legacy"),
+                ],
+            ));
+            let (result, events) = download_recording_progress(&client, &media_request(), 64).await;
+            server.await.expect("fallback progress server");
+            assert_eq!(result.expect("download"), b"legacy");
+            assert_eq!(
+                events
+                    .iter()
+                    .filter(|event| matches!(event, MediaDownloadProgress::Started { .. }))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                events.first(),
+                Some(&MediaDownloadProgress::Started { total: Some(6) })
+            );
+
+            // An oversized body fails without reporting the end of the download.
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind oversized progress server");
+            let client = restored_client(&listener).await;
+            let server = tokio::spawn(serve_paced_chunks(
+                listener,
+                b"1234",
+                2,
+                Duration::ZERO,
+                false,
+            ));
+            let (result, events) = download_recording_progress(&client, &media_request(), 6).await;
+            server.await.expect("oversized progress server");
+            assert_eq!(result, Err(BoundedMediaError::TooLarge));
+            assert!(!events.contains(&MediaDownloadProgress::Downloaded));
+        })
+        .await
+        .expect("fallback progress loopback proof timed out");
     }
 
     #[tokio::test]
@@ -976,6 +1174,7 @@ mod tests {
                 &media_request(),
                 64,
                 Duration::from_millis(600),
+                &mut no_progress,
             )
             .await
             .expect("slow download that keeps progressing");
@@ -1009,6 +1208,7 @@ mod tests {
                     &media_request(),
                     64,
                     Duration::from_millis(300),
+                    &mut no_progress,
                 )
                 .await,
                 Err(BoundedMediaError::RequestFailed)
@@ -1034,6 +1234,7 @@ mod tests {
                     &media_request(),
                     64,
                     Duration::from_millis(300),
+                    &mut no_progress,
                 )
                 .await,
                 Err(BoundedMediaError::RequestFailed)

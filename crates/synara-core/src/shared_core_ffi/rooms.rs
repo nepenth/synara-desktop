@@ -140,6 +140,9 @@ pub struct RoomListRoomDto {
     pub active_call_participant_count: u32,
     pub unread_count: u32,
     pub highlight_count: u32,
+    /// Unread events that notify under the room's push rules; feeds the
+    /// app-icon rule (`summarize_app_icon_badge`).
+    pub notification_count: u32,
     pub marked_unread: bool,
     pub last_activity_ts: Option<u64>,
     pub last_message_preview: Option<String>,
@@ -1455,6 +1458,7 @@ impl SharedCore {
                     active_call_participant_count: room.active_call_participant_count,
                     unread_count: room.unread_count,
                     highlight_count: room.highlight_count,
+                    notification_count: room.notification_count,
                     marked_unread: room.marked_unread,
                     last_activity_ts: room.last_activity_ts,
                     last_message_preview: room.last_message_preview,

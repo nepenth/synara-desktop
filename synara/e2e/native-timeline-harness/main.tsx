@@ -115,6 +115,24 @@ const claimStream = (subscriptionId: unknown, streamId: string | undefined) => {
   if (deltaSubscriptions.has(subscriptionId)) streamOwners.set(streamId, subscriptionId);
 };
 const commands: { command: string; args?: Record<string, unknown> }[] = [];
+// `saveControl`: `matrix_media_save` waits for the test, which drives its
+// progress channel and settles it through `nativeTimelineFixture.saves`.
+const saveControl = params.has('saveControl');
+type PendingSave = {
+  filename: string;
+  channelId?: number;
+  nextIndex: number;
+  resolve: (filename: string) => void;
+  reject: (error: unknown) => void;
+};
+const pendingSaves: PendingSave[] = [];
+const sendSaveEvent = (message: unknown) => {
+  const save = pendingSaves[0];
+  if (!save) throw new Error('No save is waiting');
+  if (save.channelId === undefined) throw new Error('The save has no progress channel');
+  channelCallbacks.get(save.channelId)?.({ index: save.nextIndex, message });
+  save.nextIndex += 1;
+};
 const makeRow = (index: number) => ({
   kind: 'message' as const,
   itemId: `$${index}`,
@@ -745,7 +763,21 @@ window.__SYNARA_DESKTOP__ = {
     }
     if (command === 'matrix_media_save') {
       const filename = typeof args?.filename === 'string' ? args.filename : 'download';
+      if (saveControl) {
+        return new Promise<T>((resolve, reject) => {
+          pendingSaves.push({
+            filename,
+            channelId: (args?.onProgress as { id?: number } | undefined)?.id,
+            nextIndex: 0,
+            resolve: (saved) => resolve({ filename: saved } as T),
+            reject,
+          });
+        });
+      }
       return { filename } as T;
+    }
+    if (command === 'desktop_reveal_download') {
+      return 'item' as T;
     }
     if (command === 'matrix_timeline_redact') {
       // Core's readback for a completed redaction of the requested event.
@@ -834,6 +866,23 @@ if (scenario === 'media' || params.has('surface')) {
       ...(window as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__,
       convertFileSrc: (handle: string) =>
         `${location.origin}/__synara-media/${encodeURIComponent(handle)}`,
+    },
+  });
+}
+
+if (saveControl) {
+  // The real `@tauri-apps/api` Channel registers its handler here.
+  Object.assign(window, {
+    __TAURI_INTERNALS__: {
+      ...(window as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__,
+      transformCallback: (handler: (message: unknown) => void) => {
+        const id = ++callbackSequence;
+        channelCallbacks.set(id, handler);
+        return id;
+      },
+      unregisterCallback: (id: number) => {
+        channelCallbacks.delete(id);
+      },
     },
   });
 }
@@ -1221,6 +1270,25 @@ const api = {
   },
   releaseThreadOpen() {
     releaseThreadOpen?.();
+  },
+  /** `saveControl`: the oldest waiting `matrix_media_save`, as Rust reports it. */
+  saves: {
+    pending: () => pendingSaves.length,
+    started: (total?: number) =>
+      sendSaveEvent({ event: 'started', data: { total: total ?? null } }),
+    progress: (received: number) => sendSaveEvent({ event: 'progress', data: { received } }),
+    finishing: () => sendSaveEvent({ event: 'finishing' }),
+    resolve: (filename?: string) => {
+      const save = pendingSaves.shift();
+      save?.resolve(filename ?? save.filename);
+    },
+    reject: (diagnosticId = 'v-send.r-media-download-sdk-failed') => {
+      pendingSaves.shift()?.reject({
+        code: 'Unknown',
+        message: 'The native media operation is unavailable.',
+        diagnosticId,
+      });
+    },
   },
 };
 Object.assign(window, { nativeTimelineFixture: api });

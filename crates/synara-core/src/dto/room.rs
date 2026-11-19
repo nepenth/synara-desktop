@@ -125,6 +125,12 @@ pub struct RoomSummary {
     pub join_rule: Option<String>,
     pub unread_count: u32,
     pub highlight_count: u32,
+    /// Unread events that notify under the room's push rules (the SDK's
+    /// unread notification count), apart from `unread_count`, which also
+    /// counts plain messages. Feeds the iOS app-icon rule
+    /// (`room_list::presentation::summarize_app_icon_badge`). Not part of the
+    /// desktop JSON: serialization skips it and deserialization yields 0.
+    pub notification_count: u32,
     pub marked_unread: bool,
     pub notification_mode: Option<NotificationMode>,
     /// Last activity timestamp in milliseconds since Unix epoch.
@@ -310,6 +316,7 @@ impl<'de> Deserialize<'de> for RoomSummary {
             join_rule: wire.join_rule,
             unread_count: wire.unread_count,
             highlight_count: wire.highlight_count,
+            notification_count: 0,
             marked_unread: wire.marked_unread,
             notification_mode: wire.notification_mode,
             last_activity_ts: wire.last_activity_ts,

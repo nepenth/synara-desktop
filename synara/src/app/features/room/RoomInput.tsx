@@ -14,7 +14,6 @@ import { isKeyHotkey } from 'is-hotkey';
 import type { EventedRoomReading } from '../../utils/roomEvents';
 import { MsgType } from '../../utils/messageContent';
 import { useTranslation } from 'react-i18next';
-import { ReactEditor } from 'slate-react';
 import { Descendant, Transforms, Editor } from 'slate';
 import {
   Box,
@@ -290,7 +289,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       );
       Transforms.insertNodes(editor, mentionEl);
       moveCursor(editor, true);
-      ReactEditor.focus(editor);
+      focusEditorAfterRender(editor);
       setMentionInsert(undefined);
     }, [mentionInsert, roomId, editor, setMentionInsert]);
     // A notification's Reply opens this room ready to type.
@@ -1939,7 +1938,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                     onEmojiSelect={handleEmoticonSelect}
                     onCustomEmojiSelect={handleEmoticonSelect}
                     requestClose={() => {
-                      if (emojiBoardOpen && !mobileOrTablet()) ReactEditor.focus(editor);
+                      // A pick has just inserted the emoji, and the board's focus
+                      // trap also calls this while it unmounts, mid-commit.
+                      if (emojiBoardOpen && !mobileOrTablet()) focusEditorAfterRender(editor);
                       setEmojiBoardOpen(false);
                     }}
                   />

@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { Descendant, Editor, Element, Transforms, createEditor } from 'slate';
 import { withHistory } from 'slate-history';
 import { BlockType } from '../types';
-import { createLinkElement, withLinkEdgeEscape } from '../utils';
+import {
+  createEmoticonElement,
+  createLinkElement,
+  createMentionElement,
+  moveCursor,
+  withLinkEdgeEscape,
+} from '../utils';
+import { withComposer } from '../composerEditor';
 
 const linkEditor = (): Editor => {
   const editor = withLinkEdgeEscape(withHistory(createEditor()));
@@ -86,4 +93,105 @@ test('a line break at the end of a link starts a plain paragraph', () => {
     'the new paragraph holds no link'
   );
   assert.equal(Editor.string(editor, [1]), 'next');
+});
+
+// Emoji and mention chips, and pastes, entered at a link's edge: an emoji
+// picked right after a pasted link became part of the link (and so did the
+// cursor's new empty text after it).
+const composerLinkEditor = (): Editor => {
+  const editor = withComposer(withHistory(createEditor()));
+  editor.children = [
+    {
+      type: BlockType.Paragraph,
+      children: [
+        { text: 'see ' },
+        createLinkElement('https://example.org/docs', 'example.org/docs'),
+        { text: '' },
+      ],
+    },
+  ] as Descendant[];
+  return editor;
+};
+
+const childTypes = (editor: Editor): string[] =>
+  paragraphChildren(editor).map((node) => (Element.isElement(node) ? node.type : 'text'));
+
+test('an emoji picked at the end of a link lands after the link', () => {
+  const editor = composerLinkEditor();
+  Transforms.select(editor, LINK_END);
+
+  editor.insertNode(createEmoticonElement('😀', 'grinning'));
+  moveCursor(editor);
+  editor.insertText('ok');
+
+  assert.equal(linkText(editor), 'example.org/docs');
+  assert.deepEqual(childTypes(editor), [
+    'text',
+    BlockType.Link,
+    'text',
+    BlockType.Emoticon,
+    'text',
+  ]);
+  assert.deepEqual(paragraphChildren(editor)[4], { text: 'ok' });
+});
+
+test('a mention inserted at the end of a link lands after the link', () => {
+  const editor = composerLinkEditor();
+  Transforms.select(editor, LINK_END);
+
+  Transforms.insertNodes(editor, createMentionElement('@fiona:example.org', '@Fiona', false));
+  moveCursor(editor, true);
+
+  assert.deepEqual(childTypes(editor), ['text', BlockType.Link, 'text', BlockType.Mention, 'text']);
+  assert.deepEqual(paragraphChildren(editor)[4], { text: ' ' });
+});
+
+test('an emoji picked at the start of a link lands before the link', () => {
+  const editor = composerLinkEditor();
+  Transforms.select(editor, LINK_START);
+
+  editor.insertNode(createEmoticonElement('😀', 'grinning'));
+
+  assert.equal(Editor.string(editor, [0, 3]), 'example.org/docs');
+  assert.deepEqual(childTypes(editor), [
+    'text',
+    BlockType.Emoticon,
+    'text',
+    BlockType.Link,
+    'text',
+  ]);
+});
+
+test('text pasted at the end of a link lands after the link', () => {
+  const editor = composerLinkEditor();
+  Transforms.select(editor, LINK_END);
+
+  editor.insertFragment([{ type: BlockType.Paragraph, children: [{ text: ' pasted' }] }]);
+
+  assert.equal(linkText(editor), 'example.org/docs');
+  assert.deepEqual(paragraphChildren(editor)[2], { text: ' pasted' });
+});
+
+test('a link pasted at the end of a link is not nested in it', () => {
+  const editor = composerLinkEditor();
+  Transforms.select(editor, LINK_END);
+
+  editor.insertFragment([
+    {
+      type: BlockType.Paragraph,
+      children: [createLinkElement('https://example.org/more', 'example.org/more')],
+    },
+  ] as Descendant[]);
+
+  assert.equal(linkText(editor), 'example.org/docs');
+  assert.deepEqual(childTypes(editor), ['text', BlockType.Link, 'text', BlockType.Link, 'text']);
+});
+
+test('an insert at an explicit location is not moved', () => {
+  const editor = composerLinkEditor();
+  Transforms.select(editor, LINK_END);
+
+  Transforms.insertNodes(editor, { text: '!' }, { at: { path: [0, 1, 0], offset: 3 } });
+
+  assert.equal(linkText(editor), 'exa!mple.org/docs');
 });

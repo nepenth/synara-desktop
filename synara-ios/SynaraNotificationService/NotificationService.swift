@@ -18,6 +18,13 @@ final class NotificationService: UNNotificationServiceExtension {
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
         let content = SynaraNotificationPresentationPolicy.fallback(from: request.content)
+        // The icon counts conversations, as the app does, not the gateway's
+        // per-message `aps.badge`; see SynaraAppIconBadgeStore.
+        content.badge = SynaraAppIconBadgeStore.badgeForIncomingPush(
+            roomID: try? SynaraNotificationPreviewPayloadParser
+                .reference(from: request.content.userInfo, trimWhitespace: true).get().roomID,
+            payloadBadge: request.content.badge
+        )
         let requestID = coordinator.begin(content: content, handler: contentHandler)
         SynaraNotificationDiagnostics.record(.received, runID: requestID)
 

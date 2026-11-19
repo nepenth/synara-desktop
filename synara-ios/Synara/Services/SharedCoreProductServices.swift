@@ -1275,7 +1275,8 @@ final class SharedCoreRoomListService: RoomListServicing {
                         isSpace: $0.isSpace,
                         isLowPriority: $0.isLowPriority,
                         isAgentRoom: $0.isAgentRoom,
-                        notificationMode: $0.notificationMode
+                        notificationMode: $0.notificationMode,
+                        notificationCount: Int($0.notificationCount)
                     )
                 },
                 invites: invites.map {

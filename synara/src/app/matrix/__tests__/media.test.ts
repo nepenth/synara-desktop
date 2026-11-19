@@ -9,7 +9,9 @@ import {
   previewMatrixMediaText,
   resolveMatrixMediaUrl,
   resolveMatrixThumbnailUrl,
+  revealSavedMatrixMediaFile,
   saveMatrixMediaFile,
+  type MatrixMediaSaveEvent,
 } from '../media';
 import { nativeThumbnailContentUri } from '../nativeThumbnail';
 
@@ -112,6 +114,84 @@ test('text preview and save return text or a filename, not file bytes', async ()
     assert.deepEqual(await previewMatrixMediaText(handle), { kind: 'ready', text: '# hi' });
     assert.equal(await saveMatrixMediaFile(handle, 'notes.md'), 'notes.md');
     assert.deepEqual(calls, ['matrix_media_text_preview', 'matrix_media_save']);
+  } finally {
+    (globalThis as { window: unknown }).window = originalWindow;
+  }
+});
+
+test('save reports progress over a channel only where the webview can make one', async () => {
+  const originalWindow = globalThis.window;
+  const handle = `timeline-media-${'ab'.repeat(32)}`;
+  const saveArgs: Array<Record<string, unknown> | undefined> = [];
+  const callbacks = new Map<number, (message: unknown) => void>();
+  const invoke = async (command: string, args?: Record<string, unknown>) => {
+    assert.equal(command, 'matrix_media_save');
+    saveArgs.push(args);
+    const channel = args?.onProgress as { id: number } | undefined;
+    if (channel) {
+      callbacks.get(channel.id)?.({ index: 0, message: { event: 'started', data: { total: 4 } } });
+      callbacks.get(channel.id)?.({ index: 1, message: { event: 'finishing' } });
+    }
+    return { filename: 'notes (1).md' };
+  };
+  const events: MatrixMediaSaveEvent[] = [];
+  try {
+    // A browser or harness bridge without Tauri's callback registry: no channel.
+    (globalThis as { window: unknown }).window = {
+      __SYNARA_DESKTOP__: { platform: 'tauri', invoke },
+    };
+    assert.equal(
+      await saveMatrixMediaFile(handle, 'notes.md', (event) => events.push(event)),
+      'notes (1).md'
+    );
+    assert.deepEqual(saveArgs[0], { contentUri: handle, filename: 'notes.md' });
+
+    (globalThis as { window: unknown }).window = {
+      __SYNARA_DESKTOP__: { platform: 'tauri', invoke },
+      __TAURI_INTERNALS__: {
+        transformCallback: (callback: (message: unknown) => void) => {
+          callbacks.set(callbacks.size + 1, callback);
+          return callbacks.size;
+        },
+        unregisterCallback: () => undefined,
+      },
+    };
+    await saveMatrixMediaFile(handle, 'notes.md', (event) => events.push(event));
+    assert.ok(saveArgs[1]?.onProgress, 'a progress channel is passed');
+    assert.deepEqual(events, [{ event: 'started', data: { total: 4 } }, { event: 'finishing' }]);
+
+    // Callers without a progress callback send exactly what they did before.
+    await saveMatrixMediaFile(handle, 'notes.md');
+    assert.deepEqual(saveArgs[2], { contentUri: handle, filename: 'notes.md' });
+  } finally {
+    (globalThis as { window: unknown }).window = originalWindow;
+  }
+});
+
+test('show in folder sends only the saved filename and fails closed', async () => {
+  const originalWindow = globalThis.window;
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  let reply: unknown = 'item';
+  (globalThis as { window: unknown }).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return reply;
+      },
+    },
+  };
+  try {
+    assert.equal(await revealSavedMatrixMediaFile('key (1).pem'), 'item');
+    assert.deepEqual(calls, [
+      { command: 'desktop_reveal_download', args: { filename: 'key (1).pem' } },
+    ]);
+    reply = 'folder';
+    assert.equal(await revealSavedMatrixMediaFile('key.pem'), 'folder');
+    reply = undefined;
+    await assert.rejects(revealSavedMatrixMediaFile('key.pem'), /Could not open Downloads/);
+    (globalThis as { window: unknown }).window = {};
+    await assert.rejects(revealSavedMatrixMediaFile('key.pem'), /Could not open Downloads/);
   } finally {
     (globalThis as { window: unknown }).window = originalWindow;
   }

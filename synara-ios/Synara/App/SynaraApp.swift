@@ -441,9 +441,10 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             return
         }
 
+        // The payload badge is the gateway's per-message count; routing
+        // applies the app's own summary instead.
         if let route = await push.resolveRoute(from: userInfo) {
             routeToDestination(route)
-            push.applyIncomingBadge(from: userInfo)
         } else {
             routeToFallback()
         }
@@ -516,6 +517,10 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             return
         }
         PerformanceTrace.event("SceneBackground")
+        // Leave the icon and the extension's stored count in the app's unit.
+        Task { @MainActor in
+            await applyCurrentAppIconBadge()
+        }
         // The coordinator takes the background assertion before it stops sync,
         // so an in-flight event-cache transaction finishes before UIKit can
         // suspend. It is idempotent across duplicate SwiftUI and
@@ -540,9 +545,6 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     ) async -> UNNotificationPresentationOptions {
         SynaraNotificationDiagnostics.record(.foregroundReceived, runID: UUID())
         logNotificationPayloadShape(notification.request.content.userInfo, context: "foreground")
-        await MainActor.run {
-            push?.applyIncomingBadge(from: notification.request.content.userInfo)
-        }
 
         if let target = SynaraForegroundNotificationPolicy.target(from: notification.request.content.userInfo) {
             let owner = await MainActor.run { () -> (MatrixClientServicing, AuthenticatedSession, Int)? in
@@ -567,20 +569,22 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             }
         }
 
-        return [.banner, .sound, .badge, .list]
+        // No `.badge`: while the app runs it owns the icon, and room-list
+        // updates apply its count. The payload badge counts messages.
+        return [.banner, .sound, .list]
     }
 
     private func handleBackgroundRemoteNotification(_ userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
-        await MainActor.run {
-            push?.applyIncomingBadge(from: userInfo)
-        }
-
-        if let badge = push?.parseBadgeCount(from: userInfo) {
-            logger?.info("Background push updated badge to \(badge)", category: .push)
+        let payloadBadge = push?.parseBadgeCount(from: userInfo)
+        if payloadBadge == 0, let push {
+            await MainActor.run {
+                AppIconBadge.applyBackgroundPayloadBadge(payloadBadge, push: push)
+            }
+            logger?.info("Background push cleared badge", category: .push)
         }
 
         guard let matrix, let session, case .signedIn(let authenticatedSession) = session.currentState else {
-            return push?.parseBadgeCount(from: userInfo) == nil ? .noData : .newData
+            return payloadBadge == 0 ? .newData : .noData
         }
 
         if await matrix.syncForBackgroundNotification(session: authenticatedSession) {
@@ -588,7 +592,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             return .newData
         }
 
-        return push?.parseBadgeCount(from: userInfo) == nil ? .noData : .newData
+        return payloadBadge == 0 ? .newData : .noData
     }
 
     private func logNotificationPayloadShape(_ userInfo: [AnyHashable: Any], context: String) {
@@ -622,9 +626,6 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             // Approve-always (and other open-only dispositions) require in-app confirmation.
             logger?.info("Agent approval notification action opening room: \(reason)", category: .push)
             routeToDestination(.room(id: roomID, eventID: eventID))
-            await MainActor.run {
-                push?.applyIncomingBadge(from: userInfo)
-            }
         case .submitDecision(let request):
             let dedupeKey = SynaraAgentApprovalNotificationActionDedupeStore.key(
                 roomID: request.roomID,
@@ -654,9 +655,6 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             agentApprovalActionDedupe.insert(dedupeKey)
             do {
                 _ = try await agentApprovalDecisions.submitDecision(request)
-                await MainActor.run {
-                    push?.applyIncomingBadge(from: userInfo)
-                }
             } catch {
                 agentApprovalActionDedupe.remove(dedupeKey)
                 logger?.error("Agent approval notification action failed: \(error.localizedDescription)", category: .push)
