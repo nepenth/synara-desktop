@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [3.2.0] - 2026-11-18
+
 - Desktop: hovering a message no longer shows a date-and-time tooltip over the text you are reading. To see a message's full date and time, point at the time beside the sender's name; it appears beside that time.
 - Desktop: the follow-on messages in a group no longer show a time in the left margin when you hover them (it was cut off in 12-hour mode on macOS, showing "8:22P"). The only time shown is the one beside the sender's name, and screen readers still read each message's full date and time. The left margin now grows with page zoom, so at 200% zoom avatars no longer overlap the sender's name.
 - Desktop: the time beside a sender's name is now only the time, such as "2:03 PM", for every message; it no longer adds "Yesterday" or the date for older ones. The date is in the day heading above the first message of each day, which is now short: "Today", "Yesterday", then "Nov 14th" (with the year for another year). Twelve-hour times no longer have a leading zero ("2:03 PM", not "02:03 PM").
@@ -13,6 +15,8 @@
 - Desktop: the composer's GIF item stays in the "+" menu when GIF search is off (also after "Not now") and opens the Enable GIFs? prompt, which now also offers Open settings. `/gif` with GIF search off says where to turn it on and has an Open settings button. Without a GIF provider the item stays hidden.
 - Desktop: after an update, a small "What's new in X.Y.Z" card in the top-right corner of the window lists the release's headline and up to four changes, with a link to the full release notes. It shows once per version (dismiss it, or it is recorded when you quit after seeing it), not on a fresh install, and not over Settings or the verification prompt; Settings › About shows the same notes any time. On macOS and Windows the update prompt lists the same notes before you install. The notes come from one short file per release, `release-notes/vX.Y.Z.json`, checked in CI and by `npm run bump:version` (see `docs/whats-new-notes.md`).
 - iOS: after an update, a small "What's New in X.Y.Z" card at the top of the Rooms list shows the release's headline and up to four iPhone and iPad changes, with a Full Release Notes link. It shows once per version (close it, or it is recorded when you leave the app after seeing it), not on a fresh install, and not over a sheet or the verification prompt; Settings › About › What's New shows the same notes any time. The app bundles the same `release-notes/vX.Y.Z.json` files as desktop.
+- iOS: the rows on the iPhone Settings screen open their pages again. Since 2.8.0, tapping Notifications, Appearance, Security & Recovery or any other row on iPhone did nothing; iPad was unaffected.
+- Desktop: the timeline no longer shows a frame at the wrong scroll position when a message grows while it is being read in WebKit (macOS and Linux).
 
 ## [3.1.1] - 2026-11-18
 
