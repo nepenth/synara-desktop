@@ -113,12 +113,71 @@ longer queries, and ranks results: more words matched, then the query as a
 phrase, then title over synonyms over description. A single word keeps exact
 substring matching. Room and space settings use the same search.
 
-## Names iOS mirrors
+## iOS
 
-iOS should use the same page names for the pages it has: **Messages**,
-**Media & links**, **Privacy** and **Advanced** (alongside the existing
-General, Appearance, Notifications, Account, Security & recovery and
-Sessions). iOS's "GIFs & Link Previews" page becomes Media & links.
+iOS Settings uses the same groups, page names and section names for the
+pages it has. The account summary row at the top of the list opens
+Account; Log out is the last row.
+
+| Group    | Page                | Sections                                                                                   |
+| -------- | ------------------- | ------------------------------------------------------------------------------------------ |
+| (top)    | Account             | Account · Profile · Avatar · Contact · Presence · Status                                   |
+| App      | General             | Date & time                                                                                |
+| App      | Appearance          | Theme · Text · Message display                                                             |
+| App      | Notifications       | Permission · Direct messages · Rooms · Mentions · Keywords · Agent approvals · Previews · Troubleshooting |
+| Chat     | Messages            | Drafts                                                                                     |
+| Chat     | Media & links       | GIFs · Links                                                                               |
+| Chat     | Privacy             | Activity · Blocked users                                                                   |
+| Account  | Security & recovery | Verification · Recovery · Danger zone                                                      |
+| Account  | Sessions            | Sessions · This session                                                                    |
+| Advanced | Advanced            | Calls · Security details                                                                   |
+| Advanced | Diagnostics         | Delivery · Local delivery diagnostics                                                      |
+| Advanced | About               | Build · Links (What's new, Licenses, Privacy policy, Support)                              |
+
+Notifications › Agent approvals links to the Agent notifications page
+(agent accounts and message categories), and Notifications ›
+Troubleshooting links to Diagnostics; Support links there too.
+
+Every row, its accessibility identifier and the key it stores is pinned in
+`synara-ios/Synara/Features/SettingsInventory.swift`. The root list is built
+from it, and `SettingsInventoryTests` holds the page sources and the stored
+keys to it, the same way `settingsInventory.ts` works on desktop.
+
+Desktop pages, sections and rows iOS does not have, and why:
+
+- **General › Updates** and **Keyboard shortcuts**: the App Store updates the
+  app, and there are no global shortcuts on iOS. **Date format** is not
+  offered; iOS follows the system's date format.
+- **Appearance**: Light/Dark theme and Follow system theme colors (iOS
+  always follows the system appearance), Monochrome mode, Accent color,
+  Message text, fonts and Page zoom (iOS uses Dynamic Type), Message layout
+  and spacing, Legacy username color, and Window (Linux shell only).
+  Appearance keeps a base color and Thread display.
+- **Notifications › System** has no Desktop notifications or Notification
+  sound switch: iOS Settings owns both, so iOS shows the permission instead.
+  Urgent agent approvals, Approve once without unlocking and Show message
+  content in notifications are iOS-only (time-sensitive alerts and Lock
+  Screen previews).
+- **Messages › Composer** and **Timeline** (Enter adds a new line, Markdown
+  formatting, Hide membership and profile changes) are not in iOS Settings.
+- **Media & links › Media** (Load media automatically) is not in iOS Settings.
+- **Account › Matrix ID** and **Password**: the Matrix ID shows in the Account
+  section; iOS has no change-password form.
+- **Security & recovery › Certificate identities** (X.509, experimental) is
+  desktop-only.
+- **Sessions › Export & import keys** is desktop-only.
+- **Advanced › Experimental**, **Developer** and **Maintenance** (indexed
+  search, hidden events, widgets, developer tools, reload) are desktop-only.
+  iOS Advanced holds the call-service readout and the implementation
+  readouts (session storage, message security) that used to sit among the
+  security status rows.
+- **Diagnostics** on iOS is the push delivery log, not desktop's capture
+  settings.
+- **About › Credits** is Licenses, a row of About.
+
+"Sessions › This session" on iOS is the Verify this device button the
+Account page used to have; Security & recovery › Verification has the same
+action, as before.
 
 ## UX review items this resolves
 

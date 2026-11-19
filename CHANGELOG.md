@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- iOS Settings are grouped like desktop's: your account at the top, then App (General, Appearance, Notifications), Chat (Messages, Media & links, Privacy), Account (Security & recovery, Sessions) and Advanced (Advanced, Diagnostics, About), with Log out last. 24-hour time is on General; Sync drafts across devices is on Messages; GIF search, Play GIF links inline, Link previews, Show X posts and Shorten long links are on Media & links (was "GIFs & Link Previews"); Hide typing & read receipts and Blocked users are on Privacy; the session list is on Sessions; the call service status and the session storage and message security readouts are on Advanced; the push delivery log is on Diagnostics, still linked from Notifications; Licenses, Privacy policy and Support are rows of About. Section and row names use sentence case and match desktop's, such as "Direct messages" and "Mentions of your user ID". No setting was removed or changed, and every setting keeps its stored value.
+
 ## [3.2.0] - 2026-11-18
 
 - Desktop: hovering a message no longer shows a date-and-time tooltip over the text you are reading. To see a message's full date and time, point at the time beside the sender's name; it appears beside that time.
