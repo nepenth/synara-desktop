@@ -93,6 +93,10 @@ Then:
   at Verify this session; when other sessions need review it shows their
   count and opens Sessions. Cmd/Ctrl+, and the Settings place key toggle the
   same way.
+- The bottom bar is mounted once for the signed-in client shell
+  (`NavBottomBarHost` in `pages/Router.tsx`) and placed into each pane's list
+  column by `NavBottomBarSlot`, so the avatar, its badge and its probes keep
+  their state across Home, Activity, Approvals, Explore and spaces.
 - **The composer**: with a GIF provider configured and GIF search off, the
   "+" menu keeps its GIF item, which opens the Enable GIFs? prompt with Open
   settings; `/gif` with GIF search off says where the switch is and has an

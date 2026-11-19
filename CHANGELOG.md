@@ -6,7 +6,7 @@
 - Desktop: settings search understands questions such as "enable gif", "turn on gifs", "read receipts off", "dark mode" or "block someone": words like enable, turn, on and off are ignored, plurals match, and the best match is listed first instead of every word being required.
 - Desktop: Settings reopens on the page you last viewed (General the first time), and links can open a page and a setting (`/settings/<page>/`, `synara://settings/<page>/`).
 - Desktop: the account avatar in the bottom bar now opens Settings directly and closes it when pressed again, as Cmd/Ctrl+, does; its menu is gone and Log out is at the foot of the Settings list. When this session is not verified the avatar keeps its warning and opens Security & recovery at Verify this session; when other sessions need review it opens Sessions.
-- Desktop: the account avatar no longer flashes its initial when you move between Home, Activity and Approvals.
+- Desktop: the bottom bar no longer reloads when you switch between Home, Activity, Approvals, Explore and spaces. It is now part of the window rather than of each list, so the avatar keeps its picture instead of flashing your initial, and the unverified-session warning no longer blinks.
 - Desktop: the composer's GIF item stays in the "+" menu when GIF search is off (also after "Not now") and opens the Enable GIFs? prompt, which now also offers Open settings. `/gif` with GIF search off says where to turn it on and has an Open settings button. Without a GIF provider the item stays hidden.
 
 ## [3.1.1] - 2026-11-18
