@@ -31,9 +31,10 @@ import {
   toMatrixCustomHTML,
   toPlainText,
   trimCustomHtml,
-  useEditor,
   focusEditorAfterRender,
 } from '../../components/editor';
+import { ComposerSafetyNet } from './ComposerSafetyNet';
+import type { ComposerRestore } from './composerSafetyNetPolicy';
 import { renderComposerHtml } from '../../components/editor/composerMarkdown';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
@@ -64,20 +65,45 @@ type NativeTimelineMessageEditorProps = {
   onClose: () => void;
 };
 
+type MessageEditorBodyProps = NativeTimelineMessageEditorProps & {
+  editor: Editor;
+  /** After a safety-net remount: the edit to start with, or `empty` for the message itself. */
+  restore?: ComposerRestore;
+};
+
 /**
  * Edits a message in place with the room composer's Slate editor, so its
  * formatting, mentions and msgtype survive the edit (review D76). It sits in
  * the row rather than in a popover, so clicking elsewhere never discards it.
+ * An error inside it is contained by the composer safety net, which keeps
+ * the edit and remounts it, instead of reaching the full-screen error page.
  */
-export function NativeTimelineMessageEditor({
+export function NativeTimelineMessageEditor(props: NativeTimelineMessageEditorProps) {
+  const { roomId, eventId } = props;
+  const keepDraft = useCallback(
+    (restore: ComposerRestore) => {
+      if (restore.mode === 'empty') dropNativeEditDraft(roomId, eventId);
+      else keepNativeEditDraft(roomId, eventId, restore.nodes);
+    },
+    [eventId, roomId]
+  );
+  return (
+    <ComposerSafetyNet surface="edit" keepDraft={keepDraft}>
+      {({ editor, restore }) => <MessageEditorBody {...props} editor={editor} restore={restore} />}
+    </ComposerSafetyNet>
+  );
+}
+
+function MessageEditorBody({
   roomId,
   eventId,
   body,
   formattedBody,
   messageType,
   onClose,
-}: NativeTimelineMessageEditorProps) {
-  const editor = useEditor();
+  editor,
+  restore,
+}: MessageEditorBodyProps) {
   const room = useOptionalRoom();
   const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
   const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
@@ -94,11 +120,18 @@ export function NativeTimelineMessageEditor({
   const imagePackRooms = React.useMemo(() => [roomId], [roomId]);
 
   // Start from a draft kept while the row was scrolled away, else the message.
+  // After a safety-net remount, from the edit it held (or the message, to
+  // start fresh).
   useEffect(() => {
-    const draft = takeNativeEditDraft<Descendant[]>(roomId, eventId);
+    const kept = takeNativeEditDraft<Descendant[]>(roomId, eventId);
+    const draft = restore ? restore.nodes : kept;
     const html = nativeEditInitialHtml(formattedBody);
     const initialValue =
-      draft ?? (html ? htmlToEditorInput(html, isMarkdown) : plainToEditorInput(body, isMarkdown));
+      draft && draft.length > 0
+        ? draft
+        : html
+          ? htmlToEditorInput(html, isMarkdown)
+          : plainToEditorInput(body, isMarkdown);
     Transforms.select(editor, { anchor: Editor.start(editor, []), focus: Editor.end(editor, []) });
     editor.insertFragment(initialValue);
     ReactEditor.focus(editor);

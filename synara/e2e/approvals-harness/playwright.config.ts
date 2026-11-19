@@ -17,6 +17,7 @@ export default defineConfig({
     'composer-formatting.spec.ts',
     'composer-mention.spec.ts',
     'composer-emoji.spec.ts',
+    'composer-safety-net.spec.ts',
     'question-cards.spec.ts',
     'approvals-viewport-matrix.spec.ts',
   ],

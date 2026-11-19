@@ -16,8 +16,8 @@ import { RoomViewHeader } from './RoomViewHeader';
 import { RoomSidePanel, RoomSidePanelType } from './RoomSidePanel';
 import { closeExperimentalWidgets } from '../widgets/experimentalWidgets';
 import { ThreadSidePanel } from './ThreadSidePanel';
-import { RoomInput } from './RoomInput';
-import { useEditor } from '../../components/editor';
+import { RoomInput, useKeepRoomInputDraft } from './RoomInput';
+import { ComposerSafetyNet } from './ComposerSafetyNet';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { resolveThreadPane, type ThreadPaneTarget } from './threadPane';
@@ -45,17 +45,21 @@ function OverlayEscape({ onClose }: { onClose: () => void }) {
 
 function ThreadPaneComposer({ rootEventId }: { rootEventId: string }) {
   const room = useRoom();
-  const editor = useEditor();
   const permissions = useRoomPermissions(usePowerLevelsContext());
+  const keepComposerDraft = useKeepRoomInputDraft(room.roomId, rootEventId);
   if (!permissions.event('m.room.message')) return null;
   return (
-    <RoomInput
-      key={rootEventId}
-      room={room}
-      roomId={room.roomId}
-      editor={editor}
-      threadRootOverride={rootEventId}
-    />
+    <ComposerSafetyNet key={rootEventId} surface="thread" keepDraft={keepComposerDraft}>
+      {({ editor, restore }) => (
+        <RoomInput
+          room={room}
+          roomId={room.roomId}
+          editor={editor}
+          restore={restore}
+          threadRootOverride={rootEventId}
+        />
+      )}
+    </ComposerSafetyNet>
   );
 }
 

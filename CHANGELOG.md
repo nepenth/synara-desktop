@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Desktop: if the message box runs into an error, it no longer replaces the whole screen with "Something went wrong". The message box reloads in place with your draft, reply and attachments, and gets focus back if it had it. If it fails again right away, a one-line notice takes its place ("The message box ran into a problem. Your draft is saved.") with Try again, Start fresh and Copy draft. The same applies to the thread pane composer and to editing a message in place. Each contained error is written to the desktop log, without the draft's text.
+
 ## [3.2.0] - 2026-11-18
 
 - Desktop: hovering a message no longer shows a date-and-time tooltip over the text you are reading. To see a message's full date and time, point at the time beside the sender's name; it appears beside that time.
