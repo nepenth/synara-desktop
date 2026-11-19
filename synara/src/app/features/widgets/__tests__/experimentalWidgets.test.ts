@@ -60,12 +60,15 @@ test('experimental widgets stay off by default and are not account data', () => 
   assert.doesNotMatch(settingsSource, /account_data/);
 });
 
-test('widget empty-state copy points at General and explains agents', () => {
+test('widget empty-state copy points at Advanced › Experimental and explains agents', () => {
   assert.equal(
     widgetsPanelEmptyCopy(false),
     `Experimental Widgets are off. Enable them in ${WIDGETS_SETTINGS_PATH}.`
   );
-  assert.match(widgetsPanelEmptyCopy(true), /Add an agent URL in Settings → General → Widgets/);
+  assert.match(
+    widgetsPanelEmptyCopy(true),
+    /Add an agent URL in Settings → Advanced → Experimental/
+  );
   assert.match(widgetsPanelEmptyCopy(true), /m\.widget/);
   assert.match(widgetsAgentHowToCopy(), /http:\/\/127\.0\.0\.1/);
   assert.match(widgetsAgentHowToCopy(), /m\.room\.message/);
@@ -74,24 +77,18 @@ test('widget empty-state copy points at General and explains agents', () => {
   assert.match(widgetsSettingsDescription, /not synced to the account or other devices/);
 });
 
-test('General owns the Widgets editor; Developer Tools only points at it', () => {
+test('Advanced › Experimental owns the Widgets editor, and only one page has it', () => {
+  const advanced = readFileSync('src/app/features/settings/advanced/Advanced.tsx', 'utf8');
   const general = readFileSync('src/app/features/settings/general/General.tsx', 'utf8');
-  const developerTools = readFileSync(
-    'src/app/features/settings/developer-tools/DevelopTools.tsx',
-    'utf8'
-  );
   const panel = readFileSync('src/app/features/room/RoomWidgetsPanel.tsx', 'utf8');
-  assert.match(general, /<SettingsSection\s+title="Widgets"/);
-  assert.match(general, /experimentalWidgetsEnabled/);
-  assert.match(general, /agentWidgetEntries/);
-  assert.match(general, /Add agent widget/);
-  assert.match(general, /widgetsSettingsDescription/);
-  // Developer Tools no longer carries a pointer row; General is the only home.
-  assert.doesNotMatch(developerTools, /Widgets are configured under General/);
-  assert.doesNotMatch(developerTools, /Experimental Widgets/);
-  assert.equal(developerTools.includes('Add agent widget'), false);
-  assert.equal(developerTools.includes('setAgentWidgetEntries'), false);
-  assert.equal(developerTools.includes('closeExperimentalWidgets'), false);
+  assert.match(advanced, /title="Experimental widgets"/);
+  assert.match(advanced, /experimentalWidgetsEnabled/);
+  assert.match(advanced, /agentWidgetEntries/);
+  assert.match(advanced, /Add agent widget/);
+  assert.match(advanced, /widgetsSettingsDescription/);
+  assert.match(advanced, /closeExperimentalWidgets/);
+  assert.equal(general.includes('experimentalWidgetsEnabled'), false);
+  assert.equal(general.includes('Add agent widget'), false);
   assert.match(panel, /widgetsPanelEmptyCopy\(experimentalWidgetsEnabled\)/);
   assert.match(panel, /widgetsAgentHowToCopy\(\)/);
   const host = readFileSync('src/app/features/widgets/experimentalWidgets.ts', 'utf8');

@@ -13,7 +13,7 @@ import { allInvitesAtom } from '../../../state/room-list/inviteList';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent } from '../../../components/page';
 import { NavPaneHeader } from '../../../features/nav-pane/NavPaneHeader';
-import { NavBottomBar } from '../../../features/nav-pane/NavBottomBar';
+import { NavBottomBarSlot } from '../../../features/nav-pane/NavBottomBarSlot';
 import { HideRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 import { laterContentAtom } from '../../../state/laterList';
 import { getLaterDueSummary } from '../../../utils/later';
@@ -92,7 +92,7 @@ export function Inbox() {
     <PageNav
       label="Activity"
       header={<NavPaneHeader title="Activity" actions={<HideRoomListButton />} />}
-      footer={<NavBottomBar />}
+      footer={<NavBottomBarSlot />}
     >
       <PageNavContent>
         <Box direction="Column" gap="300">

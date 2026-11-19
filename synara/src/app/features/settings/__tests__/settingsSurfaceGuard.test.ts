@@ -60,7 +60,8 @@ test('settings left nav stacks categories with a gap on the reading plane', () =
   // App, Room and Space settings share one grouped nav; selection uses the
   // room list's NavItem so the selected state matches everywhere.
   assert.match(settings, /<SettingsNav/);
-  assert.match(settings, /label: 'Preferences'/);
+  assert.match(settings, /label: 'App'/);
+  assert.match(settings, /label: 'Chat'/);
   const layout = readFileSync(
     join(process.cwd(), 'src/app/components/settings-layout/SettingsLayout.tsx'),
     'utf8'
@@ -71,6 +72,12 @@ test('settings left nav stacks categories with a gap on the reading plane', () =
   assert.doesNotMatch(layout, /aria-selected/);
   assert.match(layout, /aria-current=\{selected \? 'page' : undefined\}/);
   assert.match(layout, /data-settings-nav/);
+});
+
+test('Log out stays in the settings nav footer', () => {
+  assert.match(settings, /footer=\{/);
+  assert.match(settings, /<Text size="B400">Log out<\/Text>/);
+  assert.match(settings, /<LogoutDialog/);
 });
 
 test('native Appearance hides Message Layout and does not name other clients', () => {
@@ -92,7 +99,7 @@ test('native Appearance hides Message Layout and does not name other clients', (
   assert.doesNotMatch(appearance, /<Text size="T300">Modern<\/Text>/);
 });
 
-test('Appearance is its own Settings page and General no longer hosts theme or layout controls', () => {
+test('Appearance is its own Settings page and General hosts no theme, layout or chat rows', () => {
   assert.match(settings, /SettingsPages\.AppearancePage/);
   assert.match(settings, /name: 'Appearance'/);
   assert.match(settings, /<AppearanceSettings requestClose=/);
@@ -101,11 +108,35 @@ test('Appearance is its own Settings page and General no longer hosts theme or l
   assert.equal(general.includes('legacyUsernameColor'), false);
   assert.match(appearance, /Message layout/);
   assert.match(appearance, /Legacy username color/);
+  // Thread display is a message display choice, next to spacing.
+  const display = appearance.slice(appearance.indexOf('function MessageDisplay'));
+  assert.match(display, /<SettingsSection title="Message display">/);
+  assert.match(display, /<ThreadDisplaySetting \/>/);
+  // General is the app itself: updates, date and time, keyboard shortcuts.
+  assert.match(
+    general,
+    /<SettingsPage title="General" requestClose=\{requestClose\}>\s*<SoftwareUpdatesSection \/>\s*<DateAndTime \/>\s*<DesktopShortcutsSection \/>\s*<\/SettingsPage>/
+  );
+  ['gifSearchEnabled', 'hideActivity', 'mediaAutoLoad', 'enterForNewline', 'syncDrafts'].forEach(
+    (key) => assert.equal(general.includes(key), false, key)
+  );
 });
 
-test('maintenance actions live once, under General > Storage, not duplicated in About', () => {
-  assert.match(general, /<SettingsSection title="Storage">/);
-  assert.match(general, /Reload application/);
+const advanced = readFileSync(
+  join(process.cwd(), 'src/app/features/settings/advanced/Advanced.tsx'),
+  'utf8'
+);
+const media = readFileSync(
+  join(process.cwd(), 'src/app/features/settings/media/MediaLinks.tsx'),
+  'utf8'
+);
+
+test('maintenance actions live once, last on Advanced, not duplicated in About', () => {
+  assert.match(advanced, /<SettingsSection title="Maintenance">/);
+  assert.match(advanced, /Reload application/);
+  assert.match(advanced, /<Maintenance \/>\s*<\/SettingsPage>/);
+  // Reload keeps its critical styling.
+  assert.match(advanced, /onClick=\{\(\) => reloadApplication\(\)\}\s*variant="Critical"/);
   // The session store is diagnostics content, so it lives on Diagnostics (once).
   const integration = readFileSync(
     join(process.cwd(), 'src/app/features/settings/diagnostics/DesktopIntegration.tsx'),
@@ -119,21 +150,22 @@ test('maintenance actions live once, under General > Storage, not duplicated in 
   // Update checking has exactly one home: General > Updates, first on the page.
   assert.match(general, /<SettingsSection title="Updates">/);
   assert.match(general, /<UpdateSettingsTile \/>/);
-  assert.match(
-    general,
-    /<SettingsPage title="General" requestClose=\{requestClose\}>\s*<SoftwareUpdatesSection \/>/
-  );
 });
 
-test('General settings use positive phrasing for media loading', () => {
-  assert.match(general, /title="Load media automatically"/);
-  assert.equal(general.includes('Disable Media Auto Load'), false);
+test('Media & links uses positive phrasing for media loading and owns GIF search', () => {
+  assert.match(media, /title="Load media automatically"/);
+  assert.equal(media.includes('Disable Media Auto Load'), false);
+  assert.match(media, /<SettingsSection title="GIFs">/);
+  assert.match(media, /gifSearchEnabled/);
+  // With no provider configured the row says so and the switch is disabled.
+  assert.match(media, /GIF search is not configured by this client\./);
+  assert.match(media, /disabled=\{!gifProviderAvailable\}/);
 });
 
-test('General hosts Indexed message search with a session-reload note', () => {
-  assert.match(general, /Indexed message search/);
-  assert.match(general, /indexedMessageSearch/);
-  assert.match(general, /session reload/);
+test('Advanced hosts Indexed message search with a session-reload note', () => {
+  assert.match(advanced, /Indexed message search/);
+  assert.match(advanced, /indexedMessageSearch/);
+  assert.match(advanced, /session reload/);
 });
 
 test('native Notifications owns homeserver push rules instead of a unavailable stub', () => {
@@ -148,38 +180,35 @@ const devices = readFileSync(
   join(process.cwd(), 'src/app/features/settings/devices/Devices.tsx'),
   'utf8'
 );
-const developerTools = readFileSync(
-  join(process.cwd(), 'src/app/features/settings/developer-tools/DevelopTools.tsx'),
-  'utf8'
-);
 
-test('General hosts the first-class Widgets card and Developer Tools does not duplicate it', () => {
-  // Widgets are experimental: last on the page, with a Beta badge.
-  assert.match(general, /<SettingsSection\s+title="Widgets"/);
-  assert.match(general, /<WidgetsSection \/>\s*<\/SettingsPage>/);
-  assert.match(general, /experimentalWidgetsEnabled/);
-  assert.match(general, /agentWidgetEntries/);
-  assert.match(general, /widgetsSettingsDescription/);
-  assert.match(general, /Add agent widget/);
-  assert.equal(developerTools.includes('Widgets are configured under General'), false);
-  assert.equal(developerTools.includes('Add agent widget'), false);
-  assert.equal(developerTools.includes('setAgentWidgetEntries'), false);
-  assert.equal(developerTools.includes('setExperimentalWidgetsEnabled'), false);
+test('Advanced › Experimental hosts the Widgets editor with its Beta badge', () => {
+  assert.match(advanced, /<SettingsSection\s+title="Experimental"/);
+  assert.match(advanced, /title="Experimental widgets"/);
+  assert.match(advanced, />\s*Beta\s*</);
+  assert.match(advanced, /experimentalWidgetsEnabled/);
+  assert.match(advanced, /agentWidgetEntries/);
+  assert.match(advanced, /widgetsSettingsDescription/);
+  assert.match(advanced, /Add agent widget/);
+  // Encrypted state events still push the setting to Core when the page opens.
+  assert.match(advanced, /pushEncryptedStateEventsSetting\(encryptedStateEvents\)/);
 });
 
-test('General hosts a Calls card with honest MatrixRTC transport status', () => {
-  assert.match(general, /<SettingsSection title="Calls">/);
-  assert.match(general, /rtcCallAvailabilityCopy/);
-  assert.match(general, /snapshotRtcTransportsNative/);
-  assert.equal(general.includes('set_call'), false);
+test('Advanced hosts a Calls card with honest MatrixRTC status and the transport row', () => {
+  assert.match(advanced, /<SettingsSection title="Calls">/);
+  assert.match(advanced, /rtcCallAvailabilityCopy/);
+  assert.match(advanced, /snapshotRtcTransportsNative/);
+  assert.match(advanced, /refreshRtcTransportsNative/);
+  assert.match(advanced, /title="Call transport"/);
+  assert.equal(advanced.includes('set_call'), false);
+  assert.equal(profile.includes('MatrixRTC'), false);
 });
 
-test('X.509 identity settings live on Security & recovery, not Developer Tools', () => {
+test('X.509 identity settings live on Security & recovery, not Advanced', () => {
   assert.match(devices, /X509IdentityCard/);
   assert.match(devices, /isNativeMatrixSession/);
-  assert.equal(developerTools.includes('X509'), false);
-  assert.equal(developerTools.includes('x509'), false);
-  assert.equal(developerTools.includes('X.509'), false);
+  assert.equal(advanced.includes('X509'), false);
+  assert.equal(advanced.includes('x509'), false);
+  assert.equal(advanced.includes('X.509'), false);
   const x509Card = readFileSync(
     join(process.cwd(), 'src/app/features/settings/devices/X509IdentityCard.tsx'),
     'utf8'

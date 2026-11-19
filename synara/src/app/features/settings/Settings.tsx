@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Avatar, Button, Icon, IconButton, Icons, Text } from 'folds';
 import { General } from './general';
 import { AppearancePage as AppearanceSettings } from './appearance';
 import { PageRoot } from '../../components/page';
-import { SettingsNav, SettingsNavGroup } from '../../components/settings-layout';
+import { revealSetting, SettingsNav, SettingsNavGroup } from '../../components/settings-layout';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { Account } from './account';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -12,42 +12,58 @@ import { UserAvatar } from '../../components/user-avatar';
 import { nameInitials } from '../../utils/common';
 import { Notifications } from './notifications';
 import { Devices, SecurityRecovery } from './devices';
-import { DeveloperTools } from './developer-tools';
+import { Messages } from './messages/Messages';
+import { MediaLinks } from './media/MediaLinks';
+import { Privacy } from './privacy/Privacy';
+import { Advanced } from './advanced/Advanced';
 import { Diagnostics } from './diagnostics';
 import { About } from './about';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LogoutDialog } from '../../components/LogoutDialog';
 import * as depthCss from '../../styles/Depth.css';
 import { isDesktopPlatform } from '../../platform';
+import { isLinuxDesktopShell } from '../../hooks/useTilingMode';
+import { isSynaraDesktop } from '../../utils/desktop';
+import { isNativeMatrixSession } from '../verification/nativeVerification';
 import { getSafeMyUserId } from '../../state/nativeIdentity';
-import { SettingsPages } from './settingsPages';
-import { APP_SETTINGS_SEARCH_INDEX } from './settingsSearchIndex';
+import { lastViewedSettingsPage, rememberSettingsPage, SettingsPages } from './settingsPages';
+import { appSettingsSearchIndex, SettingsIndexCondition } from './settingsSearchIndex';
 
 export { SettingsPages };
 
+/** Whether rows indexed with a condition render here, as the pages decide. */
+const indexConditionHolds = (condition: SettingsIndexCondition): boolean => {
+  switch (condition) {
+    case 'desktop':
+      return isDesktopPlatform();
+    case 'synaraDesktop':
+      return isSynaraDesktop();
+    case 'linuxShell':
+      return isLinuxDesktopShell();
+    case 'nativeSession':
+      return isNativeMatrixSession();
+    case 'nonNativeSession':
+      return !isNativeMatrixSession();
+    default:
+      return true;
+  }
+};
+
+/**
+ * Four groups, by task: the app itself, chatting, your account, and the
+ * advanced and support pages. Everyday pages come before advanced ones.
+ */
 const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
   useMemo(
     () => [
       {
-        label: 'Preferences',
+        label: 'App',
         items: [
           {
             id: SettingsPages.GeneralPage,
             name: 'General',
             icon: Icons.Setting,
-            keywords: [
-              'widgets',
-              'calls',
-              'date',
-              'time',
-              'composer',
-              'editor',
-              'enter',
-              'markdown',
-              'shortcuts',
-              'storage',
-              'updates',
-            ],
+            keywords: ['date', 'time', 'clock', 'shortcuts', 'keyboard', 'updates', 'version'],
           },
           {
             id: SettingsPages.AppearancePage,
@@ -63,6 +79,8 @@ const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
               'text',
               'density',
               'zoom',
+              'threads',
+              'layout',
             ],
           },
           {
@@ -74,13 +92,36 @@ const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
         ],
       },
       {
+        label: 'Chat',
+        items: [
+          {
+            id: SettingsPages.MessagesPage,
+            name: 'Messages',
+            icon: Icons.Message,
+            keywords: ['composer', 'editor', 'enter', 'markdown', 'timeline', 'drafts'],
+          },
+          {
+            id: SettingsPages.MediaPage,
+            name: 'Media & links',
+            icon: Icons.Photo,
+            keywords: ['gif', 'images', 'video', 'previews', 'url', 'embeds'],
+          },
+          {
+            id: SettingsPages.PrivacyPage,
+            name: 'Privacy',
+            icon: Icons.EyeBlind,
+            keywords: ['typing', 'read receipts', 'block', 'ignore'],
+          },
+        ],
+      },
+      {
         label: 'Account',
         items: [
           {
             id: SettingsPages.AccountPage,
             name: 'Account',
             icon: Icons.User,
-            keywords: ['profile', 'name', 'avatar', 'email', 'contact', 'ignored', 'matrix id'],
+            keywords: ['profile', 'name', 'avatar', 'email', 'contact', 'password', 'matrix id'],
           },
           {
             id: SettingsPages.SecurityPage,
@@ -108,6 +149,21 @@ const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
       {
         label: 'Advanced',
         items: [
+          {
+            id: SettingsPages.AdvancedPage,
+            name: 'Advanced',
+            icon: Icons.Terminal,
+            keywords: [
+              'experimental',
+              'beta',
+              'widgets',
+              'calls',
+              'developer',
+              'devtools',
+              'reload',
+              'cache',
+            ],
+          },
           ...(isDesktopPlatform()
             ? [
                 {
@@ -118,12 +174,6 @@ const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
                 },
               ]
             : []),
-          {
-            id: SettingsPages.DeveloperToolsPage,
-            name: 'Developer tools',
-            icon: Icons.Terminal,
-            keywords: ['account data', 'debug', 'json'],
-          },
           {
             id: SettingsPages.AboutPage,
             name: 'About',
@@ -137,21 +187,38 @@ const useSettingsNavGroups = (): SettingsNavGroup<SettingsPages>[] =>
   );
 
 type SettingsProps = {
+  /** The page to open on; otherwise the last page viewed, then General. */
   initialPage?: SettingsPages;
+  /** A row or section title on that page to scroll to and highlight. */
+  initialSetting?: string;
   requestClose: () => void;
 };
-export function Settings({ initialPage, requestClose }: SettingsProps) {
+export function Settings({ initialPage, initialSetting, requestClose }: SettingsProps) {
   const userId = getSafeMyUserId();
   const profile = useUserProfile(userId);
   const displayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
   const avatarUrl = profile.avatarUrl;
 
   const screenSize = useScreenSizeContext();
-  const [activePage, setActivePage] = useState<SettingsPages | undefined>(() => {
-    if (initialPage) return initialPage;
-    return screenSize === ScreenSize.Mobile ? undefined : SettingsPages.GeneralPage;
-  });
   const navGroups = useSettingsNavGroups();
+  const searchIndex = useMemo(() => appSettingsSearchIndex(indexConditionHolds), []);
+  const [activePage, setActivePage] = useState<SettingsPages | undefined>(() => {
+    const available = (page: SettingsPages | undefined) =>
+      page !== undefined && navGroups.some((group) => group.items.some((item) => item.id === page));
+    if (available(initialPage)) return initialPage;
+    // On a phone-sized window the page list comes first.
+    if (screenSize === ScreenSize.Mobile) return undefined;
+    const last = lastViewedSettingsPage();
+    return available(last) ? last : SettingsPages.GeneralPage;
+  });
+
+  useEffect(() => {
+    rememberSettingsPage(activePage);
+  }, [activePage]);
+
+  useEffect(() => {
+    if (initialSetting) revealSetting(initialSetting);
+  }, [initialSetting]);
 
   const handlePageRequestClose = () => {
     if (screenSize === ScreenSize.Mobile) {
@@ -194,7 +261,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
               ) : undefined
             }
             groups={navGroups}
-            searchIndex={APP_SETTINGS_SEARCH_INDEX}
+            searchIndex={searchIndex}
             active={activePage}
             onSelect={setActivePage}
             footer={
@@ -234,6 +301,15 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
       {activePage === SettingsPages.NotificationPage && (
         <Notifications requestClose={handlePageRequestClose} />
       )}
+      {activePage === SettingsPages.MessagesPage && (
+        <Messages requestClose={handlePageRequestClose} />
+      )}
+      {activePage === SettingsPages.MediaPage && (
+        <MediaLinks requestClose={handlePageRequestClose} />
+      )}
+      {activePage === SettingsPages.PrivacyPage && (
+        <Privacy requestClose={handlePageRequestClose} />
+      )}
       {activePage === SettingsPages.SecurityPage && (
         <SecurityRecovery requestClose={handlePageRequestClose} />
       )}
@@ -243,8 +319,8 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
       {activePage === SettingsPages.DiagnosticsPage && (
         <Diagnostics requestClose={handlePageRequestClose} />
       )}
-      {activePage === SettingsPages.DeveloperToolsPage && (
-        <DeveloperTools requestClose={handlePageRequestClose} />
+      {activePage === SettingsPages.AdvancedPage && (
+        <Advanced requestClose={handlePageRequestClose} />
       )}
       {activePage === SettingsPages.AboutPage && <About requestClose={handlePageRequestClose} />}
     </PageRoot>

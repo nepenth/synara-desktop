@@ -25,10 +25,6 @@ export function SystemNotification() {
     settingsAtom,
     'isNotificationSounds'
   );
-  const [showApprovalDetails, setShowApprovalDetails] = useSetting(
-    settingsAtom,
-    'showApprovalNotificationDetails'
-  );
 
   useEffect(() => {
     if (!platformNotifications) return undefined;
@@ -155,11 +151,6 @@ export function SystemNotification() {
           title="Notification sound"
           description="Play a sound when a message arrives."
           after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
-        />
-        <SettingTile
-          title="Show approval details"
-          description="Show the reason and requested command in agent approval notifications. When off, approval notifications only name the room."
-          after={<Switch value={showApprovalDetails} onChange={setShowApprovalDetails} />}
         />
       </SequenceCard>
     </SettingsSection>

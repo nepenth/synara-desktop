@@ -38,7 +38,10 @@ import { ApprovalInboxProvider } from '../../src/app/features/approvals/Approval
 import { OpenedSidebarFolderProvider } from '../../src/app/state/hooks/openedSidebarFolder';
 import { makeOpenedSidebarFolderAtom } from '../../src/app/state/openedSidebarFolder';
 import { NavPaneHeader } from '../../src/app/features/nav-pane/NavPaneHeader';
-import { NavBottomBar } from '../../src/app/features/nav-pane/NavBottomBar';
+import {
+  NavBottomBarHost,
+  NavBottomBarSlot,
+} from '../../src/app/features/nav-pane/NavBottomBarSlot';
 import { DesktopAppShortcuts } from '../../src/app/features/desktop-keyboard/DesktopAppShortcuts';
 
 const summary = (roomId: string, name: string, change: Partial<RoomSummary> = {}): RoomSummary => ({
@@ -283,7 +286,7 @@ function SpacePane() {
   const { spaceIdOrAlias } = useParams();
   const name = getNativeRoom(spaceIdOrAlias ?? '')?.name ?? spaceIdOrAlias ?? '';
   return (
-    <PageNav label="Rooms" header={<NavPaneHeader title={name} />} footer={<NavBottomBar />}>
+    <PageNav label="Rooms" header={<NavPaneHeader title={name} />} footer={<NavBottomBarSlot />}>
       <p style={{ padding: 16 }} data-testid="space-pane">
         {name}
       </p>
@@ -338,6 +341,8 @@ function Client() {
         />
       </Routes>
       <DesktopAppShortcuts />
+      {/* As in the app shell: one bar, placed into whichever pane is shown. */}
+      <NavBottomBarHost />
     </main>
   );
 }

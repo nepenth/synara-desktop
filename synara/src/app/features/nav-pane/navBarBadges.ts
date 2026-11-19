@@ -10,7 +10,7 @@ export type BarBadge =
   /** The 8px unread dot (neutral). */
   | { kind: 'dot' }
   | { kind: 'count'; count: number; highlight: boolean }
-  /** A solid status pill: approvals with partial coverage, unverified devices. */
+  /** A solid status pill: approvals with partial coverage, unverified sessions. */
   | { kind: 'status'; text: string; tone: 'Success' | 'Warning' | 'Critical' };
 
 const NONE: BarBadge = { kind: 'none' };
@@ -93,7 +93,7 @@ export const approvalsBarState = ({
 export type AccountBarState = {
   label: string;
   badge: BarBadge;
-  /** The account menu's verification entry, when one is needed. */
+  /** Where the avatar opens Settings instead of the last page, when verification is needed. */
   verify?: 'this-device' | 'other-devices';
 };
 
@@ -107,24 +107,24 @@ export const accountBarState = (
   ownUnverified: boolean,
   otherUnverifiedCount: number
 ): AccountBarState => {
-  if (!canOfferVerification) return { label: 'Account', badge: NONE };
+  if (!canOfferVerification) return { label: 'Settings', badge: NONE };
   if (ownUnverified) {
     return {
-      label: 'Account, this device is not verified',
+      label: 'Settings, this session is not verified',
       badge: { kind: 'status', text: '!', tone: 'Critical' },
       verify: 'this-device',
     };
   }
   if (otherUnverifiedCount > 0) {
     return {
-      label: `Account, ${otherUnverifiedCount} unverified ${
-        otherUnverifiedCount === 1 ? 'device' : 'devices'
+      label: `Settings, ${otherUnverifiedCount} unverified ${
+        otherUnverifiedCount === 1 ? 'session' : 'sessions'
       }`,
       badge: { kind: 'status', text: String(otherUnverifiedCount), tone: 'Warning' },
       verify: 'other-devices',
     };
   }
-  return { label: 'Account', badge: NONE };
+  return { label: 'Settings', badge: NONE };
 };
 
 /** Bar items show their text labels once the list column is wider than this. */

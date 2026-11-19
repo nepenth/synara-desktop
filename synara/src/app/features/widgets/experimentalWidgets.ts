@@ -117,7 +117,7 @@ export const closeExperimentalWidgets = async (sessionId?: string): Promise<void
   }
 };
 
-export const WIDGETS_SETTINGS_PATH = 'Settings → General → Widgets';
+export const WIDGETS_SETTINGS_PATH = 'Settings → Advanced → Experimental';
 
 export const widgetsSettingsDescription =
   'Default off. This device only — not synced to the account or other devices. Widgets run third-party or local web code as you. Room-state widgets cannot load localhost; agent URLs may use loopback.';

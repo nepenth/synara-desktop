@@ -97,6 +97,10 @@ export const parseSynaraRouteDestination = (value: unknown): SynaraRouteDestinat
   const segments = splitRoutePath(route);
   if (!segments) return undefined;
 
+  if (segments.length === 2 && segments[0] === 'settings') {
+    return { kind: 'settings', section: segments[1] };
+  }
+
   if (segments.length === 2 && segments[0] === 'explore') {
     return { kind: 'explore', server: segments[1] };
   }

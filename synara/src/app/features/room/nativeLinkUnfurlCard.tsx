@@ -123,7 +123,7 @@ export function NativeLinkUnfurlCard({
 
 /**
  * The preview card for a message's first link, fetched from this device when
- * Settings > General > Link previews is on, in encrypted rooms too. Nothing
+ * Settings > Media & links > Link previews is on, in encrypted rooms too. Nothing
  * is fetched for media messages or when `skip` says another card (an X post,
  * an inline GIF, an approval or agent card) already shows the link.
  */

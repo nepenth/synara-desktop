@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMatch, useNavigate } from 'react-router-dom';
 import { useStore } from 'jotai';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
@@ -7,12 +7,9 @@ import { searchModalAtom } from '../../state/searchModal';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { isSynaraDesktop, listen } from '../../utils/desktop';
 import { isLinuxOS, isMacOS } from '../../utils/user-agent';
-import {
-  getHomePath,
-  getInboxNotificationsPath,
-  getSettingsPath,
-  joinPathComponent,
-} from '../../pages/pathUtils';
+import { getHomePath, getInboxNotificationsPath, joinPathComponent } from '../../pages/pathUtils';
+import { SETTINGS_PATH } from '../../pages/paths';
+import { useToggleAppSettings } from '../../state/appSettings';
 import { useOptionalNavToActivePathAtom } from '../../state/hooks/navToActivePath';
 import { useNavigateToApprovals } from '../../hooks/useNavigateToApprovals';
 import { useToggleRoomList } from '../room-list-pane/useRoomListPane';
@@ -101,6 +98,9 @@ export function DesktopAppShortcuts() {
     [navigate, store]
   );
 
+  const toggleSettings = useToggleAppSettings();
+  const settingsRoute = Boolean(useMatch({ path: SETTINGS_PATH, end: false }));
+
   const run = useCallback(
     (action: AppShortcutAction): boolean => {
       switch (action) {
@@ -111,7 +111,9 @@ export function DesktopAppShortcuts() {
           return true;
         case 'settings':
         case 'go-settings':
-          navigate(getSettingsPath());
+          // Toggles, like the account avatar: a second press closes Settings.
+          if (settingsRoute) navigate(getHomePath());
+          else toggleSettings();
           return true;
         // Home and Activity reopen where the user last was in them, as
         // their bar buttons do.
@@ -159,6 +161,8 @@ export function DesktopAppShortcuts() {
     [
       goToRoom,
       helpOpen,
+      settingsRoute,
+      toggleSettings,
       navToActivePathAtom,
       navigate,
       navigateToApprovals,

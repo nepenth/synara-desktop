@@ -331,7 +331,7 @@ export function MessageSearch({
           disabled={nativeSession && !indexedMessageSearch && !listingSearchEnabled}
           disabledReason={
             nativeSession && !indexedMessageSearch && !listingSearchEnabled
-              ? 'Indexed message search is off. Turn it on in Settings → General and reload the session. There is no homeserver search fallback.'
+              ? 'Indexed message search is off. Turn it on in Settings → Advanced → Experimental and reload the session. There is no homeserver search fallback.'
               : undefined
           }
           searchInputRef={searchInputRef}

@@ -89,23 +89,49 @@ test('Approvals: count, coverage and the partial or unavailable warning', () => 
   assert.deepEqual(failed.badge, { kind: 'status', text: '!', tone: 'Warning' });
 });
 
-test('Account: the unverified warning moves onto the avatar', () => {
+test('Settings avatar: the unverified warning sits on it and decides where it opens', () => {
   // No cross-signing to offer: no warning, whatever the devices say.
-  assert.deepEqual(accountBarState(false, true, 3), { label: 'Account', badge: { kind: 'none' } });
-  assert.deepEqual(accountBarState(true, false, 0), { label: 'Account', badge: { kind: 'none' } });
-  // This device unverified: Critical, and the menu offers "Verify this device".
+  assert.deepEqual(accountBarState(false, true, 3), { label: 'Settings', badge: { kind: 'none' } });
+  assert.deepEqual(accountBarState(true, false, 0), { label: 'Settings', badge: { kind: 'none' } });
+  // This session unverified: Critical, and the avatar opens Security & recovery.
   assert.deepEqual(accountBarState(true, true, 2), {
-    label: 'Account, this device is not verified',
+    label: 'Settings, this session is not verified',
     badge: { kind: 'status', text: '!', tone: 'Critical' },
     verify: 'this-device',
   });
-  // Other devices unverified: a Warning count.
+  // Other sessions unverified: a Warning count, and the avatar opens Sessions.
   assert.deepEqual(accountBarState(true, false, 1), {
-    label: 'Account, 1 unverified device',
+    label: 'Settings, 1 unverified session',
     badge: { kind: 'status', text: '1', tone: 'Warning' },
     verify: 'other-devices',
   });
-  assert.equal(accountBarState(true, false, 4).label, 'Account, 4 unverified devices');
+  assert.equal(accountBarState(true, false, 4).label, 'Settings, 4 unverified sessions');
+});
+
+test('the avatar toggles Settings with no menu, and Log out lives in Settings', () => {
+  const bar = readFileSync('src/app/features/nav-pane/NavBottomBar.tsx', 'utf8');
+  assert.doesNotMatch(bar, /AccountMenu/);
+  assert.doesNotMatch(bar, /LogoutDialog/);
+  assert.match(bar, /useToggleAppSettings\(\)/);
+  assert.match(bar, /aria-expanded=\{settingsOpen\}/);
+  assert.match(bar, /verificationSettingsLocation\(verify\)/);
+  assert.match(bar, /returnFocus: \(\) => triggerRef\.current\?\.focus\(\)/);
+  const settings = readFileSync('src/app/features/settings/Settings.tsx', 'utf8');
+  assert.match(settings, /<Text size="B400">Log out<\/Text>/);
+  // The shortcut toggles the same way.
+  const shortcuts = readFileSync(
+    'src/app/features/desktop-keyboard/DesktopAppShortcuts.tsx',
+    'utf8'
+  );
+  assert.match(shortcuts, /toggleSettings\(\)/);
+});
+
+test('a profile view that mounts fresh starts from the last loaded profile', () => {
+  // The Settings header and Account › Profile mount each time Settings opens;
+  // they must not fall back to the initial while the profile is fetched.
+  const hook = readFileSync('src/app/hooks/useUserProfile.ts', 'utf8');
+  assert.match(hook, /useState<UserProfile>\(\(\) => knownProfiles\.get\(userId\) \?\? \{\}\)/);
+  assert.match(hook, /knownProfiles\.set\(userId, next\)/);
 });
 
 test('bar labels appear once the column is wider than 300px, and on Mobile', () => {
@@ -115,7 +141,7 @@ test('bar labels appear once the column is wider than 300px, and on Mobile', () 
   assert.equal(barShowsLabels(undefined), true);
 });
 
-test('the bar is the list column footer on every client pane', () => {
+test('the bar is mounted once by the client shell and placed in every pane column', () => {
   for (const path of [
     'pages/client/home/Home.tsx',
     'pages/client/space/Space.tsx',
@@ -123,9 +149,16 @@ test('the bar is the list column footer on every client pane', () => {
     'pages/client/inbox/Inbox.tsx',
   ]) {
     const source = readFileSync(`src/app/${path}`, 'utf8');
-    assert.match(source, /footer=\{<NavBottomBar \/>\}/, path);
+    assert.match(source, /footer=\{<NavBottomBarSlot \/>\}/, path);
+    assert.doesNotMatch(source, /<NavBottomBar \/>/, path);
     assert.match(source, /header=\{\s*<(NavPaneHeader|HomeHeader|SpaceHeader)/, path);
   }
+  // One host for the signed-in shell, so navigation never remounts the bar.
+  const router = readFileSync('src/app/pages/Router.tsx', 'utf8');
+  assert.equal(router.match(/<NavBottomBarHost \/>/g)?.length, 1);
+  const slot = readFileSync('src/app/features/nav-pane/NavBottomBarSlot.tsx', 'utf8');
+  assert.match(slot, /createPortal\(<NavBottomBar navWidth=/);
+  assert.match(slot, /appendChild\(getBarElement\(\)\)/);
   const bar = readFileSync('src/app/features/nav-pane/NavBottomBar.tsx', 'utf8');
   const order = ['<HomeBarItem', '<ActivityBarItem', '<ApprovalsBarItem', '<AccountBarItem'];
   const at = order.map((tag) => bar.lastIndexOf(tag));
