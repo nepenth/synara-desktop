@@ -47,7 +47,7 @@ for (const theme of ['light', 'dark'] as const) {
         .locator('header')
         .getByRole('button', { name: /more options/i })
         .click();
-      await page.getByRole('button', { name: 'Room Settings' }).click();
+      await page.getByRole('button', { name: 'Room settings' }).click();
       await captureAll(page, 'room', theme);
     });
 
@@ -59,7 +59,7 @@ for (const theme of ['light', 'dark'] as const) {
         .locator('header')
         .getByRole('button', { name: /more options/i })
         .click();
-      await page.getByRole('button', { name: 'Space Settings' }).click();
+      await page.getByRole('button', { name: 'Space settings' }).click();
       await captureAll(page, 'space', theme);
     });
   });

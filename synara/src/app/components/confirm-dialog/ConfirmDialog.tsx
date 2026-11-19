@@ -1,4 +1,4 @@
-import React, { FormEventHandler, ReactNode, useRef } from 'react';
+import React, { FormEventHandler, ReactNode, RefObject, useRef } from 'react';
 import {
   Box,
   Button,
@@ -47,6 +47,8 @@ type ConfirmDialogProps = {
   onConfirm: () => void;
   /** Cancel, the close X, Escape and clicking outside. */
   onCancel: () => void;
+  /** Takes initial focus instead of the footer button (a field in `children`). */
+  initialFocusRef?: RefObject<HTMLElement | null>;
   className?: string;
 };
 
@@ -74,6 +76,7 @@ export function ConfirmDialog({
   showClose = true,
   onConfirm,
   onCancel,
+  initialFocusRef,
   className,
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -98,7 +101,9 @@ export function ConfirmDialog({
         <FocusTrap
           focusTrapOptions={{
             initialFocus: () =>
-              (destructive && !hideCancel ? cancelRef.current : confirmRef.current) ?? false,
+              initialFocusRef?.current ??
+              (destructive && !hideCancel ? cancelRef.current : confirmRef.current) ??
+              false,
             onDeactivate: handleCancel,
             clickOutsideDeactivates: () => !busy,
             escapeDeactivates: (evt) => (busy ? false : stopPropagation(evt)),

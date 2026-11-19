@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-room-folders-create"
+description = "Enables the matrix_room_folders_create command without any pre-configured scope."
+commands.allow = ["matrix_room_folders_create"]
+
+[[permission]]
+identifier = "deny-matrix-room-folders-create"
+description = "Denies the matrix_room_folders_create command without any pre-configured scope."
+commands.deny = ["matrix_room_folders_create"]

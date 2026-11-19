@@ -236,7 +236,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           className={depthCss.quietInteractiveSurface}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            {unread ? 'Mark as Read' : 'Mark as Unread'}
+            {unread ? 'Mark as read' : 'Mark as unread'}
           </Text>
         </MenuItem>
         {readError && (
@@ -296,7 +296,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           className={depthCss.quietInteractiveSurface}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Copy Link
+            Copy link
           </Text>
         </MenuItem>
         <MenuItem
@@ -309,7 +309,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           className={depthCss.quietInteractiveSurface}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Room Settings
+            Room settings
           </Text>
         </MenuItem>
         <UseStateProvider initial={false}>
@@ -326,7 +326,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
                 aria-pressed={promptJump}
               >
                 <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-                  Jump to Time
+                  Jump to time
                 </Text>
               </MenuItem>
               {promptJump && (
@@ -359,7 +359,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
                 aria-pressed={promptLeave}
               >
                 <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-                  Leave Room
+                  Leave room
                 </Text>
               </MenuItem>
               {promptLeave && (

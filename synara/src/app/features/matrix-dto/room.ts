@@ -77,6 +77,12 @@ export type RoomSummary = {
   lastMessageIsAgentApproval: boolean;
   heroes?: RoomHero[];
   tombstoneSuccessorRoomId?: string;
+  /**
+   * The user's room folder (`in.synara.room_folders`) holding this room, when
+   * filed. Core sets it only for joined rooms that are neither DMs nor
+   * spaces; favorites keep theirs.
+   */
+  folderId?: string;
 };
 
 function parseHero(value: unknown): RoomHero | null {
@@ -120,6 +126,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   const lastMessagePreview = optString(value, 'lastMessagePreview');
   const lastMessageIsAgentApproval = optBoolean(value, 'lastMessageIsAgentApproval');
   const tombstoneSuccessorRoomId = optString(value, 'tombstoneSuccessorRoomId');
+  const folderId = optString(value, 'folderId');
   if (
     roomId === null ||
     name === null ||
@@ -139,6 +146,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     lastMessagePreview === null ||
     lastMessageIsAgentApproval === null ||
     tombstoneSuccessorRoomId === null ||
+    folderId === null ||
     stateEncryptedFlag === null ||
     !isMembership(value.membership)
   ) {
@@ -197,5 +205,6 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     lastMessageIsAgentApproval: lastMessageIsAgentApproval ?? false,
     heroes,
     tombstoneSuccessorRoomId,
+    ...(folderId ? { folderId } : {}),
   };
 }

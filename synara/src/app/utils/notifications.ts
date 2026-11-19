@@ -43,7 +43,7 @@ export function markAsReadFromExplicitUserActionInBackground(roomId: string): vo
 }
 
 /**
- * Mark every room read (a space, Home or Direct "Mark as Read"). One failure
+ * Mark every room read (a space, Home or Direct "Mark as read"). One failure
  * does not stop the rest. Resolves to user copy naming the rooms that are
  * still unread, or `undefined` when every room was marked.
  */

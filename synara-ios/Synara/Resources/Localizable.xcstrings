@@ -124,6 +124,9 @@
         }
       }
     },
+    "%@ folder options" : {
+
+    },
     "%@ from %@ in %@. %@" : {
       "localizations" : {
         "en" : {
@@ -247,6 +250,28 @@
         }
       }
     },
+    "%@, %lld mentions" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@, %lld mention"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%@, %lld mentions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%@, %lld unread" : {
       "localizations" : {
         "en" : {
@@ -315,6 +340,9 @@
 
     },
     "%@, recommended" : {
+
+    },
+    "%@, unread" : {
 
     },
     "%@: %@" : {
@@ -1314,6 +1342,9 @@
     "Couldn't save this message to Later. Try again." : {
 
     },
+    "Couldn't save your folders. Try again." : {
+
+    },
     "Couldn't update this identity change." : {
 
     },
@@ -1336,6 +1367,15 @@
 
     },
     "Custom" : {
+
+    },
+    "Delete folder" : {
+
+    },
+    "Delete the %@ folder?" : {
+
+    },
+    "Direct messages can't go in a folder." : {
 
     },
     "DM" : {
@@ -1662,6 +1702,12 @@
     "First seen %@" : {
 
     },
+    "Folder names need 1 to 64 characters." : {
+
+    },
+    "Folders group rooms in the list and sync to your other devices." : {
+
+    },
     "Forward" : {
 
     },
@@ -1803,6 +1849,9 @@
     "Items saved for later will appear here once synced." : {
 
     },
+    "Its rooms go back to Rooms. You stay in every room, and your other devices update too." : {
+
+    },
     "Join" : {
 
     },
@@ -1813,6 +1862,9 @@
 
     },
     "Join another room before forwarding this message." : {
+
+    },
+    "Join this room before putting it in a folder." : {
 
     },
     "Joined" : {
@@ -2118,7 +2170,16 @@
     "Move Down" : {
 
     },
+    "Move down" : {
+
+    },
+    "Move to folder" : {
+
+    },
     "Move Up" : {
+
+    },
+    "Move up" : {
 
     },
     "Mute" : {
@@ -2140,6 +2201,12 @@
 
     },
     "New" : {
+
+    },
+    "New folder" : {
+
+    },
+    "New folder…" : {
 
     },
     "New ToDo" : {
@@ -2179,6 +2246,9 @@
 
     },
     "No Rooms" : {
+
+    },
+    "No rooms" : {
 
     },
     "No Rooms Available" : {
@@ -2669,6 +2739,9 @@
     "Remove from Favorites" : {
 
     },
+    "Remove from folder" : {
+
+    },
     "Remove from room" : {
 
     },
@@ -2682,6 +2755,12 @@
 
     },
     "Removes your reaction" : {
+
+    },
+    "Rename" : {
+
+    },
+    "Rename folder" : {
 
     },
     "Reorder notes and ToDos" : {
@@ -3176,6 +3255,9 @@
     "Spaces" : {
 
     },
+    "Spaces can't go in a folder." : {
+
+    },
     "Spoiler" : {
 
     },
@@ -3350,6 +3432,9 @@
     "The report is sent to your homeserver administrators." : {
 
     },
+    "The room moves into the new folder. Folders sync to your other devices." : {
+
+    },
     "The room will be removed from your joined room list." : {
 
     },
@@ -3426,6 +3511,9 @@
 
     },
     "This file type cannot be attached." : {
+
+    },
+    "This folder no longer exists." : {
 
     },
     "This homeserver asks for a sign-in step Synara cannot complete for an identity reset." : {
@@ -3743,6 +3831,9 @@
     "Withdraw verification" : {
 
     },
+    "Work" : {
+
+    },
     "You" : {
 
     },
@@ -3771,6 +3862,9 @@
         }
       }
     },
+    "You can have up to 100 folders. Delete one to add another." : {
+
+    },
     "You decided at %@." : {
 
     },
@@ -3787,6 +3881,12 @@
 
     },
     "Your decision was sent." : {
+
+    },
+    "Your folders are too large to save. Take some rooms out of folders and try again." : {
+
+    },
+    "Your folders were changed by a newer version of Synara. Update Synara to change them here." : {
 
     },
     "Your homeserver asks you to approve the reset on your account page. Approve it in your browser, then select Continue." : {

@@ -1311,6 +1311,42 @@
           "markdownDescription": "Enables the matrix_room_directory_search command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_folders_create command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-folders-create",
+          "markdownDescription": "Enables the matrix_room_folders_create command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_folders_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-folders-delete",
+          "markdownDescription": "Enables the matrix_room_folders_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_folders_move command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-folders-move",
+          "markdownDescription": "Enables the matrix_room_folders_move command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_folders_rename command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-folders-rename",
+          "markdownDescription": "Enables the matrix_room_folders_rename command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_folders_set_room command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-folders-set-room",
+          "markdownDescription": "Enables the matrix_room_folders_set_room command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_folders_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-folders-snapshot",
+          "markdownDescription": "Enables the matrix_room_folders_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_identity_warning_resolve command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-identity-warning-resolve",
@@ -2985,6 +3021,42 @@
           "markdownDescription": "Denies the matrix_room_directory_search command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_room_folders_create command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-folders-create",
+          "markdownDescription": "Denies the matrix_room_folders_create command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_folders_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-folders-delete",
+          "markdownDescription": "Denies the matrix_room_folders_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_folders_move command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-folders-move",
+          "markdownDescription": "Denies the matrix_room_folders_move command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_folders_rename command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-folders-rename",
+          "markdownDescription": "Denies the matrix_room_folders_rename command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_folders_set_room command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-folders-set-room",
+          "markdownDescription": "Denies the matrix_room_folders_set_room command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_folders_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-folders-snapshot",
+          "markdownDescription": "Denies the matrix_room_folders_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_room_identity_warning_resolve command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-room-identity-warning-resolve",
@@ -3729,6 +3801,12 @@
           "markdownDescription": "Enables the write_image command without any pre-configured scope."
         },
         {
+          "description": "Enables the write_secret command without any pre-configured scope.",
+          "type": "string",
+          "const": "clipboard-manager:allow-write-secret",
+          "markdownDescription": "Enables the write_secret command without any pre-configured scope."
+        },
+        {
           "description": "Enables the write_text command without any pre-configured scope.",
           "type": "string",
           "const": "clipboard-manager:allow-write-text",
@@ -3763,6 +3841,12 @@
           "type": "string",
           "const": "clipboard-manager:deny-write-image",
           "markdownDescription": "Denies the write_image command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the write_secret command without any pre-configured scope.",
+          "type": "string",
+          "const": "clipboard-manager:deny-write-secret",
+          "markdownDescription": "Denies the write_secret command without any pre-configured scope."
         },
         {
           "description": "Denies the write_text command without any pre-configured scope.",

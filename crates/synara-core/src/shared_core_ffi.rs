@@ -711,6 +711,8 @@ mod recovery;
 pub use recovery::*;
 mod room_directory;
 pub use room_directory::*;
+mod room_folders;
+pub use room_folders::*;
 mod rooms;
 pub use rooms::*;
 mod session_lifecycle;

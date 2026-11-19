@@ -913,6 +913,18 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertTrue(view.contains("RoomListSortMenu"))
         XCTAssertTrue(view.contains("Add to Favorites"))
         XCTAssertTrue(service.contains("synara.roomListSort"))
+        // Room folders: sections come from Core's folders and its section
+        // rule; the view only lays them out and offers the folder actions.
+        XCTAssertTrue(service.contains("roomSectionPlacement(input:"))
+        XCTAssertTrue(service.contains("RoomListSnapshotDto.folders"))
+        XCTAssertTrue(view.contains("RoomListFolders.sections("))
+        XCTAssertTrue(service.contains("RoomListSectionKey.folder("))
+        XCTAssertTrue(view.contains("\"Move to folder\""))
+        XCTAssertTrue(view.contains("\"New folder…\""))
+        XCTAssertTrue(view.contains("\"Remove from folder\""))
+        XCTAssertTrue(view.contains("\"Delete folder\""))
+        XCTAssertTrue(view.contains("Its rooms go back to Rooms."))
+        XCTAssertFalse(view.contains("isFavorite == false && room.folderID"), "the section rule stays in Core")
     }
 
     @MainActor

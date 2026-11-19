@@ -1,7 +1,7 @@
 import { expect, Page, test } from '@playwright/test';
 import { SETTINGS_INVENTORY } from '../src/app/features/settings/__tests__/settingsInventory';
 
-// Layout proof for Settings, Room Settings and the room header menu, mounted
+// Layout proof for Settings, Room settings and the room header menu, mounted
 // from the production app shell (e2e/settings-harness). Screenshots are
 // written only when SETTINGS_SHOTS_DIR is set.
 const SHOTS = process.env.SETTINGS_SHOTS_DIR;
@@ -112,9 +112,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
         .locator('header')
         .getByRole('button', { name: /more options/i })
         .click();
-      await expect(page.getByText('Copy Link')).toBeVisible();
+      await expect(page.getByText('Copy link')).toBeVisible();
       const backgrounds = await page.evaluate(() =>
-        ['Invite', 'Copy Link', 'Room Settings', 'Jump to Time'].map((label) => {
+        ['Invite', 'Copy link', 'Room settings', 'Jump to time'].map((label) => {
           const item = Array.from(document.querySelectorAll('button')).find(
             (button) => button.textContent?.trim() === label
           );
@@ -125,7 +125,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       if (!MEASURE_ONLY) expect(new Set(backgrounds.map(([, color]) => color)).size).toBe(1);
       await shot(page, `room-menu-${colorScheme}`);
 
-      await page.getByRole('button', { name: 'Room Settings' }).click();
+      await page.getByRole('button', { name: 'Room settings' }).click();
       const nav = page.locator('[data-settings-nav]').first();
       await expect(nav).toBeVisible();
       const roomGaps = await navGaps(page);
@@ -262,7 +262,7 @@ test('room settings search finds room rows', async ({ page }) => {
     .locator('header')
     .getByRole('button', { name: /more options/i })
     .click();
-  await page.getByRole('button', { name: 'Room Settings' }).click();
+  await page.getByRole('button', { name: 'Room settings' }).click();
   const search = page.getByRole('textbox', { name: 'Search settings' });
   await search.fill('history');
   await expect(

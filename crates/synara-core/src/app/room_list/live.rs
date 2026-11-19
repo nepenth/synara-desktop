@@ -27,8 +27,10 @@ use matrix_sdk_ui::room_list_service::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc};
 
+use crate::app::account_data::{RoomFoldersState, ROOM_FOLDERS_EVENT_TYPE};
 use crate::app::room_list::counts::{room_unread_presentation, RoomUnreadMembership};
 use crate::app::room_list::dm_avatar::dm_avatar_source;
+use crate::app::room_list::folders::apply_room_folders;
 use crate::app::room_list::last_message::{
     is_own_membership_event, last_message_event_is_agent_approval,
     last_message_event_is_agent_approval_str, last_message_event_is_agent_workflow,
@@ -109,6 +111,9 @@ enum RoomListWake {
     Room(OwnedRoomId),
     /// An `m.space.child` or `m.space.parent` state event: the space graph.
     SpaceGraph,
+    /// `in.synara.room_folders` from sync: no row changes; the snapshot
+    /// applies folders on top of the rows.
+    Folders,
 }
 
 /// Whether a state event of `event_type` can change the space graph.
@@ -127,8 +132,22 @@ impl NativeRoomListOwner {
         let handlers = vec![
             client.add_event_handler({
                 let wake = wake.clone();
-                move |_: Raw<AnyGlobalAccountDataEvent>| {
-                    let _ = wake.send(RoomListWake::All);
+                let folders = Arc::clone(owner.room_folders());
+                move |event: Raw<AnyGlobalAccountDataEvent>| {
+                    // Folders change sections and `folder_id`, which every
+                    // snapshot applies on top of the cached rows, so no row
+                    // needs projecting again.
+                    let is_folders = event
+                        .get_field::<String>("type")
+                        .ok()
+                        .flatten()
+                        .is_some_and(|event_type| event_type == ROOM_FOLDERS_EVENT_TYPE);
+                    if is_folders {
+                        folders.observe_sync_event(event.json());
+                        let _ = wake.send(RoomListWake::Folders);
+                    } else {
+                        let _ = wake.send(RoomListWake::All);
+                    }
                     async {}
                 }
             }),
@@ -162,6 +181,7 @@ impl NativeRoomListOwner {
         let wakes = Arc::new(tokio::sync::Mutex::new(wakes));
         let mut first_room_updates = Some(client.subscribe_to_all_room_updates());
         let task_cache = Arc::clone(&cache);
+        let task_folders = Arc::clone(owner.room_folders());
         let task_client = client.clone();
         let task = spawn_supervised(RestartPolicy::default(), move || {
             let service = Arc::clone(&service);
@@ -172,6 +192,7 @@ impl NativeRoomListOwner {
                 .take()
                 .unwrap_or_else(|| task_client.subscribe_to_all_room_updates());
             let task_cache = Arc::clone(&task_cache);
+            let task_folders = Arc::clone(&task_folders);
             let emit = Arc::clone(&emit);
             async move {
                 let mut wakes = wakes.lock_owned().await;
@@ -198,6 +219,7 @@ impl NativeRoomListOwner {
                         push_rules: settings.subscribe_to_changes(),
                         room_updates,
                         loaded,
+                        folders: &task_folders,
                     },
                     |room_ids| {
                         let sync_owner = Arc::clone(&sync_owner);
@@ -313,6 +335,8 @@ struct RoomListWakeSources<'a, L> {
     room_updates: broadcast::Receiver<RoomUpdates>,
     /// `true` once the SDK room list has loaded (a first response arrived).
     loaded: L,
+    /// Local folder writes; they emit before their sync echo arrives.
+    folders: &'a RoomFoldersState,
 }
 
 /// Ids of the rooms that get a full room subscription: the first
@@ -374,6 +398,7 @@ fn invalidate_for_wake(cache: &RoomListSnapshotCache, wake: &RoomListWake) {
         RoomListWake::All => cache.invalidate_all(),
         RoomListWake::Room(room_id) => cache.invalidate_rooms([&**room_id]),
         RoomListWake::SpaceGraph => cache.invalidate_space_graph(),
+        RoomListWake::Folders => {}
     }
 }
 
@@ -402,6 +427,7 @@ async fn run_room_list_updates<S, L, Subscribe, SubscribeFuture, Emit>(
         mut push_rules,
         mut room_updates,
         loaded,
+        folders,
     } = sources;
     futures_util::pin_mut!(entries);
     futures_util::pin_mut!(loaded);
@@ -480,6 +506,8 @@ async fn run_room_list_updates<S, L, Subscribe, SubscribeFuture, Emit>(
                 }
                 emit();
             }
+            // A local folder write: sections change, rows do not.
+            () = folders.changed() => debounce.mark(),
             // Heals any change no stream reported, in rows and graph alike.
             _ = pulse.tick() => {
                 cache.invalidate_all();
@@ -801,7 +829,16 @@ async fn build_snapshot(
         .iter()
         .map(|entry| (entry.room_id.clone(), entry.parent_ids.clone()))
         .collect::<std::collections::BTreeMap<_, _>>();
-    let presentation = room_list_presentation(&rooms, &parents);
+    // Folders apply on top of the (possibly cached) rows: a folder change
+    // re-projects no room. A failed read shows no folders rather than
+    // failing the snapshot.
+    let folders = owner
+        .room_folders()
+        .current(service.client())
+        .await
+        .unwrap_or_default();
+    apply_room_folders(&mut rooms, &folders);
+    let presentation = room_list_presentation(&rooms, &parents, &folders.snapshot(0).folders);
 
     Ok(NativeRoomListSnapshot {
         session_generation: owner.session_generation(),
@@ -1018,6 +1055,7 @@ async fn project_room(
         active_call_participant_count,
         is_favorite: room.is_favourite(),
         is_low_priority: room.is_low_priority(),
+        // Set per snapshot from room folders (`apply_room_folders`).
         folder_id: None,
         encryption_status,
         state_encrypted,
@@ -1721,6 +1759,222 @@ mod live_owner_tests {
                 .expect("read"),
             RoomListSnapshotReply::Snapshot { .. }
         ));
+        owner.stop().await.expect("sync stops");
+    }
+
+    /// `GET`/`PUT` of `in.synara.room_folders` against one stored document.
+    struct FoldersAccountData(Arc<Mutex<Option<serde_json::Value>>>);
+
+    impl wiremock::Respond for FoldersAccountData {
+        fn respond(&self, request: &wiremock::Request) -> ResponseTemplate {
+            let mut stored = self.0.lock().unwrap();
+            if request.method.as_str() == "PUT" {
+                *stored = request.body_json().ok();
+                return ResponseTemplate::new(200).set_body_json(serde_json::json!({}));
+            }
+            match stored.as_ref() {
+                Some(content) => ResponseTemplate::new(200).set_body_json(content),
+                None => ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                    "errcode": "M_NOT_FOUND", "error": "not found"
+                })),
+            }
+        }
+    }
+
+    /// One room-list sliding-sync response that carries `content` as this
+    /// account's `in.synara.room_folders`, as another device's write (or an
+    /// echo) arrives. Returns once the client has processed it: its next
+    /// room-list request carries the response's `pos`.
+    async fn deliver_folders(server: &MatrixMockServer, pos: &str, content: serde_json::Value) {
+        Mock::given(method("POST"))
+            .and(path(SLIDING_SYNC))
+            .and(body_partial_json(
+                serde_json::json!({"conn_id": "room-list"}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "pos": pos,
+                "lists": {},
+                "rooms": {},
+                "extensions": {
+                    "account_data": {
+                        "global": [{ "type": ROOM_FOLDERS_EVENT_TYPE, "content": content }]
+                    }
+                }
+            })))
+            .up_to_n_times(1)
+            .with_priority(1)
+            .mount(server.server())
+            .await;
+        let after = |request: &wiremock::Request| {
+            request.url.path() == SLIDING_SYNC
+                && request
+                    .url
+                    .query_pairs()
+                    .any(|(key, value)| key == "pos" && value == pos)
+        };
+        let processed = tokio::time::timeout(Duration::from_secs(5), async {
+            while requests_matching(server, after).await == 0 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        assert!(processed.is_ok(), "the folders sync response is processed");
+    }
+
+    async fn folder_view(owner: &SyncServiceOwner) -> (Option<String>, Vec<(String, Vec<String>)>) {
+        let snapshot = snapshot_from_sync_owner(owner).await.expect("snapshot");
+        let row = snapshot
+            .rooms
+            .iter()
+            .find(|room| room.room_id == ROOM)
+            .expect("the joined room is listed");
+        (
+            row.folder_id.clone(),
+            snapshot
+                .presentation
+                .folders
+                .iter()
+                .map(|folder| (folder.name.clone(), folder.room_ids.clone()))
+                .collect(),
+        )
+    }
+
+    #[tokio::test]
+    async fn folder_writes_show_before_their_echo_and_other_devices_update_the_list() {
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "versions": ["v1.12"],
+                "unstable_features": { "org.matrix.simplified_msc3575": true }
+            })))
+            .mount(server.server())
+            .await;
+        server.mock_upload_keys().ok().mount().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"/state/m\.room\.encryption"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(server.server())
+            .await;
+        let stored = Arc::new(Mutex::new(None));
+        Mock::given(path_regex(r"/account_data/in\.synara\.room_folders$"))
+            .respond_with(FoldersAccountData(Arc::clone(&stored)))
+            .mount(server.server())
+            .await;
+        mount_room_list_response(&server, "1", "Room A").await;
+        Mock::given(method("POST"))
+            .and(path(SLIDING_SYNC))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({
+                        "pos": "idle", "lists": {}, "rooms": {}, "extensions": {}
+                    }))
+                    .set_delay(Duration::from_millis(100)),
+            )
+            .mount(server.server())
+            .await;
+
+        let owner = Arc::new(
+            build_sync_service(&client, 4, SyncServiceConfig::default())
+                .await
+                .expect("sync service"),
+        );
+        let signals = Arc::new(Mutex::new(0usize));
+        let sink = Arc::clone(&signals);
+        let _live =
+            NativeRoomListOwner::start(&owner, Arc::new(move |_| *sink.lock().unwrap() += 1));
+        owner.start().await.expect("sync starts");
+        let wait_for_signal_after = |seen: usize| {
+            let signals = Arc::clone(&signals);
+            async move {
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    while *signals.lock().unwrap() <= seen {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                })
+                .await
+                .is_ok()
+            }
+        };
+        assert!(wait_for_signal_after(0).await, "the joined room is listed");
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while client
+                .get_room(<&RoomId>::try_from(ROOM).unwrap())
+                .is_none()
+            {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the client knows the joined room");
+        assert_eq!(folder_view(&owner).await, (None, vec![]));
+
+        // A local write shows in the very next snapshot and wakes the list,
+        // without waiting for its sync echo.
+        let seen = *signals.lock().unwrap();
+        let created = owner
+            .room_folders()
+            .create(&client, 4, "Work", Some(ROOM))
+            .await
+            .expect("create a folder holding the room");
+        let filed = (
+            Some(created.folder_id.clone()),
+            vec![("Work".to_owned(), vec![ROOM.to_owned()])],
+        );
+        assert_eq!(folder_view(&owner).await, filed);
+        assert!(
+            wait_for_signal_after(seen).await,
+            "a local folder write wakes the room list"
+        );
+        let written = stored
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("the folders were PUT");
+        assert_eq!(written["folders"][0]["rooms"], serde_json::json!([ROOM]));
+
+        // A delayed sync of the pre-write state must not flip it back.
+        deliver_folders(
+            &server,
+            "2",
+            serde_json::json!({ "version": 1, "folders": [] }),
+        )
+        .await;
+        assert_eq!(folder_view(&owner).await, filed);
+
+        // The echo of the write acknowledges it.
+        deliver_folders(&server, "3", written).await;
+        assert_eq!(folder_view(&owner).await, filed);
+
+        // Another device renames the folder and unfiles the room.
+        let seen = *signals.lock().unwrap();
+        deliver_folders(
+            &server,
+            "4",
+            serde_json::json!({
+                "version": 1,
+                "folders": [{ "id": created.folder_id, "name": "Elsewhere", "rooms": [] }]
+            }),
+        )
+        .await;
+        assert!(
+            wait_for_signal_after(seen).await,
+            "a synced folder change wakes the room list"
+        );
+        assert_eq!(
+            folder_view(&owner).await,
+            (None, vec![("Elsewhere".to_owned(), vec![])])
+        );
+        // Folders apply on top of cached rows: a cached build still matches
+        // a full projection.
+        let cached = build_snapshot(&owner, SnapshotCacheUse::Reuse)
+            .await
+            .expect("cached snapshot");
+        let full = build_snapshot(&owner, SnapshotCacheUse::Bypass)
+            .await
+            .expect("full snapshot");
+        assert_eq!(cached, full);
         owner.stop().await.expect("sync stops");
     }
 }

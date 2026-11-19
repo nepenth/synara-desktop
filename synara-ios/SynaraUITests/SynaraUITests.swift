@@ -295,6 +295,110 @@ final class SynaraUITests: XCTestCase {
         app.buttons["SpaceFilter-all"].tap()
     }
 
+    func testRoomFoldersShowAsSectionsAndFileARoom() {
+        let app = launchRoomFoldersApp()
+
+        let work = identifiedElement(in: app, "RoomListFolderHeader-work")
+        XCTAssertTrue(work.waitForExistence(timeout: 5))
+        XCTAssertTrue(identifiedElement(in: app, "RoomListFolderHeader-ops").exists)
+        XCTAssertTrue(identifiedElement(in: app, "RoomListFolderHeader-side").exists)
+        XCTAssertTrue(identifiedElement(in: app, "RoomListFolderEmpty-side").exists, "an empty folder says No rooms")
+        // Folders sit between Favorites and the default sections, in order.
+        let ops = identifiedElement(in: app, "RoomListFolderHeader-ops")
+        XCTAssertLessThan(work.frame.minY, ops.frame.minY)
+        XCTAssertLessThan(ops.frame.minY, identifiedElement(in: app, "RoomListFolderHeader-side").frame.minY)
+
+        // Collapsing keeps the mention row and says so on the header.
+        tap(work)
+        XCTAssertTrue(work.label.contains("Work, 1 mention"), work.label)
+        XCTAssertEqual(work.value as? String, "Collapsed")
+        XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].exists, "unread rows stay visible")
+        XCTAssertFalse(app.buttons["RoomRow-!design:matrix.org"].exists, "read rows hide")
+        tap(work)
+
+        // File General in the empty folder from its long-press menu.
+        let general = app.buttons["RoomRow-!general:matrix.org"]
+        XCTAssertTrue(general.waitForExistence(timeout: 5))
+        general.press(forDuration: 1.0)
+        tap(app.buttons["Move to folder"])
+        XCTAssertTrue(app.buttons["New folder…"].waitForExistence(timeout: 5))
+        // The header carries the same name; the open menu's item comes last.
+        tap(lastButton(in: app, labeled: "Side projects"))
+        XCTAssertTrue(identifiedElement(in: app, "RoomListFolderEmpty-side").waitForNonExistence(timeout: 5))
+
+        // A DM has no Move to folder.
+        let alice = app.buttons["RoomRow-!alice:matrix.org"]
+        app.swipeUp()
+        XCTAssertTrue(alice.waitForExistence(timeout: 5))
+        alice.press(forDuration: 1.0)
+        XCTAssertTrue(app.buttons["Add to Favorites"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Move to folder"].exists)
+    }
+
+    func testRoomFolderHeaderMenuMovesAndDeletesAFolder() {
+        let app = launchRoomFoldersApp()
+
+        let menu = identifiedElement(in: app, "RoomListFolderMenu-side")
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        tap(menu)
+        XCTAssertTrue(app.buttons["Rename"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Move down"].isEnabled, "the last folder cannot move down")
+        tap(app.buttons["Move up"])
+        let side = identifiedElement(in: app, "RoomListFolderHeader-side")
+        let ops = identifiedElement(in: app, "RoomListFolderHeader-ops")
+        XCTAssertTrue(side.waitForExistence(timeout: 5))
+        let moved = NSPredicate { _, _ in side.frame.minY < ops.frame.minY }
+        wait(for: [XCTNSPredicateExpectation(predicate: moved, object: nil)], timeout: 5)
+
+        tap(identifiedElement(in: app, "RoomListFolderMenu-side"))
+        tap(app.buttons["Delete folder"])
+        XCTAssertTrue(app.staticTexts["Its rooms go back to Rooms. You stay in every room, and your other devices update too."].waitForExistence(timeout: 5))
+        tap(identifiedElement(in: app, "RoomFolderDeleteConfirm-side"))
+        XCTAssertTrue(side.waitForNonExistence(timeout: 5))
+    }
+
+    func testRoomFolderNamePromptCreatesAndShowsCoreErrors() {
+        let failing = launchRoomFoldersApp(error: "too-many-folders")
+        tap(failing.buttons["RoomListTitleMenu"])
+        tap(menuButton(in: failing, "RoomListNewFolderButton", labeled: "New folder"))
+        let field = failing.textFields["RoomFolderNameField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertFalse(failing.buttons["RoomFolderNameSaveButton"].isEnabled, "save waits for a name")
+        // The simulator may type on another hardware layout; any letters do.
+        field.typeText("Plans")
+        tap(failing.buttons["RoomFolderNameSaveButton"])
+        let error = failing.staticTexts["RoomFolderNameError"]
+        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        XCTAssertEqual(error.label, "You can have up to 100 folders. Delete one to add another.")
+        failing.terminate()
+
+        let app = launchRoomFoldersApp()
+        tap(app.buttons["RoomListTitleMenu"])
+        tap(menuButton(in: app, "RoomListNewFolderButton", labeled: "New folder"))
+        let name = app.textFields["RoomFolderNameField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.typeText("Plans")
+        tap(app.buttons["RoomFolderNameSaveButton"])
+        XCTAssertTrue(identifiedElement(in: app, "RoomListFolderHeader-mock-folder-1").waitForExistence(timeout: 5))
+    }
+
+    func testReadOnlyRoomFoldersHideEveryManagementAction() {
+        let app = launchRoomFoldersApp(readOnly: true)
+        XCTAssertTrue(identifiedElement(in: app, "RoomListFolderHeader-work").waitForExistence(timeout: 5))
+        XCTAssertFalse(identifiedElement(in: app, "RoomListFolderMenu-work").exists)
+        tap(app.buttons["RoomListTitleMenu"])
+        let recent = menuButton(in: app, "RoomListSortMenu-recent", labeled: "Sort by recent activity")
+        XCTAssertTrue(recent.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["RoomListNewFolderButton"].exists)
+        XCTAssertFalse(app.buttons["New folder"].exists)
+        recent.tap()
+        let general = app.buttons["RoomRow-!general:matrix.org"]
+        XCTAssertTrue(general.waitForExistence(timeout: 5))
+        general.press(forDuration: 1.0)
+        XCTAssertTrue(app.buttons["Add to Favorites"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Move to folder"].exists)
+    }
+
     func testRoomManagementPublicDirectorySearchMockFlow() {
         let app = launchRoomManagementSheetApp()
 
@@ -3112,6 +3216,21 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
+    private func launchRoomFoldersApp(error: String? = nil, readOnly: Bool = false) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_FOLDERS"] = "1"
+        if let error {
+            app.launchEnvironment["SYNARA_UI_TEST_ROOM_FOLDERS_ERROR"] = error
+        }
+        if readOnly {
+            app.launchEnvironment["SYNARA_UI_TEST_ROOM_FOLDERS_READ_ONLY"] = "1"
+        }
+        launch(app)
+        return app
+    }
+
     private func launchLargeRoomsApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
@@ -3342,6 +3461,27 @@ final class SynaraUITests: XCTestCase {
 
     private func composerField(in app: XCUIApplication) -> XCUIElement {
         identifiedElement(in: app, "ComposerTextField")
+    }
+
+    /// A menu item by identifier, or by label where the OS drops menu
+    /// items' identifiers (seen on the iOS 27 simulator).
+    private func menuButton(in app: XCUIApplication, _ identifier: String, labeled label: String) -> XCUIElement {
+        let byIdentifier = app.buttons[identifier]
+        if byIdentifier.waitForExistence(timeout: 2) {
+            return byIdentifier
+        }
+        return lastButton(in: app, labeled: label)
+    }
+
+    /// A menu item by label, never the list's own header or row with that name.
+    private func lastButton(in app: XCUIApplication, labeled label: String) -> XCUIElement {
+        let matches = app.buttons.matching(NSPredicate(
+            format: "(label == %@ OR label == %@) AND NOT (identifier BEGINSWITH 'RoomList') AND NOT (identifier BEGINSWITH 'RoomRow')",
+            label,
+            label == "Sort by recent activity" ? "Recent" : label
+        ))
+        _ = matches.firstMatch.waitForExistence(timeout: 5)
+        return matches.element(boundBy: max(0, matches.count - 1))
     }
 
     private func identifiedElement(in app: XCUIApplication, _ identifier: String) -> XCUIElement {

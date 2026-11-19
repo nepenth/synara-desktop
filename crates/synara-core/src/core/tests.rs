@@ -391,6 +391,12 @@ async fn default_registry_dispatches_matrix_session_snapshot() {
             "matrix_room_directory_cancel",
             "matrix_room_directory_protocols",
             "matrix_room_directory_search",
+            "matrix_room_folders_create",
+            "matrix_room_folders_delete",
+            "matrix_room_folders_move",
+            "matrix_room_folders_rename",
+            "matrix_room_folders_set_room",
+            "matrix_room_folders_snapshot",
             "matrix_room_identity_warning_resolve",
             "matrix_room_identity_warnings",
             "matrix_room_invite",
@@ -5410,4 +5416,75 @@ async fn matrix_timeline_retry_decryption_fails_closed_without_owner_or_with_unk
         assert_eq!(error.category, category);
         assert_eq!(error.diagnostic_id.as_deref(), Some(diagnostic));
     }
+}
+
+#[tokio::test]
+async fn room_folder_commands_without_a_session_fail_closed() {
+    let core = Core::new(Arc::new(TestPlatform));
+    for (command, payload, diagnostic) in [
+        (
+            "matrix_room_folders_snapshot",
+            serde_json::Value::Null,
+            "p2-room-folders-snapshot-no-session",
+        ),
+        (
+            "matrix_room_folders_create",
+            serde_json::json!({ "name": "Work" }),
+            "p2-room-folders-create-no-session",
+        ),
+        (
+            "matrix_room_folders_rename",
+            serde_json::json!({ "folderId": "f", "name": "Work" }),
+            "p2-room-folders-rename-no-session",
+        ),
+        (
+            "matrix_room_folders_delete",
+            serde_json::json!({ "folderId": "f" }),
+            "p2-room-folders-delete-no-session",
+        ),
+        (
+            "matrix_room_folders_move",
+            serde_json::json!({ "folderId": "f", "toIndex": 0 }),
+            "p2-room-folders-move-no-session",
+        ),
+        (
+            "matrix_room_folders_set_room",
+            serde_json::json!({ "roomId": "!r:example.org", "folderId": null }),
+            "p2-room-folders-set-room-no-session",
+        ),
+    ] {
+        let error = core
+            .command(CommandEnvelope {
+                command: command.into(),
+                session_generation: 0,
+                request_id: None,
+                payload,
+            })
+            .await
+            .expect_err("room-folder command without a session must fail closed");
+        assert_eq!(
+            error.category,
+            MatrixIpcErrorCategory::Forbidden,
+            "{command}"
+        );
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some(diagnostic),
+            "{command}"
+        );
+    }
+    // Unknown fields are rejected before any owner lookup.
+    let error = core
+        .command(CommandEnvelope {
+            command: "matrix_room_folders_create".into(),
+            session_generation: 0,
+            request_id: None,
+            payload: serde_json::json!({ "name": "Work", "color": "red" }),
+        })
+        .await
+        .expect_err("unknown fields must be rejected");
+    assert_eq!(
+        error.diagnostic_id.as_deref(),
+        Some("p2-room-folders-create-invalid-payload")
+    );
 }

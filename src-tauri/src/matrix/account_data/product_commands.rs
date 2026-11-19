@@ -285,6 +285,63 @@ pub async fn matrix_room_notes_move_todo(
     .await
 }
 
+/// User room folders (`in.synara.room_folders`): the stored folders.
+#[tauri::command]
+pub async fn matrix_room_folders_snapshot(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<synara_core::app::account_data::NativeRoomFoldersSnapshot, MatrixAuthCommandError> {
+    crate::bridge::room_folders::room_folders_snapshot(core.inner().as_ref()).await
+}
+
+/// Append a folder; with `room_id`, file that room in it in the same write.
+#[tauri::command]
+pub async fn matrix_room_folders_create(
+    core: State<'_, Arc<synara_core::Core>>,
+    name: String,
+    room_id: Option<String>,
+) -> Result<synara_core::app::account_data::NativeRoomFolderCreateResult, MatrixAuthCommandError> {
+    crate::bridge::room_folders::room_folders_create(core.inner().as_ref(), name, room_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_room_folders_rename(
+    core: State<'_, Arc<synara_core::Core>>,
+    folder_id: String,
+    name: String,
+) -> Result<synara_core::app::account_data::NativeRoomFoldersSnapshot, MatrixAuthCommandError> {
+    crate::bridge::room_folders::room_folders_rename(core.inner().as_ref(), folder_id, name).await
+}
+
+/// Delete a folder; its rooms become unfiled.
+#[tauri::command]
+pub async fn matrix_room_folders_delete(
+    core: State<'_, Arc<synara_core::Core>>,
+    folder_id: String,
+) -> Result<synara_core::app::account_data::NativeRoomFoldersSnapshot, MatrixAuthCommandError> {
+    crate::bridge::room_folders::room_folders_delete(core.inner().as_ref(), folder_id).await
+}
+
+/// Move a folder to `to_index` in display order.
+#[tauri::command]
+pub async fn matrix_room_folders_move(
+    core: State<'_, Arc<synara_core::Core>>,
+    folder_id: String,
+    to_index: u32,
+) -> Result<synara_core::app::account_data::NativeRoomFoldersSnapshot, MatrixAuthCommandError> {
+    crate::bridge::room_folders::room_folders_move(core.inner().as_ref(), folder_id, to_index).await
+}
+
+/// File a room in `folder_id`, or unfile it with `null`.
+#[tauri::command]
+pub async fn matrix_room_folders_set_room(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    folder_id: Option<String>,
+) -> Result<synara_core::app::account_data::NativeRoomFoldersSnapshot, MatrixAuthCommandError> {
+    crate::bridge::room_folders::room_folders_set_room(core.inner().as_ref(), room_id, folder_id)
+        .await
+}
+
 pub(super) fn map_pack_read_subscribe_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(
         "Unknown",

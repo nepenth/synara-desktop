@@ -1,4 +1,5 @@
 import type {
+  RoomFolderPresentation,
   RoomListPresentation,
   RoomUnreadAttention,
 } from '../../features/matrix-dto/generated';
@@ -16,6 +17,7 @@ export const EMPTY_ROOM_LIST_PRESENTATION: RoomListPresentation = {
   unread: [],
   highlightTotal: 0,
   unreadTotal: 0,
+  folders: [],
 };
 
 const isStringArray = (value: unknown): value is string[] =>
@@ -35,6 +37,33 @@ const parseAttention = (value: unknown): RoomUnreadAttention | null => {
     highlight: record.highlight,
     total: record.total,
     ...(record.fromRoomIds ? { fromRoomIds: record.fromRoomIds } : {}),
+  };
+};
+
+const parseFolder = (value: unknown): RoomFolderPresentation | null => {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.id !== 'string' ||
+    typeof record.name !== 'string' ||
+    !isStringArray(record.roomIds) ||
+    !isStringArray(record.recentOrder) ||
+    !isStringArray(record.nameOrder) ||
+    !isCount(record.unreadHighlight) ||
+    !isCount(record.unreadTotal) ||
+    !isStringArray(record.unreadRoomIds)
+  ) {
+    return null;
+  }
+  return {
+    id: record.id,
+    name: record.name,
+    roomIds: record.roomIds,
+    recentOrder: record.recentOrder,
+    nameOrder: record.nameOrder,
+    unreadHighlight: record.unreadHighlight,
+    unreadTotal: record.unreadTotal,
+    unreadRoomIds: record.unreadRoomIds,
   };
 };
 
@@ -62,6 +91,14 @@ export const parseRoomListPresentation = (value: unknown): RoomListPresentation 
     if (!parsed) return null;
     unread.push(parsed);
   }
+  // Room folders (`in.synara.room_folders`); an older Core sends none.
+  if (record.folders !== undefined && !Array.isArray(record.folders)) return null;
+  const folders: RoomFolderPresentation[] = [];
+  for (const entry of (record.folders as unknown[] | undefined) ?? []) {
+    const parsed = parseFolder(entry);
+    if (!parsed) return null;
+    folders.push(parsed);
+  }
   return {
     recentOrder: record.recentOrder,
     nameOrder: record.nameOrder,
@@ -69,6 +106,7 @@ export const parseRoomListPresentation = (value: unknown): RoomListPresentation 
     unread,
     highlightTotal: record.highlightTotal,
     unreadTotal: record.unreadTotal,
+    folders,
   };
 };
 

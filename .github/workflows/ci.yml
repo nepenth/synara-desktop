@@ -439,9 +439,7 @@ jobs:
           save-cache: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || (inputs.apple_slices != 'all' && !inputs.check_ios_device_release)) }}
 
       - name: Install XcodeGen
-        run: |
-          brew install xcodegen
-          test "$(xcodegen --version)" = "Version: 2.46.0"
+        uses: ./.github/actions/install-xcodegen
 
       - name: Restore native Xcode compilation cache
         id: xcode_cache
@@ -514,9 +512,7 @@ jobs:
           save-cache: "false"
 
       - name: Install XcodeGen
-        run: |
-          brew install xcodegen
-          test "$(xcodegen --version)" = "Version: 2.46.0"
+        uses: ./.github/actions/install-xcodegen
 
       - name: Restore native Xcode compilation cache
         id: xcode_cache
@@ -574,9 +570,7 @@ jobs:
           save-cache: "false"
 
       - name: Install XcodeGen
-        run: |
-          brew install xcodegen
-          test "$(xcodegen --version)" = "Version: 2.46.0"
+        uses: ./.github/actions/install-xcodegen
 
       - name: Restore native Xcode compilation cache
         id: xcode_cache

@@ -171,7 +171,7 @@ test.describe('the smallest window, 380x480', () => {
   }) => {
     await open(page, roomPath);
     await page.getByRole('button', { name: 'More Options' }).click();
-    const leave = page.getByRole('button', { name: 'Leave Room' });
+    const leave = page.getByRole('button', { name: 'Leave room' });
     await expectInsideViewport(leave, { scroll: true });
     await page.keyboard.press('Escape');
 

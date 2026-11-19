@@ -1,6 +1,6 @@
 //! Room-list presentation shared by desktop and iOS: section ordering, the
-//! favorites split, per-room unread attention with space rollup, and badge
-//! totals.
+//! favorites split, room folders, per-room unread attention with space
+//! rollup, and badge totals.
 //!
 //! Every shell used to re-derive these rules from room summaries, and the
 //! copies drifted (name normalization, tie-breaks, which rooms count toward a
@@ -360,12 +360,19 @@ pub struct RoomListPresentation {
     /// Mentions and unread totals over attention rooms (not space rows).
     pub highlight_total: u64,
     pub unread_total: u64,
+    /// User room folders (`in.synara.room_folders`) in display order, with
+    /// the rooms each one shows (favorites excluded) and their order and
+    /// unread rollup. A room in a folder's `roomIds` shows there instead of
+    /// its default section.
+    #[serde(default)]
+    pub folders: Vec<super::folders::RoomFolderPresentation>,
 }
 
 /// Build the presentation for one snapshot.
 pub fn room_list_presentation(
     rooms: &[RoomSummary],
     parents: &BTreeMap<String, Vec<String>>,
+    folders: &[crate::app::account_data::NativeRoomFolder],
 ) -> RoomListPresentation {
     let inputs: Vec<RoomOrderInput> = rooms.iter().map(order_input).collect();
     let unread = unread_attention_with_rollup(rooms, parents);
@@ -391,6 +398,7 @@ pub fn room_list_presentation(
         unread,
         highlight_total: summary.highlight_count,
         unread_total: summary.unread_count,
+        folders: super::folders::room_folders_presentation(rooms, folders),
     }
 }
 
@@ -687,7 +695,7 @@ mod tests {
                 .unwrap(),
         ];
         let parents = BTreeMap::from([("!plain:x".to_owned(), vec!["!space:x".to_owned()])]);
-        let presentation = room_list_presentation(&rooms, &parents);
+        let presentation = room_list_presentation(&rooms, &parents, &[]);
         assert_eq!(presentation.favorite_room_ids, ["!fav:x"]);
         assert_eq!(presentation.highlight_total, 1);
         assert_eq!(presentation.unread_total, 1);

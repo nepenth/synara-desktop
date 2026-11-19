@@ -4,7 +4,7 @@ import { getNativeRoom } from '../native/nativeSession';
 import { useAlive } from './useAlive';
 
 /**
- * "Mark as Read" for a group of rooms from a menu. `markRead` resolves true
+ * "Mark as read" for a group of rooms from a menu. `markRead` resolves true
  * when every room was marked, so the menu closes only on success; otherwise
  * `markReadError` names the rooms that are still unread.
  */

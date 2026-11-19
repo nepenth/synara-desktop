@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-room-folders-move"
+description = "Enables the matrix_room_folders_move command without any pre-configured scope."
+commands.allow = ["matrix_room_folders_move"]
+
+[[permission]]
+identifier = "deny-matrix-room-folders-move"
+description = "Denies the matrix_room_folders_move command without any pre-configured scope."
+commands.deny = ["matrix_room_folders_move"]

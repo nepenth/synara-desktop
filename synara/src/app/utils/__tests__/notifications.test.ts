@@ -16,7 +16,7 @@ import {
   shouldRestoreRoomTimelineViewport,
 } from '../timelineLifecycle';
 
-test('Mark as Read for a group tries every room and names the ones still unread', async () => {
+test('Mark as read for a group tries every room and names the ones still unread', async () => {
   const marked: string[] = [];
   const message = await markRoomsAsReadFromExplicitUserAction(
     ['!a:x', '!b:x', '!c:x'],

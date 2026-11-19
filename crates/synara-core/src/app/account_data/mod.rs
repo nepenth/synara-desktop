@@ -3,8 +3,8 @@
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.7-account-data.md`
 //! Product verticals: `docs/matrix-rust-sdk/v-rooms-5-mdirect.md`,
 //! `docs/matrix-rust-sdk/v-timeline-full-replacement-contract.md` (later/notes).
-//! Live image-pack snapshot/set/owner, m.direct, later, and room-notes Client
-//! RMW live here.
+//! Live image-pack snapshot/set/owner, m.direct, later, room-notes and
+//! room-folders Client RMW live here (`docs/design/room-folders.md`).
 
 mod agent_approval_history;
 mod agent_approval_history_live;
@@ -18,6 +18,8 @@ mod mdirect;
 mod mdirect_live;
 mod raw;
 mod recent_emoji;
+mod room_folders;
+mod room_folders_live;
 mod room_notes;
 mod room_notes_live;
 
@@ -79,6 +81,20 @@ pub use raw::{
 pub use recent_emoji::{
     recent_emoji_entries, record_recent_emoji, NativeRecentEmoji, NativeRecentEmojiEntry,
     MAX_RECENT_EMOJI, MAX_RECENT_EMOJI_KEY_BYTES, RECENT_EMOJI_EVENT_TYPE,
+};
+pub use room_folders::{
+    collapse_room_folder_name, create_room_folder, delete_room_folder, is_valid_room_folder_id,
+    is_valid_room_folder_room_id, move_room_folder, normalize_room_folders_content,
+    parse_room_folders_json, prune_room_folders, rename_room_folder, set_room_folder,
+    validate_room_folder_name, validate_room_folders_size, NativeRoomFolder,
+    NativeRoomFolderCreateResult, NativeRoomFoldersSnapshot, RoomFoldersDocument, RoomFoldersError,
+    StoredRoomFolder, MAX_ROOM_FOLDERS, MAX_ROOM_FOLDERS_CONTENT_BYTES,
+    MAX_ROOM_FOLDERS_READ_BYTES, MAX_ROOM_FOLDER_ID_BYTES, MAX_ROOM_FOLDER_NAME_CHARS,
+    ROOM_FOLDERS_ACCOUNT_DATA_VERSION, ROOM_FOLDERS_EVENT_TYPE,
+};
+pub use room_folders_live::{
+    new_room_folder_id, parse_room_folders_sync_event, room_folder_eligibility,
+    RoomFolderEligibility, RoomFoldersState, ROOM_FOLDERS_PENDING_PROJECTION_TTL,
 };
 pub use room_notes::{
     complete_room_todo_item, limit_text, move_room_todo_item, normalize_room_note_item,

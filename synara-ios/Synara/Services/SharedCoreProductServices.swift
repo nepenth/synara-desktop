@@ -1237,6 +1237,7 @@ final class SharedCoreRoomListService: RoomListServicing {
     private let stateLock = NSLock()
     private var cachedNames: [String: String] = [:]
     private var cachedRooms: [String: RoomSummary] = [:]
+    private var cachedFolderSections: [RoomFolderSection] = []
     private var latestState: RoomListState?
     private var updateContinuations: [UUID: AsyncStream<RoomListState>.Continuation] = [:]
     private var updatesTask: Task<Void, Never>?
@@ -1276,7 +1277,8 @@ final class SharedCoreRoomListService: RoomListServicing {
                         isLowPriority: $0.isLowPriority,
                         isAgentRoom: $0.isAgentRoom,
                         notificationMode: $0.notificationMode,
-                        notificationCount: Int($0.notificationCount)
+                        notificationCount: Int($0.notificationCount),
+                        folderId: $0.folderId
                     )
                 },
                 invites: invites.map {
@@ -1299,9 +1301,11 @@ final class SharedCoreRoomListService: RoomListServicing {
                 }
             )
             let state = Self.state(rooms: rooms, loading: snapshot.loading)
+            let folderSections = snapshot.folders.map(RoomFolderSection.init)
             stateLock.withLock {
                 cachedNames = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.name) })
                 cachedRooms = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0) })
+                cachedFolderSections = folderSections
                 latestState = state
             }
             return state
@@ -1362,6 +1366,12 @@ final class SharedCoreRoomListService: RoomListServicing {
         }
     }
 
+    func roomFolderSections() -> [RoomFolderSection] {
+        stateLock.withLock {
+            cachedFolderSections
+        }
+    }
+
     func hasUnreadMessages(roomID: String) -> Bool {
         stateLock.withLock {
             guard let room = cachedRooms[roomID] else {
@@ -1379,6 +1389,7 @@ final class SharedCoreRoomListService: RoomListServicing {
         let reset = stateLock.withLock {
             cachedNames.removeAll()
             cachedRooms.removeAll()
+            cachedFolderSections.removeAll()
             latestState = nil
             let task = updatesTask
             let continuations = Array(updateContinuations.values)

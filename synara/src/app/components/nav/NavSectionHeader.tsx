@@ -15,6 +15,17 @@ type NavSectionHeaderProps = {
   actions?: ReactNode;
   /** Adds the group gap above; set on every section but the first. */
   spaced?: boolean;
+  /**
+   * Always-visible status after the label, inside the toggle (a collapsed
+   * folder's unread). Give it its own spoken text; the visual is decorative.
+   */
+  badge?: ReactNode;
+  /** The toggle's spoken name when it must say more than `label` ("Work, 2 mentions"). */
+  toggleLabel?: string;
+  /** Right-click on the header (a folder's menu). */
+  onContextMenu?: MouseEventHandler<HTMLDivElement>;
+  /** Exposed as `data-section-id` (`favorites`, `rooms`, `directs`, `folder:<id>`). */
+  sectionId?: string;
   className?: string;
 };
 
@@ -30,12 +41,18 @@ export function NavSectionHeader({
   categoryId,
   actions,
   spaced,
+  badge,
+  toggleLabel,
+  onContextMenu,
+  sectionId,
   className,
 }: NavSectionHeaderProps) {
   const collapsible = typeof onToggle === 'function';
   return (
     <div
       className={classNames(css.NavSectionHeader, spaced && css.NavSectionHeaderSpaced, className)}
+      onContextMenu={onContextMenu}
+      data-section-id={sectionId}
     >
       {collapsible ? (
         <button
@@ -44,6 +61,7 @@ export function NavSectionHeader({
           onClick={onToggle}
           data-category-id={categoryId}
           aria-expanded={!closed}
+          aria-label={toggleLabel}
         >
           <span className={css.NavSectionChevronSlot} aria-hidden="true">
             <Icon
@@ -56,12 +74,14 @@ export function NavSectionHeader({
           <span className={css.NavSectionLabel} data-section-label="">
             {label}
           </span>
+          {badge && <span className={css.NavSectionBadge}>{badge}</span>}
         </button>
       ) : (
         <div className={css.NavSectionStatic} role="heading" aria-level={2}>
           <span className={css.NavSectionLabel} data-section-label="">
             {label}
           </span>
+          {badge && <span className={css.NavSectionBadge}>{badge}</span>}
         </div>
       )}
       {actions && <div className={css.NavSectionActions}>{actions}</div>}
