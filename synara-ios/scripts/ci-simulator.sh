@@ -8,11 +8,6 @@
 #       Settle, pick the runtime of that version that runs that device type,
 #       create a fresh device on it, boot it, wait until it has finished
 #       booting, and print its UDID (the only line on stdout).
-#   ci-simulator.sh park <udid>
-#       Shut the device down so it does not compete with the build.
-#   ci-simulator.sh ready <udid>
-#       Boot a parked device again (fast: it has done its first boot) and check
-#       it. Run right before xcodebuild.
 #   ci-simulator.sh check <udid>
 #       Fail unless that device is booted, its runtime is still mounted and it
 #       answers a command.
@@ -29,10 +24,9 @@
 # simulator runs from (actions/runner-images#14946, #15334; Apple lists it as a
 # known issue in the Xcode 27.3 release notes, 191574717). The CI jobs boot
 # their device first, before any build, so a missing or broken runtime fails in
-# the first minutes with this script's diagnostics, then park it: a freshly
-# booted simulator runs its first-boot work for minutes and slowed the build
-# steps beside it until a 5 s test timeout fired. Right before testing they boot
-# it again and check it.
+# the first minutes with this script's diagnostics, and check it again right
+# before testing. The device stays booted through the build: `simctl shutdown`
+# right after a first boot hung for over two minutes on this image.
 set -euo pipefail
 
 log() { echo "ci-simulator: $*" >&2; }
@@ -172,23 +166,6 @@ if not any(m and os.path.isdir(m) for m in mounts):
   log "device $udid is still booted, its runtime is mounted and it answered in $((SECONDS - started)) s"
 }
 
-park() {
-  local udid="$1"
-  with_timeout 120 xcrun simctl shutdown "$udid"
-  log "device $udid is shut down until the tests"
-}
-
-ready() {
-  local udid="$1" started=$SECONDS
-  if ! with_timeout "${CI_SIMULATOR_BOOT_SECONDS:-600}" xcrun simctl bootstatus "$udid" -b >&2; then
-    log "simulator $udid did not boot again"
-    diagnose
-    return 1
-  fi
-  log "booted again in $((SECONDS - started)) s"
-  check "$udid"
-}
-
 smoke() {
   local udid="$1"
   check "$udid"
@@ -216,14 +193,14 @@ diagnose() {
     | grep -iE 'unmount|duplicate|eject|fail|error|prefer' | tail -n 200 >&2 || true
 }
 
-usage="usage: $0 settle | boot <iOS version> <device type name> | park <udid> | ready <udid> | check <udid> | smoke <udid> | remove <udid> | diagnose"
+usage="usage: $0 settle | boot <iOS version> <device type name> | check <udid> | smoke <udid> | remove <udid> | diagnose"
 case "${1:-}" in
   settle) settle ;;
   boot)
     [[ $# -eq 3 ]] || { log "$usage"; exit 2; }
     boot "$2" "$3"
     ;;
-  park | ready | check | smoke | remove)
+  check | smoke | remove)
     [[ $# -eq 2 ]] || { log "$usage"; exit 2; }
     "$1" "$2"
     ;;
