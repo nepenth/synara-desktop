@@ -1227,12 +1227,13 @@ final class SynaraUITests: XCTestCase {
         let app = launchSignedInSettingsApp(
             contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL"
         )
-        tapSettingsElement(app.buttons["AppearanceSettingsLink"], app: app, timeout: 10)
-        let appearanceList = app.collectionViews["AppearanceSettingsScreen"]
-        XCTAssertTrue(appearanceList.waitForExistence(timeout: 5))
+        // Media & links ends with a toggle (Appearance's last one moved to Privacy).
+        tapSettingsElement(app.buttons["RichLinkSettingsLink"], app: app, timeout: 10)
+        let mediaList = app.collectionViews["RichLinkSettingsScreen"]
+        XCTAssertTrue(mediaList.waitForExistence(timeout: 5))
 
-        let finalAction = app.switches["AppearanceHideActivityToggle"]
-        XCTAssertTrue(revealForDirectHit(finalAction, in: appearanceList, app: app))
+        let finalAction = app.switches["RichLinkShortenLinksToggle"]
+        XCTAssertTrue(revealForDirectHit(finalAction, in: mediaList, app: app))
         assertAboveFloatingTabBar(finalAction, app: app)
         let originalValue = try XCTUnwrap(finalAction.value as? String)
         XCTAssertTrue(["0", "1"].contains(originalValue))
@@ -1259,8 +1260,9 @@ final class SynaraUITests: XCTestCase {
         tapSettingsElement(app.buttons["NotificationSettingsLink"], app: app, timeout: 10)
         XCTAssertTrue(app.collectionViews["NotificationSettingsScreen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["NotificationPermissionButton"].waitForExistence(timeout: 5))
-        // Push registration moved to Notifications → Diagnostics (review-2 IOSS-18).
+        // Push registration is on Diagnostics (review-2 IOSS-18); Notifications links to it.
         tapSettingsElement(app.buttons["NotificationDiagnosticsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["NotificationDiagnosticsScreen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["PushRegistrationButton"].waitForExistence(timeout: 5))
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.collectionViews["NotificationSettingsScreen"].waitForExistence(timeout: 5))
@@ -1281,16 +1283,67 @@ final class SynaraUITests: XCTestCase {
 
         tapSettingsElement(app.buttons["SecuritySettingsLink"], app: app, timeout: 10)
         XCTAssertTrue(app.collectionViews["SecuritySettingsScreen"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Session Storage"].exists)
-        XCTAssertTrue(app.staticTexts["Device Verification"].exists)
-        XCTAssertTrue(app.staticTexts["Key Recovery"].exists)
-        XCTAssertTrue(app.staticTexts["Key Backup"].exists)
+        XCTAssertTrue(app.staticTexts["Device verification"].exists)
+        XCTAssertTrue(app.staticTexts["Key recovery"].exists)
+        XCTAssertTrue(app.staticTexts["Key backup"].exists)
+        XCTAssertFalse(app.staticTexts["Session storage"].exists, "implementation readouts are on Advanced")
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
-        XCTAssertTrue(app.buttons["AboutSettingsLink"].exists)
-        XCTAssertTrue(app.buttons["LicensesSettingsLink"].exists)
-        XCTAssertTrue(app.buttons["PrivacyPolicySettingsLink"].exists)
-        XCTAssertTrue(app.buttons["SupportSettingsLink"].exists)
+        tapSettingsElement(app.buttons["AdvancedSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["AdvancedSettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Session storage"].exists)
+        XCTAssertTrue(identifiedElement(in: app, "SettingsRtcTransportsDiagnostic").exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // Licenses, Privacy policy and Support are rows of About now.
+        XCTAssertTrue(revealSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10))
+        XCTAssertFalse(app.buttons["LicensesSettingsLink"].exists)
+        XCTAssertFalse(app.buttons["PrivacyPolicySettingsLink"].exists)
+        XCTAssertFalse(app.buttons["SupportSettingsLink"].exists)
+    }
+
+    /// Every row of the regrouped root list opens its page (App, Chat,
+    /// Account, Advanced, as on desktop) and returns to the list.
+    func testSettingsRootListOpensEveryPage() {
+        let app = launchSignedInSettingsApp()
+        XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 10))
+
+        let pages: [(link: String, screen: String)] = [
+            ("AccountSettingsLink", "AccountSettingsScreen"),
+            ("GeneralSettingsLink", "GeneralSettingsScreen"),
+            ("AppearanceSettingsLink", "AppearanceSettingsScreen"),
+            ("NotificationSettingsLink", "NotificationSettingsScreen"),
+            ("MessagesSettingsLink", "MessagesSettingsScreen"),
+            ("RichLinkSettingsLink", "RichLinkSettingsScreen"),
+            ("PrivacySettingsLink", "PrivacySettingsScreen"),
+            ("SecuritySettingsLink", "SecuritySettingsScreen"),
+            ("SessionsSettingsLink", "SessionsSettingsScreen"),
+            ("AdvancedSettingsLink", "AdvancedSettingsScreen"),
+            ("DiagnosticsSettingsLink", "NotificationDiagnosticsScreen"),
+            ("AboutSettingsLink", "AboutSettingsScreen"),
+        ]
+        for page in pages {
+            tapSettingsElement(app.buttons[page.link], app: app, timeout: 10)
+            XCTAssertTrue(
+                identifiedElement(in: app, page.screen).waitForExistence(timeout: 10),
+                "\(page.link) did not open \(page.screen)"
+            )
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 5))
+        }
+
+        // The moved switches, top to bottom (the reveal helper only scrolls down).
+        app.collectionViews["SettingsScreen"].swipeDown()
+        app.collectionViews["SettingsScreen"].swipeDown()
+        tapSettingsElement(app.buttons["GeneralSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.switches["AppearanceHour24Toggle"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        tapSettingsElement(app.buttons["MessagesSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.switches["SyncDraftsToggle"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        tapSettingsElement(app.buttons["PrivacySettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.switches["AppearanceHideActivityToggle"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["SettingsBlockUserButton"].exists)
     }
 
     func testRichLinkSettingsDefaultOnAndGifSearchNeedsAKey() {
@@ -1349,10 +1402,9 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Synara"].exists)
         XCTAssertTrue(app.staticTexts["Version"].exists)
         XCTAssertTrue(app.staticTexts["Build"].exists)
-        XCTAssertTrue(app.buttons["AboutPrivacyLink"].exists)
-        XCTAssertTrue(app.buttons["AboutSupportLink"].exists)
+        XCTAssertTrue(revealForDirectHit(app.buttons["PrivacyPolicySettingsLink"], in: aboutScreen, app: app))
+        XCTAssertTrue(revealForDirectHit(app.buttons["SupportSettingsLink"], in: aboutScreen, app: app))
 
-        app.navigationBars.buttons.element(boundBy: 0).tap()
         tapSettingsElement(app.buttons["LicensesSettingsLink"], app: app, timeout: 10)
         XCTAssertTrue(app.collectionViews["LicensesSettingsScreen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["AGPL-3.0-only"].exists)
@@ -1396,6 +1448,8 @@ final class SynaraUITests: XCTestCase {
     func testSettingsNavigationDestinationsOpenAndReturn() {
         let app = launchSignedInSettingsApp()
 
+        tapSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(identifiedElement(in: app, "AboutSettingsScreen").waitForExistence(timeout: 10))
         tapSettingsElement(app.buttons["PrivacyPolicySettingsLink"], app: app, timeout: 10)
         XCTAssertTrue(app.collectionViews["PrivacyPolicySettingsScreen"].waitForExistence(timeout: 5))
         XCTAssertTrue(identifiedElement(in: app, "PrivacyPolicyExternalLink").exists)
@@ -1405,6 +1459,8 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.collectionViews["SupportSettingsScreen"].waitForExistence(timeout: 5))
         XCTAssertTrue(identifiedElement(in: app, "SupportExternalLink").exists)
         XCTAssertEqual(identifiedElement(in: app, "SupportExternalLink").label, "synara-support@whyland.com")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(identifiedElement(in: app, "AboutSettingsScreen").waitForExistence(timeout: 5))
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
         XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 5))
@@ -1958,7 +2014,7 @@ final class SynaraUITests: XCTestCase {
         let permission = app.buttons["NotificationPermissionButton"]
         XCTAssertTrue(permission.waitForExistence(timeout: 10))
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        if permission.label == "Enable Notifications" {
+        if permission.label == "Enable notifications" {
             permission.tap()
             let alert = springboard.alerts.firstMatch
             if alert.waitForExistence(timeout: 5) { tap(alert.buttons["Allow"]) }
@@ -2554,7 +2610,7 @@ final class SynaraUITests: XCTestCase {
 
         let permissionButton = app.buttons["NotificationPermissionButton"]
         XCTAssertTrue(permissionButton.waitForExistence(timeout: 5))
-        if permissionButton.label == "Enable Notifications" {
+        if permissionButton.label == "Enable notifications" {
             permissionButton.tap()
             let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
             let alert = springboard.alerts.firstMatch
@@ -3308,6 +3364,8 @@ final class SynaraUITests: XCTestCase {
         let settingsList: XCUIElement
         if app.collectionViews["AccountSettingsScreen"].exists {
             settingsList = app.collectionViews["AccountSettingsScreen"]
+        } else if app.collectionViews["SessionsSettingsScreen"].exists {
+            settingsList = app.collectionViews["SessionsSettingsScreen"]
         } else if app.collectionViews["SettingsScreen"].exists {
             settingsList = app.collectionViews["SettingsScreen"]
         } else {
@@ -3339,7 +3397,7 @@ final class SynaraUITests: XCTestCase {
     ) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         let refresh = app.buttons["RefreshSessionsButton"]
-        let account = app.collectionViews["AccountSettingsScreen"]
+        let account = app.collectionViews["SessionsSettingsScreen"]
 
         while Date() < deadline {
             if revealSettingsElement(element, app: app, timeout: 8) {

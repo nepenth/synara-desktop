@@ -9,7 +9,7 @@ struct GifPickerRequest: Identifiable, Equatable {
 /// Whether this build and the user's settings offer GIF search.
 enum GifSearchAvailability: Equatable {
     case available(KlipyGifProvider)
-    /// Built with a key, but the user turned GIF Search off.
+    /// Built with a key, but the user turned GIF search off.
     case turnedOff
     /// Built without a Klipy key (local, dev and CI test builds).
     case unconfigured
@@ -32,7 +32,7 @@ enum GifSearchAvailability: Equatable {
         case .available:
             return ""
         case .turnedOff:
-            return String(localized: "Turn on GIF Search in Settings to use /gif.")
+            return String(localized: "Turn on GIF search in Settings › Media & links to use /gif.")
         case .unconfigured:
             return String(localized: "GIF search is not set up for this app.")
         }

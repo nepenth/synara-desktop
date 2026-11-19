@@ -20,7 +20,7 @@ enum SharedCoreTimelineReadState {
     }
 
     /// The user's receipt privacy mode: public `m.read` unless Settings →
-    /// Hide Typing & Read Receipts is on, when Core sends `m.read.private`.
+    /// Privacy › Hide typing & read receipts is on, when Core sends `m.read.private`.
     static var readReceiptsArePublic: Bool {
         SynaraSharedConstants.boolSetting(SynaraSharedConstants.hideActivityKey) == false
     }

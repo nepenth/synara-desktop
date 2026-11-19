@@ -1,7 +1,7 @@
 import Foundation
 import SynaraCore
 
-/// Settings → Composer "Sync drafts across devices". Per device, on by default.
+/// Settings › Messages › Drafts "Sync drafts across devices". Per device, on by default.
 enum DraftSyncSettings {
     static let syncDraftsKey = "synara.settings.syncDrafts"
 }
