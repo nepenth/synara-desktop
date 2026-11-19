@@ -333,15 +333,16 @@ before the code. The deployment target stays iOS 16.
 
 The simulator test jobs set `IOS_SIMULATOR_RUNTIME=27.2` and
 `IOS_SIMULATOR_DEVICE=iPhone 17`. Their first step after checkout,
-`synara-ios/scripts/ci-simulator.sh boot`, waits for the runtimes to be mounted,
-picks the 27.2 runtime that runs an iPhone 17 (the image also has an iPhone
-Duo-only 27.2 runtime), creates a fresh device and waits for
-`simctl bootstatus`. The device stays booted through the build (shutting it
-down right after its first boot hung for minutes on this image), so build
-steps beside it run slower; tests with tight time limits must allow for that.
-`ci-build.sh` then checks the device is still booted, its runtime still
-mounted and that it answers, and tests on its UDID instead of whichever
-"iPhone 17" xcodebuild picks by name. The unit suite runs on that one device
+`synara-ios/scripts/ci-simulator.sh prepare`, waits for the runtimes to be
+mounted, picks the 27.2 runtime that runs an iPhone 17 (the image also has an
+iPhone Duo-only 27.2 runtime) and creates a fresh device on it, without booting
+it. After the build, `ci-build.sh` boots it (`ci-simulator.sh ready`), waits for
+`simctl bootstatus`, checks its runtime is still mounted and that it answers,
+and tests on its UDID instead of whichever "iPhone 17" xcodebuild picks by
+name. The device is booted only then because on this image a booted
+simulator's first-boot work slows everything beside it: with the device booted
+at job start, the build steps took minutes longer, a script test hit its time
+limit, and shutting the device down again to spare the build hung for minutes. The unit suite runs on that one device
 without parallel clones. On this image `simdiskimaged` can unmount a runtime
 after CoreSimulator starts
 ([runner-images#14946](https://github.com/actions/runner-images/issues/14946),
@@ -361,8 +362,10 @@ with, not the simulator OS, so if 27.2 stays unreliable on the image,
   `gh workflow run ios-simulator-smoke.yml --ref <branch> -f runtime=27.0`
   (inputs: `xcode`, `runtime`, `device`); a pull request that changes the
   script or the workflow runs it by itself.
-- *A runtime problem in the real jobs* now fails in their first two minutes, in
-  the "Boot iOS test simulator" step, before the Rust and Swift builds.
+- *A missing runtime or a runtime/device pair that does not fit* now fails in
+  the real jobs' first minutes, in the "Create iOS test simulator" step, before
+  the Rust and Swift builds. A device that will not boot still shows up only
+  after the build; the smoke workflow is the quick way to test booting.
 - *Cold builds:* compiler caches are keyed by toolchain, so a new Xcode starts
   with no snapshot and the first run builds everything, about 30 minutes for
   the Apple Rust slice. A pull request whose `iOS simulator tests` job finds no

@@ -437,15 +437,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Boot the exact test device before anything expensive, so a runtime
-      # problem on the image fails in the first minutes with diagnostics, not
-      # after the build (synara-ios/scripts/ci-simulator.sh). It stays booted:
-      # shutting it down right after its first boot hung for minutes on this
-      # image. ci-build.sh checks it is still booted, mounted and answering right
-      # before testing on it.
-      - name: Boot iOS test simulator
+      # Create the exact test device before anything expensive, so a missing
+      # runtime or a runtime/device pair that does not fit fails in the first
+      # minutes with diagnostics (synara-ios/scripts/ci-simulator.sh). It is not
+      # booted here: a booted simulator's first-boot work slowed the build steps
+      # beside it. ci-build.sh boots and checks it right before testing on it.
+      - name: Create iOS test simulator
         run: |
-          udid="$(synara-ios/scripts/ci-simulator.sh boot "$IOS_SIMULATOR_RUNTIME" "$IOS_SIMULATOR_DEVICE")"
+          udid="$(synara-ios/scripts/ci-simulator.sh prepare "$IOS_SIMULATOR_RUNTIME" "$IOS_SIMULATOR_DEVICE")"
           echo "IOS_SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
 
       - name: Install Rust 1.96 and Apple targets
@@ -546,15 +545,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Boot the exact test device before anything expensive, so a runtime
-      # problem on the image fails in the first minutes with diagnostics, not
-      # after the build (synara-ios/scripts/ci-simulator.sh). It stays booted:
-      # shutting it down right after its first boot hung for minutes on this
-      # image. ci-build.sh checks it is still booted, mounted and answering right
-      # before testing on it.
-      - name: Boot iOS test simulator
+      # Create the exact test device before anything expensive, so a missing
+      # runtime or a runtime/device pair that does not fit fails in the first
+      # minutes with diagnostics (synara-ios/scripts/ci-simulator.sh). It is not
+      # booted here: a booted simulator's first-boot work slowed the build steps
+      # beside it. ci-build.sh boots and checks it right before testing on it.
+      - name: Create iOS test simulator
         run: |
-          udid="$(synara-ios/scripts/ci-simulator.sh boot "$IOS_SIMULATOR_RUNTIME" "$IOS_SIMULATOR_DEVICE")"
+          udid="$(synara-ios/scripts/ci-simulator.sh prepare "$IOS_SIMULATOR_RUNTIME" "$IOS_SIMULATOR_DEVICE")"
           echo "IOS_SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
 
       - name: Install Rust 1.96 and Apple targets

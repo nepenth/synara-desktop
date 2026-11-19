@@ -4,10 +4,14 @@
 #   ci-simulator.sh settle
 #       Start CoreSimulator and wait until every usable iOS runtime is Ready and
 #       its volume is mounted, then print runtimes, device types and devices.
-#   ci-simulator.sh boot <iOS version> <device type name>
+#   ci-simulator.sh prepare <iOS version> <device type name>
 #       Settle, pick the runtime of that version that runs that device type,
-#       create a fresh device on it, boot it, wait until it has finished
-#       booting, and print its UDID (the only line on stdout).
+#       and create a fresh device on it without booting it. Prints its UDID
+#       (the only line on stdout).
+#   ci-simulator.sh ready <udid>
+#       Boot that device, wait until it has finished booting, and check it.
+#   ci-simulator.sh boot <iOS version> <device type name>
+#       prepare, then ready; prints the UDID.
 #   ci-simulator.sh check <udid>
 #       Fail unless that device is booted, its runtime is still mounted and it
 #       answers a command.
@@ -22,11 +26,12 @@
 # Why: on the Xcode 27 runner image, simdiskimaged tidies up duplicate runtime
 # registrations after CoreSimulator starts, and can unmount the volume a booted
 # simulator runs from (actions/runner-images#14946, #15334; Apple lists it as a
-# known issue in the Xcode 27.3 release notes, 191574717). The CI jobs boot
-# their device first, before any build, so a missing or broken runtime fails in
-# the first minutes with this script's diagnostics, and check it again right
-# before testing. The device stays booted through the build: `simctl shutdown`
-# right after a first boot hung for over two minutes on this image.
+# known issue in the Xcode 27.3 release notes, 191574717). The CI jobs run
+# prepare as their first step, so a missing runtime or a runtime/device pair
+# that does not fit fails in minutes with this script's diagnostics, and boot
+# the device with ready only right before testing: on this image a booted
+# simulator's first-boot work slowed the build steps beside it until a test
+# timed out, and shutting it down again hung for minutes.
 set -euo pipefail
 
 log() { echo "ci-simulator: $*" >&2; }
@@ -82,7 +87,7 @@ settle() {
   xcrun simctl list devices available >&2
 }
 
-boot() {
+prepare() {
   local version="$1" device_type_name="$2"
   settle
   local runtime_id device_type_id
@@ -118,14 +123,26 @@ for d in json.load(sys.stdin)["devicetypes"]:
     diagnose
     return 1
   fi
-  log "booting $device_type_name on $runtime_id ($udid)"
-  local started=$SECONDS
+  log "created $device_type_name on $runtime_id ($udid)"
+  echo "$udid"
+}
+
+ready() {
+  local udid="$1" started=$SECONDS
+  log "booting $udid"
   if ! with_timeout "${CI_SIMULATOR_BOOT_SECONDS:-600}" xcrun simctl bootstatus "$udid" -b >&2; then
     log "simulator $udid did not finish booting"
     diagnose
     return 1
   fi
   log "booted in $((SECONDS - started)) s"
+  check "$udid"
+}
+
+boot() {
+  local udid
+  udid="$(prepare "$1" "$2")"
+  ready "$udid"
   echo "$udid"
 }
 
@@ -193,14 +210,14 @@ diagnose() {
     | grep -iE 'unmount|duplicate|eject|fail|error|prefer' | tail -n 200 >&2 || true
 }
 
-usage="usage: $0 settle | boot <iOS version> <device type name> | check <udid> | smoke <udid> | remove <udid> | diagnose"
+usage="usage: $0 settle | prepare <iOS version> <device type name> | ready <udid> | boot <iOS version> <device type name> | check <udid> | smoke <udid> | remove <udid> | diagnose"
 case "${1:-}" in
   settle) settle ;;
-  boot)
+  prepare | boot)
     [[ $# -eq 3 ]] || { log "$usage"; exit 2; }
-    boot "$2" "$3"
+    "$1" "$2" "$3"
     ;;
-  check | smoke | remove)
+  ready | check | smoke | remove)
     [[ $# -eq 2 ]] || { log "$usage"; exit 2; }
     "$1" "$2"
     ;;

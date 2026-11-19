@@ -297,12 +297,13 @@ xcodebuild \
   "${UNSIGNED_BUILD_ARGS[@]}"
 
 if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
-  # CI boots its test device before building (IOS_SIMULATOR_UDID, from
-  # ci-simulator.sh boot) and tests on it once it proves still usable. With
+  # CI creates its test device before building (IOS_SIMULATOR_UDID, from
+  # ci-simulator.sh prepare) and boots and checks it only now, after the
+  # build: a booted simulator slows the build steps beside it. With
   # only IOS_SIMULATOR_RUNTIME (e.g. 27.2), a fresh device on exactly that
   # runtime is booted here. Either way xcodebuild never picks a device by name.
   if [[ -n "${IOS_SIMULATOR_UDID:-}" ]]; then
-    "$SCRIPT_DIR/ci-simulator.sh" check "$IOS_SIMULATOR_UDID"
+    "$SCRIPT_DIR/ci-simulator.sh" ready "$IOS_SIMULATOR_UDID"
     TEST_DESTINATION="platform=iOS Simulator,id=$IOS_SIMULATOR_UDID"
   elif [[ -n "${IOS_SIMULATOR_RUNTIME:-}" ]]; then
     simulator_udid="$("$SCRIPT_DIR/ci-simulator.sh" boot "$IOS_SIMULATOR_RUNTIME" "${IOS_SIMULATOR_DEVICE:-iPhone 17}")"
