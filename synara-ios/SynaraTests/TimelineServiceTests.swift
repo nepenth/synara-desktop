@@ -334,6 +334,39 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertNil(availability.failure)
     }
 
+    func testAvailabilityRowDefersToConnectionChromeWhileOffline() {
+        let offline = TimelineLoadFailure(kind: .temporarilyUnavailable, diagnosticCode: "timeline-temporarily-unavailable")
+        let suspended = TimelineLoadFailure(kind: .waitingToReconnect, diagnosticCode: "timeline-suspended")
+        let missingRoom = TimelineLoadFailure(kind: .roomUnavailable, diagnosticCode: "v-timeline-normal-room-not-found")
+
+        for status: MatrixSyncStatus in [.reconnecting, .disconnected, .starting, .failed("x"), .stopped] {
+            XCTAssertNil(
+                RoomTimelineAvailabilityBannerPolicy.candidate(failure: offline, connection: status),
+                "the top bar already says the connection is lost (\(status))"
+            )
+            XCTAssertNil(RoomTimelineAvailabilityBannerPolicy.candidate(failure: suspended, connection: status))
+        }
+        XCTAssertNil(RoomTimelineAvailabilityBannerPolicy.candidate(failure: offline, connection: nil))
+        XCTAssertEqual(
+            RoomTimelineAvailabilityBannerPolicy.candidate(failure: offline, connection: .connected),
+            offline
+        )
+        XCTAssertEqual(
+            RoomTimelineAvailabilityBannerPolicy.candidate(failure: missingRoom, connection: .disconnected),
+            missingRoom,
+            "a failure the connection does not explain still shows"
+        )
+        XCTAssertNil(RoomTimelineAvailabilityBannerPolicy.candidate(failure: nil, connection: .connected))
+    }
+
+    func testAvailabilityRowWaitsLongerThanTheConnectionLostHold() {
+        XCTAssertGreaterThan(
+            RoomTimelineAvailabilityBannerPolicy.appearanceHold,
+            ConnectionStatusCopy.lostHold,
+            "a connection drop must reach the top bar before the row could show"
+        )
+    }
+
     func testTimelineAvailabilityDoesNotDuplicateFullScreenFailure() {
         let failure = TimelineLoadFailure(
             kind: .viewUnavailable,
