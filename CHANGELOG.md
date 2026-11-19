@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Desktop: keyboard shortcuts work from the moment the window shows. A shortcut pressed as the room list first appeared, such as Cmd/Ctrl+/ for the shortcut list or Cmd/Ctrl+K for search, could do nothing, because the app started listening for it a moment after drawing the window. Escape closing a thread just after it opened had the same gap, and View menu items on macOS could be missed for a moment after some settings changed.
+
 ## [3.2.1] - 2026-11-19
 
 - Linux: MP4 videos (video attachments and the video in an X post) could play with no sound, because nothing on the system decoded their AAC audio. The pacman package now depends on `gst-libav` and the .deb on `gstreamer1.0-libav` and `gstreamer1.0-plugins-good`, which provide the decoders WebKitGTK uses. If you build from source, install `gst-libav`.

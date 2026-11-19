@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMatch, useNavigate } from 'react-router-dom';
 import { useStore } from 'jotai';
 import { useSetting } from '../../state/hooks/settings';
@@ -173,7 +173,17 @@ export function DesktopAppShortcuts() {
     ]
   );
 
-  useEffect(() => {
+  // The keys work from the first frame the shell paints. A passive effect runs
+  // after paint, so a key pressed as the window appeared could reach a window
+  // with no listener yet and do nothing. Layout effects run in the same commit
+  // as the DOM they belong to, before the browser can deliver another event.
+  // One listener for the component's life reads the latest `run` from a ref
+  // (updated in a layout effect too, so a key never sees a stale render).
+  const runRef = useRef(run);
+  useLayoutEffect(() => {
+    runRef.current = run;
+  }, [run]);
+  useLayoutEffect(() => {
     const desktop = isSynaraDesktop();
     const onKeyDown = (evt: KeyboardEvent) => {
       if (evt.defaultPrevented) return;
@@ -181,20 +191,22 @@ export function DesktopAppShortcuts() {
       if (!action) return;
       const shortcut = appShortcut(action);
       if (shortcut.external || (shortcut.desktopOnly && !desktop)) return;
-      if (run(action)) evt.preventDefault();
+      if (runRef.current(action)) evt.preventDefault();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [platform, run]);
+  }, [platform]);
 
-  // macOS View and app menu items send the same actions.
+  // macOS View and app menu items send the same actions. Subscribed once:
+  // `listen` is async, so re-subscribing on each new `run` left gaps in which
+  // a menu click went unheard.
   useEffect(() => {
     if (!isSynaraDesktop()) return undefined;
     let unlisten: (() => void | Promise<void>) | undefined;
     let disposed = false;
     void listen<string>(APP_SHORTCUT_MENU_EVENT, (evt) => {
       const action = APP_SHORTCUT_ACTIONS.find((candidate) => candidate === evt.payload);
-      if (action && !appShortcut(action).external) run(action);
+      if (action && !appShortcut(action).external) runRef.current(action);
     })
       .then((unsubscribe) => {
         if (disposed) {
@@ -208,7 +220,7 @@ export function DesktopAppShortcuts() {
       disposed = true;
       void unlisten?.();
     };
-  }, [run]);
+  }, []);
 
   return helpOpen ? (
     <ShortcutHelpSheet platform={platform} onClose={() => setHelpOpen(false)} />
