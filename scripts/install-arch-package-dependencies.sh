@@ -14,6 +14,7 @@ pacman -S --needed --noconfirm \
   webkit2gtk-4.1 \
   xdg-desktop-portal \
   gst-plugins-good \
+  gst-libav \
   libayatana-appindicator \
   librsvg \
   openssl \

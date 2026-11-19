@@ -33,7 +33,9 @@
     "linux": {
       "deb": {
         "depends": [
-          "hunspell-en-us"
+          "hunspell-en-us",
+          "gstreamer1.0-plugins-good",
+          "gstreamer1.0-libav"
         ],
         "desktopTemplate": "../packaging/deb/synara.desktop",
         "files": {

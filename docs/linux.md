@@ -71,6 +71,7 @@ sudo pacman -S --needed \
   file \
   openssl \
   gst-plugins-good \
+  gst-libav \
   appmenu-gtk-module \
   libayatana-appindicator \
   librsvg \
@@ -276,7 +277,7 @@ The package installs:
 
 The wrapper keeps the app on native Wayland (`GDK_BACKEND=wayland`) and makes Balanced this package's default drawing mode (`SYNARA_RENDERING_DEFAULT=balanced`). The Synara binary applies the drawing mode itself when it starts, and falls back to CPU drawing on its own if the web view fails; see the next section.
 
-Keep `gst-plugins-good` installed so WebKitGTK can resolve the `autoaudiosink` GStreamer element during Matrix media setup.
+Keep `gst-plugins-good` installed so WebKitGTK can resolve the `autoaudiosink` GStreamer element during Matrix media setup, and `gst-libav` so it can decode AAC audio and H.264 video. Without `gst-libav`, an MP4 (a video attachment, or the video in an X post) can play with no sound: a GPU decoder may still handle the picture, but nothing decodes the audio track.
 
 #### Hardware acceleration (`SYNARA_RENDERING`)
 
