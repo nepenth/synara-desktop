@@ -591,7 +591,7 @@ final class SynaraUITests: XCTestCase {
                     app.collectionViews["RoomList"],
                     app.collectionViews["RoomListLoading"],
                     app.buttons["RoomRow-!project:matrix.org"],
-                    app.staticTexts["No Rooms"],
+                    app.staticTexts["No rooms yet"],
                 ],
                 timeout: 10
             )
@@ -1391,7 +1391,8 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["RejectInvite-!alerts:matrix.org"].waitForExistence(timeout: 5))
         tap(app.buttons["RejectInvite-!alerts:matrix.org"])
 
-        XCTAssertTrue(app.staticTexts["No Rooms"].waitForExistence(timeout: 5))
+        // Sentence-case empty state since review 2 (2.8.0).
+        XCTAssertTrue(app.staticTexts["No rooms yet"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["RejectInvite-!alerts:matrix.org"].exists)
     }
 
@@ -2339,7 +2340,7 @@ final class SynaraUITests: XCTestCase {
                 [
                     app.collectionViews["RoomList"],
                     app.collectionViews["RoomListLoading"],
-                    app.staticTexts["No Rooms"],
+                    app.staticTexts["No rooms yet"],
                 ],
                 timeout: 60
             )

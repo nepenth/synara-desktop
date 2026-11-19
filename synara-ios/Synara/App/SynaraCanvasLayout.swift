@@ -216,12 +216,9 @@ struct SynaraSettingsCanvas: View {
         Group {
             switch layout {
             case .stacked:
-                NavigationStack(path: router.binding(for: .settings)) {
+                NavigationStack(path: $router.settingsPath) {
                     SettingsView()
                         .synaraConnectionChrome()
-                        .navigationDestination(for: AppRoute.self) { route in
-                            RoutePlaceholderView(route: route)
-                        }
                 }
             case .split:
                 NavigationSplitView(columnVisibility: $columnVisibility) {
