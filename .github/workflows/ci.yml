@@ -537,7 +537,9 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
       IOS_SIMULATOR_RUNTIME: "27.2"
       IOS_SIMULATOR_DEVICE: iPhone 17
-    timeout-minutes: 75
+    # The suite takes about 30 minutes on top of the build; a cold Apple Rust
+    # build (first run on a new toolchain) adds about 35 more.
+    timeout-minutes: 100
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
