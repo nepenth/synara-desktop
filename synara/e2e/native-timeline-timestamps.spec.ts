@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 // `scenario=timestamps`: Ada's header row and two grouped rows, all at
 // 12:59 PM today, the widest 12-hour clock time.
@@ -23,6 +23,17 @@ const applyAppearance = (page: Page, zoom: number, monospace: boolean) =>
     { zoom, monospace }
   );
 
+/** Every `<time>` in the row that takes up more than a hidden pixel. */
+const drawnTimes = (row: Locator) =>
+  row.locator('time').evaluateAll((nodes) =>
+    nodes
+      .filter((node) => {
+        const box = node.getBoundingClientRect();
+        return box.width > 1 || box.height > 1;
+      })
+      .map((node) => node.textContent)
+  );
+
 test('hovering a message body shows no timestamp over the text', async ({ page }) => {
   await open(page);
   for (const selector of [header, grouped, edited]) {
@@ -44,118 +55,99 @@ test('hovering a message body shows no timestamp over the text', async ({ page }
     });
     expect(titles).toEqual([]);
   }
-  // The row's own hover behaviour is unchanged: the gutter time and the rail.
-  const row = page.locator(grouped);
-  await row.getByText('A grouped message').hover();
-  await expect(row.locator('[data-native-timeline-gutter-time]')).toBeVisible();
-  await expect(row.locator('[data-native-timeline-action-rail]')).toBeVisible();
+  // The row's own hover behaviour is unchanged: the action rail still shows.
+  await page.locator(grouped).getByText('A grouped message').hover();
+  await expect(page.locator(grouped).locator('[data-native-timeline-action-rail]')).toBeVisible();
+});
+
+test('hovering or focusing a grouped row shows no time', async ({ page }) => {
+  await open(page);
+  for (const selector of [grouped, edited]) {
+    const row = page.locator(selector);
+    await row.getByText(/grouped message/).hover();
+    await page.waitForTimeout(500);
+    expect(await drawnTimes(row)).toEqual([]);
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+
+    await page.mouse.move(0, 0);
+    await row.locator('[data-native-timeline-row-surface]').focus();
+    await page.waitForTimeout(300);
+    expect(await drawnTimes(row)).toEqual([]);
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+  }
+  // The header row keeps its one visible time, beside the sender.
+  expect(await drawnTimes(page.locator(header))).toEqual(['12:59 PM']);
 });
 
 for (const zoom of [75, 100, 200]) {
   for (const monospace of [false, true]) {
-    test(`the gutter time fits at ${zoom}% with the ${monospace ? 'monospace' : 'default'} font`, async ({
+    test(`rows line up and hold still at ${zoom}% with the ${monospace ? 'monospace' : 'default'} font`, async ({
       page,
     }) => {
       await open(page);
       await applyAppearance(page, zoom, monospace);
-      const row = page.locator(grouped);
-      const time = row.locator('[data-native-timeline-gutter-time]');
-      const body = row.getByText('A grouped message');
-      await body.scrollIntoViewIfNeeded();
-      const restingLeft = (await body.boundingBox())?.x;
-      await body.hover();
-      await expect(time).toBeVisible();
-      await expect(time.locator('[aria-hidden="true"]')).toHaveText('12:59');
-
-      const geometry = await time.evaluate((node) => {
-        const reveal = node.parentElement as HTMLElement;
-        const gutter = reveal.parentElement as HTMLElement;
-        const timeBox = node.getBoundingClientRect();
-        const gutterBox = gutter.getBoundingClientRect();
-        return {
-          scrollWidth: reveal.scrollWidth,
-          clientWidth: reveal.clientWidth,
-          timeLeft: timeBox.left,
-          timeRight: timeBox.right,
-          gutterLeft: gutterBox.left,
-          gutterRight: gutterBox.right,
-        };
-      });
-      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
-      expect(geometry.timeLeft).toBeGreaterThanOrEqual(geometry.gutterLeft - 0.5);
-      expect(geometry.timeRight).toBeLessThanOrEqual(geometry.gutterRight + 0.5);
-
-      // Header and grouped rows share the gutter, and hover never moves text.
-      expect((await body.boundingBox())?.x).toBe(restingLeft);
+      const body = page.locator(grouped).getByText('A grouped message');
       const headerBody = page.locator(header).getByText('Message', { exact: false }).first();
-      expect((await headerBody.boundingBox())?.x).toBeCloseTo(restingLeft ?? 0, 1);
+      await body.scrollIntoViewIfNeeded();
+      const restingLeft = (await body.boundingBox())?.x ?? 0;
+      const headerLeft = (await headerBody.boundingBox())?.x ?? 0;
+
+      await body.hover();
+      expect((await body.boundingBox())?.x).toBe(restingLeft);
+      expect((await headerBody.boundingBox())?.x).toBe(headerLeft);
+      // Header and grouped rows share the gutter, so their text lines up.
+      expect(headerLeft).toBeCloseTo(restingLeft, 1);
+
+      // The avatar fits its gutter at every zoom, clear of the sender's name.
+      const gutter = await page
+        .locator(header)
+        .locator('[data-native-timeline-gutter]')
+        .evaluate((node) => {
+          const g = node.getBoundingClientRect();
+          const a = (node.firstElementChild as HTMLElement).getBoundingClientRect();
+          return { left: g.left, right: g.right, avatarLeft: a.left, avatarRight: a.right };
+        });
+      const nameBox = await page.locator(header).getByText('Ada', { exact: true }).boundingBox();
+      expect(gutter.avatarLeft).toBeGreaterThanOrEqual(gutter.left - 0.5);
+      expect(gutter.avatarRight).toBeLessThanOrEqual(gutter.right + 0.5);
+      expect(gutter.avatarRight).toBeLessThan(nameBox?.x ?? 0);
     });
   }
 }
 
-test('the gutter time fits in 24-hour mode too', async ({ page }) => {
-  await page.addInitScript(() =>
-    localStorage.setItem('settings', JSON.stringify({ hour24Clock: true }))
-  );
+test('grouped rows give screen readers their time', async ({ page }) => {
   await open(page);
-  await applyAppearance(page, 200, true);
-  // The setting took: the header drops the meridiem.
-  await expect(page.locator(header).locator('time')).toHaveText('12:59');
-  const time = page.locator(grouped).locator('[data-native-timeline-gutter-time]');
-  await expect(time.locator('[aria-hidden="true"]')).toHaveText('12:59');
-  const fits = await time.evaluate((node) => {
-    const reveal = node.parentElement as HTMLElement;
-    return reveal.scrollWidth <= reveal.clientWidth;
-  });
-  expect(fits).toBe(true);
+  for (const selector of [grouped, edited]) {
+    const time = page.locator(selector).locator('time');
+    await expect(time).toHaveCount(1);
+    await expect(time).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T/);
+    await expect(time).toHaveText(/day, .*2\d{3} 12:59 PM$/);
+    // In the accessibility tree, and not a tab stop of its own.
+    expect(await time.evaluate((node) => node.closest('[aria-hidden="true"]'))).toBeNull();
+    expect(await time.getAttribute('tabindex')).toBeNull();
+  }
 });
 
-test('the time stays accessible and hovering it shows the full date', async ({ page }) => {
+test('hovering the header time shows the full date beside it', async ({ page }) => {
   await open(page);
-  // In the app the room list sits left of the timeline, where the gutter's
-  // tooltip grows; at the window's edge folds would move it back on screen.
-  await page.evaluate(() => {
-    document.body.style.paddingLeft = '320px';
-  });
-  const time = page.locator(grouped).locator('[data-native-timeline-gutter-time]');
-  // Screen readers get the full date and time, not just the short clock.
-  await expect(time).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T/);
-  await expect(time).toContainText(/, .*2\d{3} 12:59 PM$/);
-  expect(await time.evaluate((node) => node.closest('[aria-hidden="true"]'))).toBeNull();
-
-  await page.locator(grouped).getByText('A grouped message').hover();
-  await time.hover();
-  const tooltip = page.getByRole('tooltip');
-  await expect(tooltip).toHaveText(/day, .*2\d{3} 12:59 PM$/);
-  // The tooltip sits above the time and grows left from its edge, so it covers
-  // the gutter, never the message text that starts right of the gutter.
-  const tooltipBox = await tooltip.boundingBox();
-  const timeBox = await time.boundingBox();
-  expect((tooltipBox?.y ?? 0) + (tooltipBox?.height ?? 0)).toBeLessThanOrEqual(timeBox?.y ?? 0);
-  expect((tooltipBox?.x ?? 0) + (tooltipBox?.width ?? 0)).toBeLessThanOrEqual(
-    (timeBox?.x ?? 0) + (timeBox?.width ?? 0) + 0.5
-  );
-  await page.mouse.move(0, 0);
-  await expect(tooltip).toHaveCount(0);
-
-  // The header row's time gives the full date the same way.
   const headerTime = page.locator(header).locator('time');
   await expect(headerTime).toHaveText('12:59 PM');
   await expect(headerTime).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T/);
   await headerTime.hover();
-  await expect(page.getByRole('tooltip')).toHaveText(/day, .*2\d{3} 12:59 PM$/);
+  const tooltip = page.getByRole('tooltip');
+  await expect(tooltip).toHaveText(/day, .*2\d{3} 12:59 PM$/);
   // Beside the header time, on the sender's line, not over the text below.
-  const headerTooltipBox = await page.getByRole('tooltip').boundingBox();
-  const headerTimeBox = await headerTime.boundingBox();
-  expect(headerTooltipBox?.x ?? 0).toBeGreaterThanOrEqual(
-    (headerTimeBox?.x ?? 0) + (headerTimeBox?.width ?? 0)
-  );
+  const tooltipBox = await tooltip.boundingBox();
+  const timeBox = await headerTime.boundingBox();
+  expect(tooltipBox?.x ?? 0).toBeGreaterThanOrEqual((timeBox?.x ?? 0) + (timeBox?.width ?? 0));
   const firstLine = await page
     .locator(header)
     .getByText('Message', { exact: false })
     .first()
     .boundingBox();
-  expect((headerTooltipBox?.y ?? 0) + (headerTooltipBox?.height ?? 0)).toBeLessThanOrEqual(
+  expect((tooltipBox?.y ?? 0) + (tooltipBox?.height ?? 0)).toBeLessThanOrEqual(
     (firstLine?.y ?? 0) + 0.5
   );
+  await page.mouse.move(0, 0);
+  await expect(tooltip).toHaveCount(0);
 });

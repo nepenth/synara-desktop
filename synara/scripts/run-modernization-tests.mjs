@@ -98,7 +98,7 @@ const tests = [
   'src/app/utils/__tests__/syncSplashRecovery.test.ts',
   'src/app/utils/__tests__/timelinePagination.test.ts',
   'src/app/utils/__tests__/timelineDateMarks.test.ts',
-  'src/app/utils/__tests__/timeGutter.test.ts',
+  'src/app/utils/__tests__/timeFormat.test.ts',
   'src/app/pages/client/__tests__/syncStatusCopy.test.ts',
   'src/app/pages/client/home/__tests__/homeIdentity.test.ts',
   'src/app/pages/client/inbox/__tests__/notificationResponse.test.ts',

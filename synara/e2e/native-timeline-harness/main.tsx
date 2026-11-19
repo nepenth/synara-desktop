@@ -276,8 +276,8 @@ if (scenario === 'sender-headers') {
   ] as typeof rows;
 }
 // `scenario=timestamps`: Ada writes three messages at 12:59 PM local time
-// today, the widest 12-hour clock time, so the last two are grouped rows with
-// the time in the left gutter; the last one is edited.
+// today, the widest 12-hour clock time, so the last two are grouped rows that
+// draw no time of their own; the last one is edited.
 if (scenario === 'timestamps') {
   const ada = { senderId: '@ada:example.test', senderName: 'Ada' };
   const noon = new Date();
@@ -292,7 +292,7 @@ if (scenario === 'timestamps') {
       originServerTs: at + 1_000,
       eventId: '$ada-2',
       itemId: '$ada-2',
-      body: 'A grouped message whose time sits in the gutter.',
+      body: 'A grouped message after the first.',
     },
     {
       ...makeRow(sequence + 3),

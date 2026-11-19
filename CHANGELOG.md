@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Desktop: hovering a message no longer shows a date-and-time tooltip over the text you are reading. The full date and time now appears only when you point at the time itself, above it, and screen readers read it for every message, including the ones after the first in a group.
-- Desktop: the time beside grouped messages is no longer cut off (it showed as "8:22P" in 12-hour mode on macOS). It now shows the short clock, such as "8:22", as Slack does, with AM or PM in the group's header and in the tooltip. The space beside messages grows with page zoom and fits the time in any interface or monospace font, so at 200% zoom avatars no longer overlap the sender's name either.
+- Desktop: hovering a message no longer shows a date-and-time tooltip over the text you are reading. To see a message's full date and time, point at the time beside the sender's name; it appears beside that time.
+- Desktop: the follow-on messages in a group no longer show a time in the left margin when you hover them (it was cut off in 12-hour mode on macOS, showing "8:22P"). The only time shown is the one beside the sender's name, and screen readers still read each message's full date and time. The left margin now grows with page zoom, so at 200% zoom avatars no longer overlap the sender's name.
 - Desktop: the time beside a sender's name is now only the time, such as "2:03 PM", for every message; it no longer adds "Yesterday" or the date for older ones. The date is in the day heading above the first message of each day, which is now short: "Today", "Yesterday", then "Nov 14th" (with the year for another year). Twelve-hour times no longer have a leading zero ("2:03 PM", not "02:03 PM").
 
 ## [3.1.1] - 2026-11-18

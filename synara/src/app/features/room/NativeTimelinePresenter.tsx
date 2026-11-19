@@ -118,7 +118,7 @@ import { UserAvatar } from '../../components/user-avatar';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { getMxIdLocalPart } from '../../utils/matrix';
-import { timeFull, timeGutter } from '../../utils/time';
+import { timeFull } from '../../utils/time';
 import colorMXID from '../../../util/colorMXID';
 import { nameInitials } from '../../utils/common';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
@@ -1886,62 +1886,66 @@ const NativeTimelineSenderAvatar = ({ row }: { row: NativeTimelineViewRow }) => 
 };
 
 /**
- * A message's time: in the header beside the sender (time only, `2:03 PM`; the
- * day heading carries the date), or in the left gutter of a grouped row
- * (`gutter`). Hovering the time itself shows the full date and
- * time above it; the message text never gets a tooltip. The gutter draws the
- * short clock (`8:22`) and gives screen readers the full date and time.
+ * A message's time beside the sender (time only, `2:03 PM`; the day heading
+ * carries the date). Hovering the time itself shows the full date and time
+ * beside it; the message text never gets a tooltip.
  */
 const NativeTimelineTimestamp = ({
   ts,
   hour24Clock,
   dateFormatString,
-  gutter,
 }: {
   ts: number;
   hour24Clock: boolean;
   dateFormatString: string;
-  gutter?: boolean;
-}) => {
-  const full = timeFull(ts, hour24Clock, dateFormatString);
-  return (
-    // Placed where there is no message text: beside the header time, growing
-    // up from its bottom edge, and above the gutter time, growing left.
-    <TooltipProvider
-      position={gutter ? 'Top' : 'Right'}
-      align="End"
-      offset={4}
-      tooltip={
-        <Tooltip>
-          <Text size="T200">{full}</Text>
-        </Tooltip>
-      }
-    >
-      {(triggerRef) =>
-        gutter ? (
-          <time
-            ref={triggerRef}
-            dateTime={new Date(ts).toISOString()}
-            className={htmlCss.GroupedTimestampText}
-            data-native-timeline-gutter-time="true"
-          >
-            <span aria-hidden="true">{timeGutter(ts, hour24Clock)}</span>
-            <span className={htmlCss.VisuallyHidden}>{full}</span>
-          </time>
-        ) : (
-          // Time only: the day heading above carries the date.
-          <Time
-            compact
-            ref={triggerRef}
-            ts={ts}
-            hour24Clock={hour24Clock}
-            dateFormatString={dateFormatString}
-          />
-        )
-      }
-    </TooltipProvider>
-  );
-};
+}) => (
+  // On the sender's line, growing up from the time's bottom edge, so it never
+  // covers message text.
+  <TooltipProvider
+    position="Right"
+    align="End"
+    offset={4}
+    tooltip={
+      <Tooltip>
+        <Text size="T200">{timeFull(ts, hour24Clock, dateFormatString)}</Text>
+      </Tooltip>
+    }
+  >
+    {(triggerRef) => (
+      <Time
+        compact
+        ref={triggerRef}
+        ts={ts}
+        hour24Clock={hour24Clock}
+        dateFormatString={dateFormatString}
+      />
+    )}
+  </TooltipProvider>
+);
+
+/**
+ * A grouped row draws no time: the only visible time is the one beside the
+ * sender. Screen readers still read each message's full date and time here.
+ * Through 3.1.1 a short time was revealed here on hover; restoring it means
+ * drawing a time in this gutter cell again (and widening `MessageGutter` to fit).
+ */
+const NativeTimelineGroupedTime = ({
+  ts,
+  hour24Clock,
+  dateFormatString,
+}: {
+  ts: number;
+  hour24Clock: boolean;
+  dateFormatString: string;
+}) => (
+  <time
+    dateTime={new Date(ts).toISOString()}
+    className={htmlCss.VisuallyHidden}
+    data-native-timeline-grouped-time="true"
+  >
+    {timeFull(ts, hour24Clock, dateFormatString)}
+  </time>
+);
 
 const NativeTimelineReplySurface = ({
   reply,
@@ -2569,19 +2573,19 @@ const NativeTimelineRowImpl = ({
               className={`${rowClassName} ${htmlCss.MessageSwipeContent}`}
             >
               <Box gap="300" alignItems="Start">
-                <Box direction="Column" alignItems="Center" className={htmlCss.MessageGutter}>
+                <Box
+                  direction="Column"
+                  alignItems="Center"
+                  className={htmlCss.MessageGutter}
+                  data-native-timeline-gutter="true"
+                >
                   {grouped ? (
-                    // The hover time sits in the empty avatar column, where it
-                    // cannot collide with the action rail on the right.
                     originServerTs ? (
-                      <div className={htmlCss.GroupedTimestampReveal}>
-                        <NativeTimelineTimestamp
-                          gutter
-                          ts={originServerTs}
-                          hour24Clock={hour24Clock}
-                          dateFormatString={dateFormatString}
-                        />
-                      </div>
+                      <NativeTimelineGroupedTime
+                        ts={originServerTs}
+                        hour24Clock={hour24Clock}
+                        dateFormatString={dateFormatString}
+                      />
                     ) : null
                   ) : (
                     <NativeTimelineSenderAvatar row={row} />
