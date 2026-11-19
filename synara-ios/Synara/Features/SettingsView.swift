@@ -109,6 +109,8 @@ enum SettingsPage: String, Hashable, CaseIterable, Identifiable {
     case licenses
     case privacy
     case support
+    /// Pushed from About; not a row of the Settings list.
+    case whatsNew
 
     var id: String { rawValue }
 }
@@ -145,6 +147,8 @@ struct SettingsPageView: View {
             PrivacyPolicySettingsView()
         case .support:
             SupportSettingsView()
+        case .whatsNew:
+            WhatsNewSettingsView()
         }
     }
 }
@@ -2902,11 +2906,48 @@ private struct AboutSettingsView: View {
                     SettingsNavigationRow(title: String(localized: "Support"), systemImage: "questionmark.circle")
                 }
                 .accessibilityIdentifier("AboutSupportLink")
+
+                // The notes the card shows after an update, at any time.
+                // Pushed by value, like the Settings rows, so it opens on
+                // the phone stack and in the iPad detail column.
+                if WhatsNewPresentation.shared.currentNotes != nil {
+                    NavigationLink(value: SettingsPage.whatsNew) {
+                        SettingsNavigationRow(title: String(localized: "What's New"), systemImage: "sparkles")
+                    }
+                    .accessibilityIdentifier("AboutWhatsNewLink")
+                }
             }
         }
         .navigationTitle("About")
         .synaraSettingsChrome()
         .accessibilityIdentifier("AboutSettingsScreen")
+    }
+}
+
+/// Settings › About › What's New: the running version's notes, as in the
+/// card shown once after an update.
+private struct WhatsNewSettingsView: View {
+    var notes: WhatsNewNotes? = WhatsNewPresentation.shared.currentNotes
+
+    var body: some View {
+        List {
+            if let notes {
+                Section(WhatsNewCopy.title(version: notes.version)) {
+                    WhatsNewNotesContent(notes: notes)
+                        .padding(.vertical, SynaraSpacing.xSmall)
+                }
+            }
+
+            Section {
+                Link(destination: notes?.releaseURL ?? WhatsNewNotes.releasesURL) {
+                    SettingsNavigationRow(title: String(localized: "Full Release Notes"), systemImage: "safari")
+                }
+                .accessibilityIdentifier("WhatsNewSettingsReleaseNotesLink")
+            }
+        }
+        .navigationTitle(String(localized: "What's New"))
+        .synaraSettingsChrome()
+        .accessibilityIdentifier("WhatsNewSettingsScreen")
     }
 }
 

@@ -91,6 +91,7 @@ struct RootShellView: View {
                     .accessibilityHidden(true)
             }
         #endif
+        .environment(\.synaraWhatsNewBlocked, isWhatsNewBlocked)
         .onChange(of: connectionStatus.status) { status in
             // The only flush trigger outside a send: messages Core could not
             // take while the session was not ready go out now.
@@ -181,6 +182,15 @@ struct RootShellView: View {
             cryptoVerificationUpdatesTask?.cancel()
             cryptoVerificationUpdatesTask = nil
         }
+    }
+
+    /// The "What's New" card waits while a sheet, a verification prompt or
+    /// the log-out confirmation needs attention first.
+    private var isWhatsNewBlocked: Bool {
+        router.sheetDestination != nil
+            || verifyDevicePrompt.isPresented
+            || cryptoVerification.snapshot != nil
+            || bannerSignOutConfirmation.isPresented
     }
 
     private var cryptoVerificationSheetBinding: Binding<Bool> {

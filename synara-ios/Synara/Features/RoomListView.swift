@@ -33,6 +33,9 @@ struct RoomListView: View {
     /// Direct-message peers' presence from Core; a missing entry is unknown.
     @State private var peerPresence: [String: RoomListPeerPresence] = [:]
     @FocusState private var isSearchFocused: Bool
+    /// "What's New" after an update, once, at the top of the list.
+    @ObservedObject private var whatsNew = WhatsNewPresentation.shared
+    @Environment(\.synaraWhatsNewBlocked) private var isWhatsNewBlocked
 
     var body: some View {
         Group {
@@ -127,6 +130,25 @@ struct RoomListView: View {
                     ConnectionStatusChrome()
 
                     List {
+                        if let whatsNewNotes = whatsNew.pending,
+                           isWhatsNewBlocked == false,
+                           isRoomManagementSheetPresented == false,
+                           searchQuery.isEmpty {
+                            WhatsNewCard(
+                                notes: whatsNewNotes,
+                                onAppear: { whatsNew.cardDidAppear() },
+                                onDismiss: { whatsNew.dismiss() }
+                            )
+                            .listRowInsets(EdgeInsets(
+                                top: SynaraSpacing.small,
+                                leading: SynaraSpacing.large,
+                                bottom: SynaraSpacing.small,
+                                trailing: SynaraSpacing.large
+                            ))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(SynaraChrome.roomList)
+                        }
+
                         if searchQuery.isEmpty == false && filteredRooms.isEmpty {
                             SynaraEmptyState(
                                 title: String(localized: "No Matching Rooms"),

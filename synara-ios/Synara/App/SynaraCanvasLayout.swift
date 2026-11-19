@@ -233,7 +233,13 @@ struct SynaraSettingsCanvas: View {
                 } detail: {
                     NavigationStack {
                         SettingsPageView(page: selection ?? .account)
+                            // Pages push others by value (About › What's New).
+                            .navigationDestination(for: SettingsPage.self) { page in
+                                SettingsPageView(page: page)
+                            }
                     }
+                    // A new sidebar selection starts its own stack.
+                    .id(selection)
                     .accessibilityIdentifier("SettingsDetailColumn")
                 }
                 .navigationSplitViewStyle(.balanced)

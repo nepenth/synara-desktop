@@ -69,6 +69,10 @@ private struct SynaraRootHost: View {
             appDelegate.bind(to: environment)
             delegateBound = true
         }
+        if phase == .background {
+            // A "What's New" card that was on screen counts as seen.
+            WhatsNewPresentation.shared.sceneDidEnterBackground()
+        }
         guard shellReady == false,
               phase == .active,
               UIApplication.shared.applicationState == .active
@@ -76,6 +80,9 @@ private struct SynaraRootHost: View {
             return
         }
         PerformanceTrace.event("RootShellAppear")
+        // Decided from the session restored at launch, before anyone can
+        // sign in: a fresh install records its version without a card.
+        WhatsNewPresentation.shared.evaluateAtLaunch(session: WhatsNewSessionState(environment.session))
         shellReady = true
     }
 }

@@ -1358,6 +1358,41 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["AGPL-3.0-only"].exists)
     }
 
+    /// After an update (an older version "last seen"), Rooms shows the
+    /// "What's New" card once; closing it removes it, and About › What's New
+    /// shows the same notes. Other UI tests never see the card.
+    func testWhatsNewCardAfterAnUpdateClosesAndStaysInAbout() {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_WHATS_NEW_SEEN_VERSION"] = "0.0.1"
+        launch(app)
+
+        let card = identifiedElement(in: app, "WhatsNewCard")
+        XCTAssertTrue(card.waitForExistence(timeout: 15))
+        XCTAssertTrue(identifiedElement(in: app, "WhatsNewHeadline").exists)
+        XCTAssertTrue(identifiedElement(in: app, "WhatsNewItem-0").exists)
+        XCTAssertTrue(app.buttons["WhatsNewReleaseNotesLink"].exists)
+
+        tap(app.buttons["WhatsNewDismissButton"])
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: card)
+        waitForExpectations(timeout: 5)
+
+        tap(app.buttons["SettingsTab"], timeout: 10)
+        tapSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10)
+        let aboutScreen = identifiedElement(in: app, "AboutSettingsScreen")
+        if aboutScreen.waitForExistence(timeout: 5) == false {
+            tapSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10)
+        }
+        XCTAssertTrue(aboutScreen.waitForExistence(timeout: 10))
+        let whatsNewRow = app.buttons["AboutWhatsNewLink"]
+        XCTAssertTrue(revealForDirectHit(whatsNewRow, in: aboutScreen, app: app))
+        whatsNewRow.tap()
+        XCTAssertTrue(identifiedElement(in: app, "WhatsNewSettingsScreen").waitForExistence(timeout: 10))
+        XCTAssertTrue(identifiedElement(in: app, "WhatsNewItem-0").exists)
+        XCTAssertTrue(app.buttons["WhatsNewSettingsReleaseNotesLink"].exists)
+    }
+
     func testSettingsNavigationDestinationsOpenAndReturn() {
         let app = launchSignedInSettingsApp()
 
