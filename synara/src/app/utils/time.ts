@@ -18,11 +18,19 @@ export const timeMon = (ts: number): string => dayjs(ts).format('MMM');
 export const timeMonth = (ts: number): string => dayjs(ts).format('MMMM');
 export const timeYear = (ts: number): string => dayjs(ts).format('YYYY');
 
+/** `2:03 PM`, or `14:03` on the 24-hour clock. The 12-hour hour is not zero-padded. */
 export const timeHourMinute = (ts: number, hour24Clock: boolean): string =>
-  dayjs(ts).format(hour24Clock ? 'HH:mm' : 'hh:mm A');
+  dayjs(ts).format(hour24Clock ? 'HH:mm' : 'h:mm A');
 
 export const timeDayMonYear = (ts: number, dateFormatString: string): string =>
   dayjs(ts).format(dateFormatString);
+
+/** Weekday, the user's date format and the clock time: a timestamp's tooltip. */
+export const timeFull = (ts: number, hour24Clock: boolean, dateFormatString: string): string =>
+  `${dayjs(ts).format('dddd')}, ${timeDayMonYear(ts, dateFormatString)} ${timeHourMinute(
+    ts,
+    hour24Clock
+  )}`;
 
 export const timeDayMonthYear = (ts: number): string => dayjs(ts).format('D MMMM YYYY');
 

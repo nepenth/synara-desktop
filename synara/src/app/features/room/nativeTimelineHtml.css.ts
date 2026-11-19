@@ -47,37 +47,14 @@ export const MessageSwipeContent = style({
 });
 
 /**
- * A grouped row's time, revealed on hover in the empty avatar column (as in
- * Slack), so it never collides with the action rail on the right.
+ * The left gutter: the avatar on a group's first row, empty on the rows after
+ * it. The avatar is sized in rem, so the gutter is too and page zoom cannot
+ * push the avatar into the sender's name. Every row shares the width, so
+ * message text lines up and never shifts.
  */
-export const GroupedTimestampReveal = style({
-  width: '100%',
-  paddingTop: toRem(4),
-  textAlign: 'right',
-  color: 'var(--synara-content-secondary)',
-  opacity: 0,
-  transition: 'opacity 120ms ease-out',
-  pointerEvents: 'none',
-  whiteSpace: 'nowrap',
-  selectors: {
-    [`${MessageActionSurface}:hover &`]: {
-      opacity: 1,
-    },
-    [`${MessageActionSurface}:focus-within &`]: {
-      opacity: 1,
-    },
-  },
-  '@media': {
-    '(prefers-reduced-motion: reduce)': {
-      transition: 'none',
-    },
-  },
-});
-
-export const GroupedTimestampText = style({
-  fontSize: toRem(11),
-  lineHeight: toRem(14),
-  color: 'var(--synara-content-secondary)',
+export const MessageGutter = style({
+  flexShrink: 0,
+  width: toRem(36),
 });
 
 // The rail straddles the row's top edge (Slack-style) so the wider set of

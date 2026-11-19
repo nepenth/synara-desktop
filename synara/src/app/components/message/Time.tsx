@@ -42,6 +42,8 @@ export const Time = as<'span', TimeProps & ComponentProps<typeof Text>>(
         as="time"
         style={{ flexShrink: 0, color: 'var(--synara-content-secondary)', ...style }}
         size="T200"
+        // Text's props are typed for its default element, which has no dateTime.
+        {...{ dateTime: new Date(ts).toISOString() }}
         {...props}
         ref={ref}
       >
