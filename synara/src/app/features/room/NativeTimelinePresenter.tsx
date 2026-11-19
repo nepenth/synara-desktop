@@ -118,6 +118,7 @@ import { UserAvatar } from '../../components/user-avatar';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { getMxIdLocalPart } from '../../utils/matrix';
+import { timeFull, timeGutter } from '../../utils/time';
 import colorMXID from '../../../util/colorMXID';
 import { nameInitials } from '../../utils/common';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
@@ -1884,6 +1885,61 @@ const NativeTimelineSenderAvatar = ({ row }: { row: NativeTimelineViewRow }) => 
   );
 };
 
+/**
+ * A message's time: in the header beside the sender, or in the left gutter of
+ * a grouped row (`gutter`). Hovering the time itself shows the full date and
+ * time above it; the message text never gets a tooltip. The gutter draws the
+ * short clock (`8:22`) and gives screen readers the full date and time.
+ */
+const NativeTimelineTimestamp = ({
+  ts,
+  hour24Clock,
+  dateFormatString,
+  gutter,
+}: {
+  ts: number;
+  hour24Clock: boolean;
+  dateFormatString: string;
+  gutter?: boolean;
+}) => {
+  const full = timeFull(ts, hour24Clock, dateFormatString);
+  return (
+    // Placed where there is no message text: beside the header time, growing
+    // up from its bottom edge, and above the gutter time, growing left.
+    <TooltipProvider
+      position={gutter ? 'Top' : 'Right'}
+      align="End"
+      offset={4}
+      tooltip={
+        <Tooltip>
+          <Text size="T200">{full}</Text>
+        </Tooltip>
+      }
+    >
+      {(triggerRef) =>
+        gutter ? (
+          <time
+            ref={triggerRef}
+            dateTime={new Date(ts).toISOString()}
+            className={htmlCss.GroupedTimestampText}
+            data-native-timeline-gutter-time="true"
+          >
+            <span aria-hidden="true">{timeGutter(ts, hour24Clock)}</span>
+            <span className={htmlCss.VisuallyHidden}>{full}</span>
+          </time>
+        ) : (
+          <Time
+            ref={triggerRef}
+            ts={ts}
+            hour24Clock={hour24Clock}
+            dateFormatString={dateFormatString}
+          />
+        )
+      }
+    </TooltipProvider>
+  );
+};
+
 const NativeTimelineReplySurface = ({
   reply,
   onFocusEvent,
@@ -2503,30 +2559,24 @@ const NativeTimelineRowImpl = ({
           onDiscardUnsent={discardUnsent}
           onRetryUnsent={retryUnsent}
         >
-          <div
-            className={htmlCss.MessageSwipeSurface}
-            title={
-              grouped && originServerTs ? new Date(originServerTs).toLocaleString() : undefined
-            }
-          >
+          <div className={htmlCss.MessageSwipeSurface}>
             <Box
               direction="Column"
               gap="100"
               className={`${rowClassName} ${htmlCss.MessageSwipeContent}`}
             >
               <Box gap="300" alignItems="Start">
-                <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
+                <Box direction="Column" alignItems="Center" className={htmlCss.MessageGutter}>
                   {grouped ? (
                     // The hover time sits in the empty avatar column, where it
                     // cannot collide with the action rail on the right.
                     originServerTs ? (
-                      <div className={htmlCss.GroupedTimestampReveal} aria-hidden="true">
-                        <Time
-                          compact
+                      <div className={htmlCss.GroupedTimestampReveal}>
+                        <NativeTimelineTimestamp
+                          gutter
                           ts={originServerTs}
                           hour24Clock={hour24Clock}
                           dateFormatString={dateFormatString}
-                          className={htmlCss.GroupedTimestampText}
                         />
                       </div>
                     ) : null
@@ -2541,7 +2591,7 @@ const NativeTimelineRowImpl = ({
                         {displayNameForRow(row)}
                       </Text>
                       {originServerTs ? (
-                        <Time
+                        <NativeTimelineTimestamp
                           ts={originServerTs}
                           hour24Clock={hour24Clock}
                           dateFormatString={dateFormatString}
@@ -2710,7 +2760,7 @@ const NativeTimelineRowImpl = ({
         >
           <Box direction="Column" gap="100" className={rowClassName}>
             {originServerTs ? (
-              <Time
+              <NativeTimelineTimestamp
                 ts={originServerTs}
                 hour24Clock={hour24Clock}
                 dateFormatString={dateFormatString}
@@ -2837,7 +2887,7 @@ const NativeTimelineRowImpl = ({
         >
           <Box className={rowClassName}>
             <Box gap="300" alignItems="Start">
-              <Box style={{ width: 36, flexShrink: 0 }} />
+              <Box className={htmlCss.MessageGutter} />
               <Box gap="200" alignItems="Center" className={htmlCss.SystemNotice}>
                 <Icon src={Icons.Delete} size="50" />
                 <Text as="span" size="T300">
@@ -2873,7 +2923,7 @@ const NativeTimelineRowImpl = ({
         >
           <Box className={rowClassName}>
             <Box gap="300" alignItems="Start">
-              <Box style={{ width: 36, flexShrink: 0 }} />
+              <Box className={htmlCss.MessageGutter} />
               <Box gap="200" alignItems="Center" className={htmlCss.SystemNotice}>
                 <Icon src={Icons.Lock} size="50" />
                 <Text as="span" size="T300">
@@ -2948,7 +2998,7 @@ const NativeTimelineRowImpl = ({
                 {row.event.senderName}
               </Text>
               {originServerTs ? (
-                <Time
+                <NativeTimelineTimestamp
                   ts={originServerTs}
                   hour24Clock={hour24Clock}
                   dateFormatString={dateFormatString}

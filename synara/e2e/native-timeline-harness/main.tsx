@@ -275,6 +275,36 @@ if (scenario === 'sender-headers') {
     },
   ] as typeof rows;
 }
+// `scenario=timestamps`: Ada writes three messages at 12:59 PM local time
+// today, the widest 12-hour clock time, so the last two are grouped rows with
+// the time in the left gutter; the last one is edited.
+if (scenario === 'timestamps') {
+  const ada = { senderId: '@ada:example.test', senderName: 'Ada' };
+  const noon = new Date();
+  noon.setHours(12, 59, 0, 0);
+  const at = noon.getTime();
+  rows = [
+    ...rows,
+    { ...makeRow(sequence + 1), ...ada, originServerTs: at, eventId: '$ada-1', itemId: '$ada-1' },
+    {
+      ...makeRow(sequence + 2),
+      ...ada,
+      originServerTs: at + 1_000,
+      eventId: '$ada-2',
+      itemId: '$ada-2',
+      body: 'A grouped message whose time sits in the gutter.',
+    },
+    {
+      ...makeRow(sequence + 3),
+      ...ada,
+      originServerTs: at + 2_000,
+      eventId: '$ada-3',
+      itemId: '$ada-3',
+      body: 'An edited grouped message.',
+      edited: true,
+    },
+  ] as typeof rows;
+}
 if (scenario === 'media') {
   const media = [
     {

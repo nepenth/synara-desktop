@@ -29,6 +29,7 @@ export default defineConfig({
       testMatch: [
         'native-timeline-hermes-layout.spec.ts',
         'native-timeline-redact-confirm.spec.ts',
+        'native-timeline-timestamps.spec.ts',
       ],
       use: { ...devices['Desktop Safari'] },
     },

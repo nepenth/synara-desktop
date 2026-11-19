@@ -104,7 +104,16 @@ test('desktop grouped timestamps overlay on hover without shifting the message',
   const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
   const timelineCss = readFileSync('src/app/features/room/nativeTimelineHtml.css.ts', 'utf8');
 
-  assert.match(presenter, /GroupedTimestampReveal\} aria-hidden="true"/);
+  // The gutter time is read by screen readers; only its short clock is hidden.
+  assert.match(presenter, /<div className=\{htmlCss\.GroupedTimestampReveal\}>/);
+  assert.match(presenter, /<span aria-hidden="true">\{timeGutter\(ts, hour24Clock\)\}<\/span>/);
+  // The full time is a tooltip on the time, never a `title` over the message.
+  assert.doesNotMatch(presenter, /title=\{\s*grouped/);
+  assert.doesNotMatch(presenter, /toLocaleString\(\)/);
+  // The gutter is sized in rem and to the gutter time, not in pixels.
+  assert.match(presenter, /className=\{htmlCss\.MessageGutter\}/);
+  assert.doesNotMatch(presenter, /width: 36, flexShrink: 0/);
+  assert.match(timelineCss, /width: `max\(\$\{toRem\(36\)\}, \$\{GUTTER_TIME_MAX_CHARS\}ch\)`/);
   assert.match(timelineCss, /MessageActionSurface\}:hover &/);
   assert.match(timelineCss, /MessageActionSurface\}:focus-within &/);
   assert.doesNotMatch(presenter, /groupedTimestampOffset/);

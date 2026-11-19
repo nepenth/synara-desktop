@@ -21,8 +21,24 @@ export const timeYear = (ts: number): string => dayjs(ts).format('YYYY');
 export const timeHourMinute = (ts: number, hour24Clock: boolean): string =>
   dayjs(ts).format(hour24Clock ? 'HH:mm' : 'hh:mm A');
 
+/**
+ * The clock time for a timeline's left gutter, as Slack draws it: `8:22` or
+ * `20:22`, never more than five characters (`12:59`, `23:59`), so the gutter
+ * can be sized to it. The meridiem is in the group's header and the tooltip.
+ */
+export const GUTTER_TIME_MAX_CHARS = 5;
+export const timeGutter = (ts: number, hour24Clock: boolean): string =>
+  dayjs(ts).format(hour24Clock ? 'HH:mm' : 'h:mm');
+
 export const timeDayMonYear = (ts: number, dateFormatString: string): string =>
   dayjs(ts).format(dateFormatString);
+
+/** Weekday, the user's date format and the clock time: a timestamp's tooltip. */
+export const timeFull = (ts: number, hour24Clock: boolean, dateFormatString: string): string =>
+  `${dayjs(ts).format('dddd')}, ${timeDayMonYear(ts, dateFormatString)} ${timeHourMinute(
+    ts,
+    hour24Clock
+  )}`;
 
 export const timeDayMonthYear = (ts: number): string => dayjs(ts).format('D MMMM YYYY');
 

@@ -2,6 +2,7 @@ import { createVar, globalStyle, style } from '@vanilla-extract/css';
 import { recipe } from '@vanilla-extract/recipes';
 import { color, config, toRem } from 'folds';
 import { NATIVE_SYNTAX_PALETTES, type NativeSyntaxPalette } from './nativeTimelineSyntaxPalette';
+import { GUTTER_TIME_MAX_CHARS } from '../../utils/time';
 import {
   avatarSurface,
   floatingSurface,
@@ -46,6 +47,22 @@ export const MessageSwipeContent = style({
   zIndex: 1,
 });
 
+const gutterTimeFontSize = toRem(11);
+
+/**
+ * The left gutter: the avatar on a group's first row, the time on the rows
+ * after it. Avatar and time are sized in rem, so the gutter is too, and it is
+ * never narrower than the widest gutter time (`12:59`, `23:59`) in tabular
+ * figures at the time's own font: page zoom and the interface or monospace
+ * font cannot clip it. Every row shares the width, so text never shifts.
+ */
+export const MessageGutter = style({
+  flexShrink: 0,
+  fontSize: gutterTimeFontSize,
+  fontVariantNumeric: 'tabular-nums',
+  width: `max(${toRem(36)}, ${GUTTER_TIME_MAX_CHARS}ch)`,
+});
+
 /**
  * A grouped row's time, revealed on hover in the empty avatar column (as in
  * Slack), so it never collides with the action rail on the right.
@@ -57,7 +74,6 @@ export const GroupedTimestampReveal = style({
   color: 'var(--synara-content-secondary)',
   opacity: 0,
   transition: 'opacity 120ms ease-out',
-  pointerEvents: 'none',
   whiteSpace: 'nowrap',
   selectors: {
     [`${MessageActionSurface}:hover &`]: {
@@ -75,7 +91,7 @@ export const GroupedTimestampReveal = style({
 });
 
 export const GroupedTimestampText = style({
-  fontSize: toRem(11),
+  fontSize: gutterTimeFontSize,
   lineHeight: toRem(14),
   color: 'var(--synara-content-secondary)',
 });

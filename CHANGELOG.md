@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Desktop: hovering a message no longer shows a date-and-time tooltip over the text you are reading. The full date and time now appears only when you point at the time itself, above it, and screen readers read it for every message, including the ones after the first in a group.
+- Desktop: the time beside grouped messages is no longer cut off (it showed as "8:22P" in 12-hour mode on macOS). It now shows the short clock, such as "8:22", as Slack does, with AM or PM in the group's header and in the tooltip. The space beside messages grows with page zoom and fits the time in any interface or monospace font, so at 200% zoom avatars no longer overlap the sender's name either.
+
 ## [3.1.1] - 2026-11-18
 
 - Desktop: downloading a file attachment now shows what is happening on the file itself. A download that takes more than a moment shows its percentage and a progress bar, then "Finishing…" while Synara decrypts and writes it. When it is done, a line under the file says "Saved to Downloads as …" with the name it got there and a Show in folder button (on Linux without a file manager service, Show in folder opens the Downloads folder). A failed download says why on the file, with Retry, instead of in the banner above the timeline. The media viewer's Save and the Markdown preview's Download show the same download and its result.
