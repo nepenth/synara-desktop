@@ -1,0 +1,3 @@
+Synara 3.3.0 adds folders for rooms: group rooms into your own sections in the Rooms list, synced with your other devices and desktop. It also stops the room timeline from jumping when you read a room offline.
+
+Please test: long-press a room and choose Move to folder, then New folder. Rename, reorder and delete a folder from its menu. Check a favorite room stays under Favorites, and that folders made on one device appear on another running 3.3.0. On iPad, check the folders in the split view.
