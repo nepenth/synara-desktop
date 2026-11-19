@@ -161,6 +161,7 @@ export function NativeSecretStorageTile() {
     <InfoCard
       variant="Surface"
       title="Secure Backup & Recovery"
+      settingRow
       description={
         status?.unlocked
           ? 'Secret storage is unlocked and account recovery secrets are available on this device.'

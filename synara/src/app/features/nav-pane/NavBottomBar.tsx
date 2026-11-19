@@ -16,7 +16,6 @@ import {
   Icon,
   IconSrc,
   Icons,
-  Line,
   Menu,
   MenuItem,
   PopOut,
@@ -31,10 +30,9 @@ import { useAtomValue } from 'jotai';
 import FocusTrap from '../../components/FocusTrap';
 import { UnreadBadge } from '../../components/unread-badge';
 import { UserAvatar } from '../../components/user-avatar';
-import { LogoutDialog } from '../../components/LogoutDialog';
 import { usePageNavWidth } from '../../components/page';
 import { verificationSettingsLocation } from '../settings/settingsPages';
-import { useOpenAppSettings } from '../../state/appSettings';
+import { useAppSettingsOpen, useToggleAppSettings } from '../../state/appSettings';
 import { useNativeNavigationScope } from '../../state/hooks/navigationUnread';
 import { useHomeSelected } from '../../hooks/router/useHomeSelected';
 import { useDirectSelected } from '../../hooks/router/useDirectSelected';
@@ -121,7 +119,7 @@ type BarItemProps = {
   onContextMenu?: MouseEventHandler<HTMLButtonElement>;
   onKeyDown?: KeyboardEventHandler<HTMLButtonElement>;
   'aria-keyshortcuts'?: string;
-  'aria-haspopup'?: 'menu';
+  'aria-haspopup'?: 'menu' | 'dialog';
   'aria-expanded'?: boolean;
   testId: string;
 };
@@ -343,75 +341,6 @@ export function ApprovalsBarItem({ showLabel }: { showLabel: boolean }) {
   );
 }
 
-type AccountMenuProps = {
-  verify?: 'this-device' | 'other-devices';
-  onSettings: () => void;
-  onVerify: () => void;
-  onLogout: () => void;
-};
-const AccountMenu = forwardRef<HTMLDivElement, AccountMenuProps>(
-  ({ verify, onSettings, onVerify, onLogout }, ref) => {
-    const settingsShortcut = placeShortcut('go-settings');
-    return (
-      <Menu ref={ref} aria-label="Account" style={{ maxWidth: toRem(240), width: '100vw' }}>
-        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-          <MenuItem
-            variant="Surface"
-            fill="None"
-            size="300"
-            radii="300"
-            after={
-              <Box as="span" alignItems="Center" gap="200">
-                {settingsShortcut && (
-                  <Text as="kbd" size="T200" priority="300">
-                    {settingsShortcut.label}
-                  </Text>
-                )}
-                <Icon size="100" src={Icons.Setting} />
-              </Box>
-            }
-            aria-keyshortcuts={settingsShortcut?.ariaKeyShortcuts}
-            onClick={onSettings}
-          >
-            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              Settings
-            </Text>
-          </MenuItem>
-          {verify && (
-            <MenuItem
-              variant={verify === 'this-device' ? 'Critical' : 'Warning'}
-              fill="None"
-              size="300"
-              radii="300"
-              after={<Icon size="100" src={Icons.ShieldUser} />}
-              onClick={onVerify}
-            >
-              <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-                {verify === 'this-device' ? 'Verify this device' : 'Review unverified devices'}
-              </Text>
-            </MenuItem>
-          )}
-        </Box>
-        <Line variant="Surface" size="300" />
-        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-          <MenuItem
-            variant="Critical"
-            fill="None"
-            size="300"
-            radii="300"
-            after={<Icon size="100" src={Icons.Power} />}
-            onClick={onLogout}
-          >
-            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              Log out
-            </Text>
-          </MenuItem>
-        </Box>
-      </Menu>
-    );
-  }
-);
-
 function AccountBarItemView({
   showLabel,
   ownUnverified,
@@ -427,76 +356,48 @@ function AccountBarItemView({
   const userId = getSafeMyUserId();
   const profile = useUserProfile(userId);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [menuAnchor, setMenuAnchor] = useState<RectCords>();
-  const openSettings = useOpenAppSettings();
-  const [logout, setLogout] = useState(false);
+  const settingsOpen = useAppSettingsOpen();
+  const toggleSettings = useToggleAppSettings();
   const { label, badge, verify } = accountBarState(canOffer, ownUnverified, otherUnverifiedCount);
 
   const displayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
   const avatarUrl = profile.avatarUrl
     ? resolveMatrixThumbnailUrl(profile.avatarUrl, 96, { useAuthentication })
     : undefined;
-  const closeMenu = () => setMenuAnchor(undefined);
 
   return (
-    <>
-      <BarItem
-        ref={triggerRef}
-        label="Account"
-        name={label}
-        tooltip={displayName ? `${displayName} · ${userId}` : undefined}
-        icon={
-          <span className={css.BarAvatar}>
-            <UserAvatar
-              userId={userId}
-              src={avatarUrl}
-              renderFallback={() => (
-                <Text as="span" size="T200">
-                  {nameInitials(displayName)}
-                </Text>
-              )}
-            />
-          </span>
-        }
-        badge={badge}
-        selected={false}
-        showLabel={showLabel}
-        testId="nav-bar-account"
-        aria-haspopup="menu"
-        aria-expanded={!!menuAnchor}
-        onClick={(evt) => {
-          const rect = evt.currentTarget.getBoundingClientRect();
-          setMenuAnchor((current) => (current ? undefined : rect));
-        }}
-      />
-      {menuAnchor && (
-        <PopOut
-          anchor={menuAnchor}
-          position="Top"
-          align="End"
-          content={
-            <FocusTrap focusTrapOptions={menuTrapOptions(closeMenu)}>
-              <AccountMenu
-                verify={verify}
-                onSettings={() => {
-                  closeMenu();
-                  openSettings();
-                }}
-                onVerify={() => {
-                  closeMenu();
-                  if (verify) openSettings(verificationSettingsLocation(verify));
-                }}
-                onLogout={() => {
-                  closeMenu();
-                  setLogout(true);
-                }}
-              />
-            </FocusTrap>
-          }
-        />
-      )}
-      {logout && <LogoutDialog onClose={() => setLogout(false)} />}
-    </>
+    <BarItem
+      ref={triggerRef}
+      label="Settings"
+      name={label}
+      tooltip={displayName ? `Settings · ${displayName} · ${userId}` : undefined}
+      shortcut={placeShortcut('go-settings')}
+      icon={
+        <span className={css.BarAvatar}>
+          <UserAvatar
+            userId={userId}
+            src={avatarUrl}
+            renderFallback={() => (
+              <Text as="span" size="T200">
+                {nameInitials(displayName)}
+              </Text>
+            )}
+          />
+        </span>
+      }
+      badge={badge}
+      selected={false}
+      showLabel={showLabel}
+      testId="nav-bar-account"
+      aria-haspopup="dialog"
+      aria-expanded={settingsOpen}
+      onClick={() =>
+        // An unverified session opens where it is fixed; otherwise the last page.
+        toggleSettings(verify ? verificationSettingsLocation(verify) : undefined, {
+          returnFocus: () => triggerRef.current?.focus(),
+        })
+      }
+    />
   );
 }
 
@@ -520,9 +421,10 @@ function DeviceVerificationProbe({
 }
 
 /**
- * The account avatar: Settings, Verify this device (when needed) and Log out.
- * It carries the rail's unverified warning as a badge, and only reads the
- * device list once cross-signing can offer verification at all.
+ * The account avatar opens Settings, and closes it when pressed again. With
+ * this session unverified, or other sessions to review, it carries a badge
+ * and opens Settings where that is fixed (Security & recovery or Sessions).
+ * It only reads the device list once cross-signing can offer verification.
  */
 export function AccountBarItem({ showLabel }: { showLabel: boolean }) {
   const crossSigning = useCrossSigning();

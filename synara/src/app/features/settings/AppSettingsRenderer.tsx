@@ -1,14 +1,14 @@
 import React from 'react';
-import { useAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { SettingsModal } from '../../components/settings-layout';
-import { appSettingsAtom } from '../../state/appSettings';
+import { appSettingsAtom, useCloseAppSettings } from '../../state/appSettings';
 import { Settings } from './Settings';
 
 /** Shows App Settings when something asks for it with `useOpenAppSettings`. */
 export function AppSettingsRenderer() {
-  const [request, setRequest] = useAtom(appSettingsAtom);
+  const request = useAtomValue(appSettingsAtom);
+  const close = useCloseAppSettings();
   if (!request) return null;
-  const close = () => setRequest(undefined);
   return (
     <SettingsModal requestClose={close}>
       <Settings

@@ -166,7 +166,7 @@ test.describe('the smallest window, 380x480', () => {
     await expectNoHorizontalOverflow(page);
   });
 
-  test('a room: More options scrolls inside the window; the bar and account menu fit', async ({
+  test('a room: More options scrolls inside the window; the bar and Settings fit', async ({
     page,
   }) => {
     await open(page, roomPath);
@@ -176,9 +176,17 @@ test.describe('the smallest window, 380x480', () => {
     await page.keyboard.press('Escape');
 
     await page.getByRole('button', { name: 'Back' }).click();
+    // The avatar opens Settings: the page list first, with Log out at its foot.
     await page.getByTestId('nav-bar-account').click();
-    await expectInsideViewport(page.getByRole('button', { name: /^Settings/ }));
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
     await expectInsideViewport(page.getByRole('button', { name: 'Log out' }));
+    await expectInsideViewport(page.getByRole('button', { name: 'Close' }).first());
+    await page
+      .getByRole('navigation', { name: 'Settings sections' })
+      .getByRole('button', { name: 'Media & links' })
+      .click();
+    await expectInsideViewport(page.getByRole('button', { name: 'Back' }));
+    await expectNoHorizontalOverflow(page);
   });
 });
 

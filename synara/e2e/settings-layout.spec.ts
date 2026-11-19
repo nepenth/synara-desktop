@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { SETTINGS_INVENTORY } from '../src/app/features/settings/__tests__/settingsInventory';
 
 // Layout proof for Settings, Room Settings and the room header menu, mounted
 // from the production app shell (e2e/settings-harness). Screenshots are
@@ -75,7 +76,17 @@ for (const colorScheme of ['light', 'dark'] as const) {
       const gaps = await navGaps(page);
       log(`settings-nav-gaps ${colorScheme}`, gaps);
       if (!MEASURE_ONLY) expect(Math.max(...gaps)).toBeLessThanOrEqual(8);
-      for (const name of ['General', 'Appearance', 'Notifications', 'Account', 'About']) {
+      for (const name of [
+        'General',
+        'Appearance',
+        'Notifications',
+        'Messages',
+        'Media & links',
+        'Privacy',
+        'Account',
+        'Advanced',
+        'About',
+      ]) {
         await nav.getByRole('button', { name, exact: true }).click();
         await page.waitForTimeout(300);
         const edges = await controlRightEdges(page);
@@ -88,7 +99,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
           expect(structure.cardsPerSection.every((count) => count === 1)).toBe(true);
           if (edges.length > 0) expect(edges[edges.length - 1] - edges[0]).toBeLessThanOrEqual(1);
         }
-        await shot(page, `settings-${name.toLowerCase()}-${colorScheme}`);
+        await shot(
+          page,
+          `settings-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${colorScheme}`
+        );
       }
     });
 
@@ -159,11 +173,87 @@ test('settings search finds individual settings and opens them', async ({ page }
   await expect(page.locator('[data-setting-title="Notification sound"]').first()).toBeInViewport();
 
   // No match keeps the empty state; Escape clears the search and restores the nav.
-  await search.fill('zzzz no such setting');
-  await expect(page.getByText('No settings match “zzzz no such setting”.')).toBeVisible();
+  await search.fill('zzzz qqqq');
+  await expect(page.getByText('No settings match “zzzz qqqq”.')).toBeVisible();
   await search.press('Escape');
   await expect(search).toHaveValue('');
   await expect(page.locator('nav[aria-label="Settings sections"]')).toBeVisible();
+});
+
+test('settings search answers the questions people ask', async ({ page }) => {
+  await page.goto(`${HARNESS}#/settings/`);
+  const search = page.getByRole('textbox', { name: 'Search settings' });
+  const results = page.locator('[data-settings-search-results]');
+  const firstResult = results.locator('[data-settings-search-result]').first();
+  const cases: Array<[string, string, string]> = [
+    ['enable gif', 'Media & links', 'GIF search'],
+    ['gif support', 'Media & links', 'GIF search'],
+    ['turn on gifs', 'Media & links', 'GIF search'],
+    ['read receipts off', 'Privacy', 'Hide typing & read receipts'],
+    ['dark mode', 'Appearance', 'Appearance'],
+    ['block someone', 'Privacy', 'Block a user'],
+  ];
+  for (const [query, pageName, title] of cases) {
+    await search.fill(query);
+    await expect(firstResult).toHaveAttribute('data-settings-search-result', title);
+    await expect(results.getByRole('group').first()).toHaveAttribute('aria-label', pageName);
+    if (query === 'enable gif') await shot(page, 'settings-search-enable-gif');
+  }
+  await search.fill('enable gif');
+  await search.press('Enter');
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('Media & links');
+  await expect(page.locator('[data-setting-title="GIF search"]').first()).toBeInViewport();
+});
+
+test('every setting renders on its pinned page and section', async ({ page }) => {
+  await page.goto(`${HARNESS}#/settings/`);
+  const nav = page.getByRole('navigation', { name: 'Settings sections' });
+  await expect(nav).toBeVisible();
+  await shot(page, 'settings-nav');
+  const navNames = await nav
+    .locator('button[data-settings-nav-item]')
+    .evaluateAll((items) => items.map((item) => item.textContent?.trim() ?? ''));
+  // The harness is a Linux desktop app, so Diagnostics shows.
+  expect(navNames).toEqual(SETTINGS_INVENTORY.map((entry) => entry.page));
+  const groups = await nav
+    .getByRole('group')
+    .evaluateAll((items) => items.map((item) => item.getAttribute('aria-label')));
+  expect(groups).toEqual(['App', 'Chat', 'Account', 'Advanced']);
+
+  for (const inventoryPage of SETTINGS_INVENTORY) {
+    await nav.getByRole('button', { name: inventoryPage.page, exact: true }).click();
+    await expect(page.getByRole('heading', { level: 2 })).toHaveText(inventoryPage.page);
+    await page.waitForTimeout(300);
+    // Every titled row and section on the page, with its enclosing section.
+    const rendered = await page.locator('[data-settings-page]').evaluate((column) =>
+      Array.from(column.querySelectorAll<HTMLElement>('[data-setting-title]')).map((element) => {
+        const section = element.hasAttribute('data-settings-section')
+          ? element
+          : element.closest<HTMLElement>('[data-settings-section]');
+        return `${section?.dataset.settingTitle ?? '?'} › ${element.dataset.settingTitle}`;
+      })
+    );
+    const pinned = new Set<string>();
+    const required: string[] = [];
+    inventoryPage.sections.forEach((section) => {
+      pinned.add(`${section.title} › ${section.title}`);
+      if (!section.when) required.push(`${section.title} › ${section.title}`);
+      section.rows.forEach((row) => {
+        pinned.add(`${section.title} › ${row.title}`);
+        if (!section.when && !row.when && !row.labelTitle) {
+          required.push(`${section.title} › ${row.title}`);
+        }
+      });
+    });
+    // Nothing renders that the inventory does not pin, where it pins it.
+    // The Matrix ID row is titled with the user ID itself.
+    const unpinned = rendered.filter((entry) => !pinned.has(entry) && !/ › @/.test(entry));
+    expect(unpinned, `${inventoryPage.page}: rendered but not pinned`).toEqual([]);
+    // Every unconditional pinned row renders. Conditional rows are checked by
+    // the unit tests against the code that decides them.
+    const missing = required.filter((entry) => !rendered.includes(entry));
+    expect(missing, `${inventoryPage.page}: pinned but not rendered`).toEqual([]);
+  }
 });
 
 test('room settings search finds room rows', async ({ page }) => {

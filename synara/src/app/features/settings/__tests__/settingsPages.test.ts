@@ -12,6 +12,11 @@ import {
 } from '../settingsPages';
 import { getSettingsPath } from '../../../pages/pathUtils';
 import { parseSynaraRouteDestination } from '../../../routes/synaraRoutes';
+import {
+  APP_SETTINGS_REOPEN_GUARD_MS,
+  appSettingsJustClosed,
+  noteAppSettingsClosed,
+} from '../../../state/appSettings';
 
 test('every page has a route slug, and unknown slugs open nothing', () => {
   assert.equal(settingsPageFromSlug('media-links'), SettingsPages.MediaPage);
@@ -61,6 +66,12 @@ test('verifying this session leads to Security & recovery; other sessions to Ses
     'utf8'
   );
   assert.match(others, /title="Other sessions"/);
+});
+
+test('a close from outside the dialog does not reopen Settings from the same press', () => {
+  noteAppSettingsClosed(1000);
+  assert.equal(appSettingsJustClosed(1000 + 50), true);
+  assert.equal(appSettingsJustClosed(1000 + APP_SETTINGS_REOPEN_GUARD_MS + 1), false);
 });
 
 test('the GIF search location names the rendered row', () => {

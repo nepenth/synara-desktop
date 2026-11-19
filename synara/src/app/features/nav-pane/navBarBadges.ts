@@ -93,7 +93,7 @@ export const approvalsBarState = ({
 export type AccountBarState = {
   label: string;
   badge: BarBadge;
-  /** The account menu's verification entry, when one is needed. */
+  /** Where the avatar opens Settings instead of the last page, when verification is needed. */
   verify?: 'this-device' | 'other-devices';
 };
 
@@ -107,24 +107,24 @@ export const accountBarState = (
   ownUnverified: boolean,
   otherUnverifiedCount: number
 ): AccountBarState => {
-  if (!canOfferVerification) return { label: 'Account', badge: NONE };
+  if (!canOfferVerification) return { label: 'Settings', badge: NONE };
   if (ownUnverified) {
     return {
-      label: 'Account, this device is not verified',
+      label: 'Settings, this device is not verified',
       badge: { kind: 'status', text: '!', tone: 'Critical' },
       verify: 'this-device',
     };
   }
   if (otherUnverifiedCount > 0) {
     return {
-      label: `Account, ${otherUnverifiedCount} unverified ${
+      label: `Settings, ${otherUnverifiedCount} unverified ${
         otherUnverifiedCount === 1 ? 'device' : 'devices'
       }`,
       badge: { kind: 'status', text: String(otherUnverifiedCount), tone: 'Warning' },
       verify: 'other-devices',
     };
   }
-  return { label: 'Account', badge: NONE };
+  return { label: 'Settings', badge: NONE };
 };
 
 /** Bar items show their text labels once the list column is wider than this. */

@@ -34,6 +34,8 @@ export type InventoryRow = {
   when?: InventoryCondition;
   /** False for rows whose title is computed or not plain text, so not indexed. */
   indexed?: false;
+  /** The title is drawn as a small label element, so the row has no data-setting-title. */
+  labelTitle?: true;
 };
 
 export type InventorySection = {
@@ -330,10 +332,25 @@ export const SETTINGS_INVENTORY: InventoryPage[] = [
         title: 'Profile',
         was: 'Account › Profile',
         rows: [
-          { title: 'Avatar', stores: 'homeserver profile: avatar', indexed: false },
-          { title: 'Display Name', stores: 'homeserver profile: display name', indexed: false },
-          { title: 'Presence', stores: 'homeserver presence', indexed: false },
-          { title: 'Status', stores: 'homeserver presence status message', indexed: false },
+          {
+            title: 'Avatar',
+            stores: 'homeserver profile: avatar',
+            indexed: false,
+            labelTitle: true,
+          },
+          {
+            title: 'Display Name',
+            stores: 'homeserver profile: display name',
+            indexed: false,
+            labelTitle: true,
+          },
+          { title: 'Presence', stores: 'homeserver presence', indexed: false, labelTitle: true },
+          {
+            title: 'Status',
+            stores: 'homeserver presence status message',
+            indexed: false,
+            labelTitle: true,
+          },
         ],
       },
       { title: 'Matrix ID', was: 'Account › Matrix ID', rows: [] },
@@ -511,7 +528,16 @@ export const SETTINGS_INVENTORY: InventoryPage[] = [
       {
         title: 'Stored report',
         was: 'Diagnostics › Stored report',
-        rows: [{ title: 'Local diagnostics', stores: 'diagnostics report', when: 'state' }],
+        rows: [
+          { title: 'Local diagnostics', stores: 'diagnostics report', when: 'state' },
+          // The same row while the report cannot be read.
+          {
+            title: 'Diagnostics unavailable',
+            stores: 'diagnostics report',
+            when: 'state',
+            indexed: false,
+          },
+        ],
       },
       {
         title: 'Desktop integration',

@@ -141,6 +141,32 @@ const listedRooms: RoomSummary[] = [
   ...(query.has('space') ? [space] : []),
   ...(roomCount > 0 ? manyRooms(roomCount) : []),
 ];
+const COMPOSER_CAPABILITIES = {
+  ownPowerLevel: 100,
+  isCreator: true,
+  canSendMessage: true,
+  canReact: true,
+  canRedactOwn: true,
+  canRedactOthers: true,
+  canInvite: true,
+  canKick: true,
+  canBan: true,
+  canNotifyRoom: true,
+  canChangeName: true,
+  canChangeTopic: true,
+  canChangeAvatar: true,
+  canChangeCanonicalAlias: true,
+  canChangeHistoryVisibility: true,
+  canChangeJoinRules: true,
+  canEnableEncryption: true,
+  canChangePowerLevels: true,
+  canChangePinnedEvents: true,
+  canUpgradeRoom: true,
+  canManageSpaceChildren: true,
+  eventsDefaultAllowed: true,
+  stateDefaultAllowed: true,
+  eventAllowed: {},
+};
 type Fixture = unknown | ((args?: Record<string, unknown>) => unknown);
 // Room-scoped fixtures answer for whichever room (or space) is asked about.
 const requestedRoom = (args?: Record<string, unknown>): string => {
@@ -157,12 +183,17 @@ const roomState = (eventType: string, content: unknown) => (args?: Record<string
   content,
 });
 const fixtures: Record<string, Fixture> = {
-  matrix_room_power_levels_snapshot: roomState('m.room.power_levels', {
-    users_default: 0,
-    users: { '@reviewer:example.test': 100 },
-    events_default: 0,
-    state_default: 50,
-    invite: 0,
+  matrix_room_power_levels_snapshot: (args?: Record<string, unknown>) => ({
+    ...roomState('m.room.power_levels', {
+      users_default: 0,
+      users: { '@reviewer:example.test': 100 },
+      events_default: 0,
+      state_default: 50,
+      invite: 0,
+    })(args),
+    // `?composer`: Core's capabilities let the reviewer post, so the room
+    // shows its composer (otherwise the composer is withheld, as today).
+    ...(query.has('composer') ? { capabilities: COMPOSER_CAPABILITIES } : {}),
   }),
   matrix_room_power_level_tags_snapshot: roomState('in.synara.room.power_level_tags', {}),
   matrix_room_creators_snapshot: (args?: Record<string, unknown>) => ({
@@ -211,7 +242,42 @@ const fixtures: Record<string, Fixture> = {
   desktop_dismiss_notifications: true,
   matrix_notification_focus_set: true,
   'plugin:window|is_maximized': false,
-  matrix_get_own_profile: { displayName: 'Reviewer', avatarUrl: null },
+  // `?avatar` gives the account a picture, served by the spec at /__synara-media/.
+  matrix_get_own_profile: {
+    userId: identity.userId,
+    displayName: 'Reviewer',
+    avatarUrl: query.has('avatar') ? 'mxc://example.test/reviewer-avatar' : null,
+  },
+  // `?unverified`: cross-signing is set up and this session is not verified, so
+  // the Settings avatar carries the warning and opens Security & recovery.
+  ...(query.has('unverified')
+    ? {
+        matrix_cross_signing_status: {
+          sessionGeneration: 1,
+          readiness: 'verification_required',
+          masterSigning: 'published',
+          selfSigning: 'published',
+          userSigning: 'published',
+          privateIdentity: 'missing',
+          ownIdentityVerification: 'unverified',
+          bootstrap: 'not_needed',
+        },
+        matrix_device_snapshot: {
+          sessionGeneration: 1,
+          ownVerification: 'unverified',
+          hasDevicesToVerifyAgainst: true,
+          devices: [
+            {
+              deviceId: 'REVIEW',
+              displayName: 'Synara desktop',
+              trust: 'unverified',
+              isCurrent: true,
+            },
+            { deviceId: 'PHONE', displayName: 'Synara iOS', trust: 'verified', isCurrent: false },
+          ],
+        },
+      }
+    : {}),
   // "Verify This Device" after sign-in (`?verifyPrompt`) and Reset Identity.
   matrix_device_verification_prompt: { sessionGeneration: 1, show: query.has('verifyPrompt') },
   matrix_device_verification_prompt_dismiss: { sessionGeneration: 1, show: false },
@@ -238,6 +304,8 @@ Object.assign(window, {
       currentWindow: { label: 'main' },
       currentWebview: { label: 'main', windowLabel: 'main' },
     },
+    convertFileSrc: (handle: string) =>
+      `${location.origin}/__synara-media/${encodeURIComponent(handle)}`,
     transformCallback: () => {
       callbackId += 1;
       return callbackId;

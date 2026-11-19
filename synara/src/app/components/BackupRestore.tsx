@@ -96,6 +96,7 @@ export function BackupRestoreTile() {
     <InfoCard
       variant="Surface"
       title="Encryption Backup"
+      settingRow
       description={
         status?.enabled
           ? 'This device is connected to your server-side encryption backup.'
