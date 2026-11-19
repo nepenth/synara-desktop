@@ -16,6 +16,7 @@ import { useDesktopExternalLinkInterceptor } from '../utils/appLinks';
 import { useMotionPolicy } from '../hooks/useMotionPolicy';
 import { reportDesktopRenderingStarted } from '../utils/desktopRendering';
 import { useNativeBeforeQuit } from '../utils/beforeQuit';
+import { WhatsNewStartup } from '../features/whats-new/WhatsNewCard';
 import '../styles/FocusRing.css';
 import '../styles/motion.css';
 
@@ -42,6 +43,9 @@ function App() {
                 setting shows or hides the strip at once. */}
             <JotaiProvider>
               <DesktopTitleBar />
+              {/* Decides once per start whether to show "What's new"; before
+                  sign-in, so a fresh install is recorded first. */}
+              <WhatsNewStartup />
               <ClientConfigLoader
                 fallback={() => <ConfigConfigLoading />}
                 error={(err, retry, ignore) => (

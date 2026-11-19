@@ -11,6 +11,39 @@ import {
   openExternalUrlFromClick,
 } from '../../../utils/appLinks';
 import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
+import { BUNDLED_WHATS_NEW } from '../../whats-new/bundledNotes';
+import { WhatsNewItems, WhatsNewReleaseLink } from '../../whats-new/WhatsNewCard';
+import { whatsNewReleaseUrl } from '../../whats-new/whatsNewNotes';
+
+/**
+ * The same notes as the card after an update, for this version, at any
+ * time. Without notes for this version, the release page still has them.
+ */
+function WhatsNewSection() {
+  const notes = BUNDLED_WHATS_NEW ?? {
+    version: APP_VERSION,
+    headline: '',
+    items: [],
+    releaseUrl: whatsNewReleaseUrl(APP_VERSION),
+  };
+  const summary = notes.headline ? `${notes.version}: ${notes.headline}` : notes.version;
+  return (
+    <SettingsSection title="What's new">
+      <SequenceCard
+        className={SequenceCardStyle}
+        variant="SurfaceVariant"
+        direction="Column"
+        gap="300"
+      >
+        <Text size="T300" priority="400" data-whats-new-summary="">
+          {summary}
+        </Text>
+        {notes.items.length > 0 && <WhatsNewItems notes={notes} />}
+        <WhatsNewReleaseLink notes={notes} />
+      </SequenceCard>
+    </SettingsSection>
+  );
+}
 
 type AboutProps = {
   requestClose: () => void;
@@ -82,6 +115,7 @@ export function About({ requestClose }: AboutProps) {
           </Box>
         </Box>
       </Box>
+      <WhatsNewSection />
       <SettingsSection title="Credits">
         <SequenceCard
           className={SequenceCardStyle}

@@ -5,7 +5,7 @@
 //   - cargo fmt --all --check
 //   - cargo clippy -D warnings for only the workspace crates the diff touches
 //   - check:matrix-boundaries, check:versions, check:release-updater,
-//     check:workflows
+//     check:whats-new, check:workflows
 //   - prettier, eslint and typecheck when renderer files under synara/ changed
 // It does not replace CI: tests, the iOS lanes and the Synapse proofs still run
 // there.
@@ -126,6 +126,7 @@ const main = () => {
   run("check:matrix-boundaries", "node", ["scripts/check-matrix-boundaries.mjs"]);
   run("check:versions", "node", ["scripts/check-version-consistency.mjs"]);
   run("check:release-updater", "node", ["scripts/check-release-updater.mjs"]);
+  run("check:whats-new", "node", ["scripts/check-whats-new.mjs"]);
   if (hasCommand("actionlint")) {
     run("check:workflows", "npm", ["run", "--silent", "check:workflows"]);
   } else {

@@ -66,6 +66,25 @@ test('tiling mode is a per-device platform setting on Auto, and odd values read 
   }
 });
 
+test("the What's new record is a per-device setting that keeps only a version", () => {
+  const storage = createMemoryStorage();
+  const store = createLocalStorageSettingsStore(storage);
+  assert.equal(defaultDesktopPlatformSettings.whatsNewSeenVersion, '');
+  assert.equal('whatsNewSeenVersion' in store.getSharedSettings(), false);
+  store.setSettings({ ...defaultSettings, whatsNewSeenVersion: '3.2.0' });
+  assert.equal(storage.getObject('platformSettings')?.whatsNewSeenVersion, '3.2.0');
+  assert.equal(storage.getObject('settings')?.whatsNewSeenVersion, undefined);
+  assert.equal(createLocalStorageSettingsStore(storage).getSettings().whatsNewSeenVersion, '3.2.0');
+  for (const stored of ['"yes"', 'true', '3', 'null', '"3.2"', '"<b>3.2.0</b>"']) {
+    const odd = createMemoryStorage({ platformSettings: `{"whatsNewSeenVersion":${stored}}` });
+    assert.equal(
+      createLocalStorageSettingsStore(odd).getSettings().whatsNewSeenVersion,
+      '',
+      stored
+    );
+  }
+});
+
 test('vim-style list keys are a per-device setting on Auto until chosen', () => {
   const storage = createMemoryStorage();
   const store = createLocalStorageSettingsStore(storage);
@@ -264,6 +283,7 @@ test('settings store reads legacy desktop shortcuts from the shared settings blo
     roomListCollapsed: false,
     tilingMode: 'auto',
     vimListKeys: 'auto',
+    whatsNewSeenVersion: '',
   });
   assert.equal(store.getSettings().desktopShortcutNotifications, 'CmdOrCtrl+3');
 });
@@ -303,6 +323,7 @@ test('settings store writes shared and desktop platform settings separately', ()
     roomListCollapsed: false,
     tilingMode: 'auto',
     vimListKeys: 'auto',
+    whatsNewSeenVersion: '',
   });
 });
 

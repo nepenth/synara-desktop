@@ -1,5 +1,5 @@
 import { execFileSync, execSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,6 +50,18 @@ if (iosBuildFlagIndex >= 0 && !iosBuild) {
 
 if (pkgrelExplicitValue !== undefined && !/^\d+$/.test(pkgrelExplicitValue)) {
   console.error("--pkgrel requires a non-negative integer");
+  process.exit(1);
+}
+
+// The app shows these notes after the update, and the release check requires
+// them, so a release cannot be bumped without them. Their text is written by
+// hand (docs/whats-new-notes.md); this script never generates it.
+const whatsNewNotesPath = `release-notes/v${version}.json`;
+if (!existsSync(path.join(root, whatsNewNotesPath))) {
+  console.error(
+    `Missing ${whatsNewNotesPath}, the "What's new" notes the app shows after updating to ${version}.\n` +
+      `Write it first (see docs/whats-new-notes.md), check it with npm run check:whats-new, then bump again.`
+  );
   process.exit(1);
 }
 

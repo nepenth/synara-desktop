@@ -1,0 +1,9 @@
+{
+  "version": "3.1.1",
+  "headline": "Fixes for emoji, downloads and the app icon",
+  "items": [
+    { "text": "Picking an emoji no longer takes the composer screen down.", "platforms": ["desktop"] },
+    { "text": "File downloads show progress and where the file was saved.", "platforms": ["desktop"] },
+    { "text": "The app icon counts conversations that need you, not every unread message.", "platforms": ["ios"] }
+  ]
+}

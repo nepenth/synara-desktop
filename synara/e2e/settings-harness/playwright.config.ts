@@ -12,6 +12,7 @@ export default defineConfig({
     'settings-entry.spec.ts',
     'device-verification-prompt.spec.ts',
     'viewport-matrix.spec.ts',
+    'whats-new.spec.ts',
   ],
   workers: 2,
   retries: 0,

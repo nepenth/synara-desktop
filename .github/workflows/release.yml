@@ -36,6 +36,9 @@ jobs:
       - name: Require TestFlight release notes
         run: node scripts/check-ios-release-notes.mjs
 
+      - name: Require What's new notes
+        run: node scripts/check-whats-new.mjs
+
       - name: Require tag to match the shared version
         shell: bash
         run: |

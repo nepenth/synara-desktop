@@ -93,6 +93,29 @@ const readSignature = (artifactPath) => {
   return signature;
 };
 
+/**
+ * The update prompt's notes: the release's What's new headline, then one
+ * "• " line per desktop item (release-notes/v<version>.json; see
+ * docs/whats-new-notes.md). Plain text: the updater passes it on as is.
+ */
+export const updaterNotesFromWhatsNew = (whatsNew) => {
+  if (!whatsNew || typeof whatsNew.headline !== "string" || !Array.isArray(whatsNew.items)) {
+    throw new Error("What's new notes must have a headline and items");
+  }
+  const bullets = whatsNew.items
+    .filter((item) => Array.isArray(item?.platforms) && item.platforms.includes("desktop"))
+    .map((item) => `• ${String(item.text).trim()}`);
+  return [whatsNew.headline.trim(), ...bullets].join("\n");
+};
+
+export const readWhatsNewNotes = ({ notesDir, version }) => {
+  const notesPath = path.join(notesDir, `v${version}.json`);
+  if (!existsSync(notesPath)) {
+    throw new Error(`Missing What's new notes for the update prompt: ${notesPath}`);
+  }
+  return JSON.parse(readFileSync(notesPath, "utf8"));
+};
+
 export function generateReleaseUpdaterMetadata({
   artifactsDir,
   repo,
@@ -100,6 +123,7 @@ export function generateReleaseUpdaterMetadata({
   version,
   pubDate = new Date().toISOString(),
   requiredPlatforms = DEFAULT_REQUIRED_PLATFORMS,
+  notes,
 }) {
   if (!repo || !/^[^/]+\/[^/]+$/.test(repo)) {
     throw new Error("repo must be in owner/name format");
@@ -153,6 +177,7 @@ export function generateReleaseUpdaterMetadata({
 
   return {
     version,
+    ...(notes ? { notes } : {}),
     pub_date: pubDate,
     platforms,
   };
@@ -161,7 +186,15 @@ export function generateReleaseUpdaterMetadata({
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const output = args.output ?? "latest.json";
+  // The release workflow's check-whats-new step already requires this file.
+  const notes = updaterNotesFromWhatsNew(
+    readWhatsNewNotes({
+      notesDir: path.resolve(args["notes-dir"] ?? "release-notes"),
+      version: args.version,
+    })
+  );
   const metadata = generateReleaseUpdaterMetadata({
+    notes,
     artifactsDir: path.resolve(args.artifacts),
     repo: args.repo,
     tag: args.tag,

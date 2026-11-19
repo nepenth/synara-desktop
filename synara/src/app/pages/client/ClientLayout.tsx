@@ -9,5 +9,10 @@ type ClientLayoutProps = {
  * (its header switcher and bottom bar), so there is no rail beside it.
  */
 export function ClientLayout({ children }: ClientLayoutProps) {
-  return <Box grow="Yes">{children}</Box>;
+  // Positioned, so the "What's new" card can sit in its corner.
+  return (
+    <Box grow="Yes" style={{ position: 'relative' }}>
+      {children}
+    </Box>
+  );
 }

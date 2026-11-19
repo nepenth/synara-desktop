@@ -158,6 +158,12 @@ export interface DesktopPlatformSettings {
    * tiling mode: on there, off everywhere else.
    */
   vimListKeys: VimListKeysSetting;
+  /**
+   * The last version whose "What's new" notes this device has shown (or
+   * skipped, on a fresh install); '' before the first record. Per device, so
+   * each computer shows the notes once. See features/whats-new.
+   */
+  whatsNewSeenVersion: string;
 }
 
 export type VimListKeysSetting = 'auto' | 'on' | 'off';
@@ -166,6 +172,12 @@ export const normalizeVimListKeysSetting = (value: unknown): VimListKeysSetting 
   value === 'on' || value === 'off' ? value : 'auto';
 
 export type TilingModeSetting = 'auto' | 'on' | 'off';
+
+/** A stored version is kept only when it looks like one; anything else reads as no record. */
+export const normalizeWhatsNewSeenVersion = (value: unknown): string =>
+  typeof value === 'string' && /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(value.trim())
+    ? value.trim()
+    : '';
 
 export const TILING_MODE_SETTINGS: readonly TilingModeSetting[] = ['auto', 'on', 'off'];
 
@@ -281,6 +293,7 @@ const sanitizePlatformSettings = (settings: DesktopPlatformSettings): DesktopPla
   roomListCollapsed: settings.roomListCollapsed === true,
   tilingMode: normalizeTilingModeSetting(settings.tilingMode),
   vimListKeys: normalizeVimListKeysSetting(settings.vimListKeys),
+  whatsNewSeenVersion: normalizeWhatsNewSeenVersion(settings.whatsNewSeenVersion),
 });
 
 /**
@@ -347,6 +360,7 @@ export const defaultDesktopPlatformSettings: DesktopPlatformSettings = {
   roomListCollapsed: false,
   tilingMode: 'auto',
   vimListKeys: 'auto',
+  whatsNewSeenVersion: '',
 };
 
 export const defaultPlatformSettings: PlatformSettings = {

@@ -1,10 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { generateReleaseUpdaterMetadata } from "../generate-release-updater-metadata.mjs";
+import {
+  generateReleaseUpdaterMetadata,
+  readWhatsNewNotes,
+  updaterNotesFromWhatsNew,
+} from "../generate-release-updater-metadata.mjs";
+
+const scriptsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const withTempDir = (fn) => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "synara-updater-metadata-"));
@@ -235,4 +243,81 @@ test("rejects a Windows installer without its signature", () =>
         }),
       /Missing updater signature sidecar/
     );
+  }));
+
+test("the update prompt notes are the What's new headline and desktop items", () => {
+  const notes = updaterNotesFromWhatsNew({
+    version: "3.2.0",
+    headline: "Easier settings, cleaner timestamps",
+    items: [
+      { text: "Settings are grouped by what you want to do.", platforms: ["desktop"] },
+      { text: "Settings rows on iPhone respond to taps again.", platforms: ["ios"] },
+      { text: "After an update, Synara now shows what changed.", platforms: ["desktop", "ios"] },
+    ],
+  });
+  assert.equal(
+    notes,
+    [
+      "Easier settings, cleaner timestamps",
+      "• Settings are grouped by what you want to do.",
+      "• After an update, Synara now shows what changed.",
+    ].join("\n")
+  );
+});
+
+test("the repository's notes for the current version make update prompt notes", () => {
+  const root = path.resolve(scriptsDir, "..");
+  const version = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
+  const notes = updaterNotesFromWhatsNew(
+    readWhatsNewNotes({ notesDir: path.join(root, "release-notes"), version })
+  );
+  assert.ok(notes.split("\n").length >= 2);
+  assert.ok(notes.split("\n").slice(1).every((line) => line.startsWith("• ")));
+});
+
+test("metadata carries the notes, and the CLI reads them from the notes file", () =>
+  withTempDir((dir) => {
+    writeReleaseUpdaterArtifacts(dir);
+    const metadata = generateReleaseUpdaterMetadata({
+      artifactsDir: dir,
+      repo: "nepenth/synara-desktop",
+      tag: "v2.6.0",
+      version: "2.6.0",
+      pubDate: "2026-11-18T00:00:00.000Z",
+      notes: "Headline\n• One",
+    });
+    assert.equal(metadata.notes, "Headline\n• One");
+    assert.deepEqual(Object.keys(metadata), ["version", "notes", "pub_date", "platforms"]);
+
+    const notesDir = path.join(dir, "notes");
+    mkdirSync(notesDir);
+    assert.throws(
+      () => readWhatsNewNotes({ notesDir, version: "2.6.0" }),
+      /Missing What's new notes for the update prompt/
+    );
+    writeFileSync(
+      path.join(notesDir, "v2.6.0.json"),
+      JSON.stringify({
+        version: "2.6.0",
+        headline: "Faster",
+        items: [{ text: "Rooms open faster.", platforms: ["desktop", "ios"] }],
+      })
+    );
+    const output = path.join(dir, "latest.json");
+    execFileSync(process.execPath, [
+      path.join(scriptsDir, "generate-release-updater-metadata.mjs"),
+      "--artifacts",
+      dir,
+      "--repo",
+      "nepenth/synara-desktop",
+      "--tag",
+      "v2.6.0",
+      "--version",
+      "2.6.0",
+      "--notes-dir",
+      notesDir,
+      "--output",
+      output,
+    ]);
+    assert.equal(JSON.parse(readFileSync(output, "utf8")).notes, "Faster\n• Rooms open faster.");
   }));

@@ -129,6 +129,8 @@ for (const file of [
   "synara/src/app/pages/auth/AuthFooter.tsx",
   "devAssets/index.html",
   "packaging/arch/PKGBUILD",
+  // The desktop app bundles its version's "What's new" notes.
+  "release-notes/v3.2.0.json",
   ".github/workflows/release.yml",
   ".github/actions/setup-node/action.yml",
 ]) {

@@ -456,8 +456,12 @@ full app launch smoke are tracked in
 
 ## Release PR Flow
 
-1. Create `release/vX.Y.Z` from `main` and bump all client versions and the iOS
-   build number with `npm run bump:version -- X.Y.Z --ios-build X.Y.Z`.
+1. Create `release/vX.Y.Z` from `main`. Write `release-notes/vX.Y.Z.json`, the
+   short "What's new" notes both apps show after the update and the desktop
+   update prompt lists (see [What's new notes](whats-new-notes.md); check them
+   with `npm run check:whats-new`). Then bump all client versions and the iOS
+   build number with `npm run bump:version -- X.Y.Z --ios-build X.Y.Z`; the
+   bump stops if the notes file is missing.
 2. Add the changelog, `docs/releases/vX.Y.Z.md`, and
    `synara-ios/release-notes/vX.Y.Z-en-US.txt`.
 3. Open the release PR into `main`. Require its `CI / Quality gate`, including
