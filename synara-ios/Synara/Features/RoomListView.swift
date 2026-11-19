@@ -129,17 +129,14 @@ struct RoomListView: View {
                 let ungroupedChannelRooms = RoomListSpaceGrouping.ungroupedChannelRooms(from: channelRooms)
                 // The first visible section's header gets no top spacing.
                 let firstSectionKey = Self.firstSectionKey(
-                    [(RoomListSectionKey.favorites, favoriteRooms.isEmpty == false)]
-                        // A folder section draws even without rows ("No rooms").
-                        + folderListSections.map { ($0.key, true) }
-                        + (selectedSpaceTitle != nil && selectedSpaceID != nil
-                            ? [(RoomListSectionKey.space(selectedSpaceID ?? ""), channelRooms.isEmpty == false)]
-                            : spaceChannelGroups.map { (RoomListSectionKey.space($0.space.id), $0.rooms.isEmpty == false) }
-                                + [(RoomListSectionKey.channels, ungroupedChannelRooms.isEmpty == false)])
-                        + [
-                            (RoomListSectionKey.directs, directRooms.isEmpty == false),
-                            (RoomListSectionKey.lowPriority, lowPriorityRooms.isEmpty == false),
-                        ]
+                    hasFavorites: favoriteRooms.isEmpty == false,
+                    folderKeys: folderListSections.map(\.key),
+                    selectedSpaceID: selectedSpaceTitle != nil ? selectedSpaceID : nil,
+                    hasChannels: channelRooms.isEmpty == false,
+                    spaceGroups: spaceChannelGroups,
+                    hasUngroupedChannels: ungroupedChannelRooms.isEmpty == false,
+                    hasDirects: directRooms.isEmpty == false,
+                    hasLowPriority: lowPriorityRooms.isEmpty == false
                 )
                 VStack(spacing: 0) {
                     roomListChrome(
@@ -406,9 +403,36 @@ struct RoomListView: View {
     }
 
     /// The key of the first section that will draw (empty sections are
-    /// skipped), so only later headers carry the top spacing.
-    private static func firstSectionKey(_ sections: [(String, Bool)]) -> String? {
-        sections.first { $0.1 }?.0
+    /// skipped), so only later headers carry the top spacing. Built step by
+    /// step with explicit types: as one concatenated expression it was too
+    /// much for the Xcode 26 type checker.
+    private static func firstSectionKey(
+        hasFavorites: Bool,
+        folderKeys: [String],
+        selectedSpaceID: String?,
+        hasChannels: Bool,
+        spaceGroups: [SpaceChannelGroup],
+        hasUngroupedChannels: Bool,
+        hasDirects: Bool,
+        hasLowPriority: Bool
+    ) -> String? {
+        var sections: [(key: String, shows: Bool)] = []
+        sections.append((key: RoomListSectionKey.favorites, shows: hasFavorites))
+        // A folder section draws even without rows ("No rooms").
+        for key in folderKeys {
+            sections.append((key: key, shows: true))
+        }
+        if let selectedSpaceID {
+            sections.append((key: RoomListSectionKey.space(selectedSpaceID), shows: hasChannels))
+        } else {
+            for group in spaceGroups {
+                sections.append((key: RoomListSectionKey.space(group.space.id), shows: group.rooms.isEmpty == false))
+            }
+            sections.append((key: RoomListSectionKey.channels, shows: hasUngroupedChannels))
+        }
+        sections.append((key: RoomListSectionKey.directs, shows: hasDirects))
+        sections.append((key: RoomListSectionKey.lowPriority, shows: hasLowPriority))
+        return sections.first { $0.shows }?.key
     }
 
     /// The open conversation on a split canvas, kept visible in a collapsed section.
