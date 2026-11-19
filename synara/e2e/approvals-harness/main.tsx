@@ -479,6 +479,29 @@ function QuestionsPreview() {
   );
 }
 
+/**
+ * The composer under its safety net, as RoomInput mounts it. Memoised so the
+ * fixture's re-renders do not reach it: Fixture reads the approvals context,
+ * whose countdown clock ticks every second while approvals are pending, and
+ * nothing re-renders RoomInput on that clock in the app. Each re-render runs
+ * slate-react's selection sync, which puts the DOM caret back to Slate's
+ * selection if the browser has not reported a caret move yet; a spec that
+ * placed the caret in that moment lost it for good.
+ */
+const HarnessComposer = React.memo(function HarnessComposer({
+  recoveryWindowMs,
+  title,
+}: {
+  recoveryWindowMs?: number;
+  title?: boolean;
+}) {
+  return (
+    <ComposerSafetyNet surface="room" recoveryWindowMs={recoveryWindowMs}>
+      {(session) => <ComposerPreview {...session} title={title} />}
+    </ComposerSafetyNet>
+  );
+});
+
 function Fixture() {
   const { refresh, pendingCount } = useApprovalInbox();
   const navigate = useNavigate();
@@ -494,12 +517,10 @@ function Fixture() {
     return (
       <main style={{ maxWidth: 1080, margin: '64px auto', padding: '0 24px' }}>
         <Text size="H5">Composer preview</Text>
-        <ComposerSafetyNet
-          surface="room"
+        <HarnessComposer
           recoveryWindowMs={Number(query.get('recoveryWindow')) || undefined}
-        >
-          {(session) => <ComposerPreview {...session} title={false} />}
-        </ComposerSafetyNet>
+          title={false}
+        />
         <p style={{ marginTop: 20, fontSize: 14, opacity: 0.7 }}>
           Type a draft or toggle formatting to review the feel. This preview does not send messages.
         </p>
@@ -661,9 +682,7 @@ function Fixture() {
             </p>
           )}
           <div style={{ padding: 24 }}>
-            <ComposerSafetyNet surface="room">
-              {(session) => <ComposerPreview {...session} />}
-            </ComposerSafetyNet>
+            <HarnessComposer />
           </div>
         </main>
       </div>

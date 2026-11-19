@@ -2,10 +2,14 @@
 
 ## Unreleased
 
+## [3.3.0] - 2026-11-19
+
 - Desktop: room folders. Group rooms into your own sections in the room list, such as "Work" or "Side projects". A room's menu has Move to folder, with New folder… and Remove from folder; Home options has New folder. Folders show on Home between Favorites and Rooms, in a space when they hold rooms of that space, and sync to your other devices. A folder's menu (its ⋮, or right-click its title) has Rename, Move up, Move down and Delete folder; deleting a folder puts its rooms back in Rooms. A folder collapses like other sections and then shows its unread on its title. Favorites stay in Favorites and keep their folder. Direct messages and spaces cannot go in a folder. Rooms in a folder follow the Rooms sort.
 - iOS: room folders. Group rooms into your own folders in the Rooms list; they sync with your other devices and with desktop. Each folder is a section after Favorites, in your order, and collapses like the others, showing its mention count (or an unread dot) while collapsed. Long-press a room and choose Move to folder to pick a folder, make a New folder… with the room in it, or Remove from folder; New folder is also in the menu behind the list's title. A folder's ellipsis menu (or a long press on its header) has Rename, Move up, Move down and Delete folder, which asks first; its rooms go back to Rooms. A favorite stays in Favorites and returns to its folder when you unfavorite it. Direct messages and spaces can't go in a folder. In a space, a folder shows only that space's rooms; the Unread, Mentions and Agents filters hide folders with nothing to show. If a newer version of Synara changed your folders, they still show but can't be changed here until you update. iPhone and iPad.
 - Desktop: the selected row in the room list is no longer bold. Bold now means only that a room has something unread; the room you are in is marked by its fill, and is bold only if it also has unread messages.
 - Desktop: keyboard shortcuts work from the moment the window shows. A shortcut pressed as the room list first appeared, such as Cmd/Ctrl+/ for the shortcut list or Cmd/Ctrl+K for search, could do nothing, because the app started listening for it a moment after drawing the window. Escape closing a thread just after it opened had the same gap, and View menu items on macOS could be missed for a moment after some settings changed.
+- iOS: reading a cached room while offline no longer makes the timeline jump. The "Messages are temporarily unavailable" row stays out while the connection bar already explains the problem, and a sync restart no longer drops and re-shows the Connection Lost bar.
+- Dependencies: Slate 0.147 (composer), i18next 27 and react-i18next 18, pdf.js 6.5, Tauri updater 2.14.1 and notification 2.8.0 plugins, tokio, ruma and build tooling. `emojibase` stays at 17 and `@tanstack/react-virtual` at 3.14.14.
 
 ## [3.2.1] - 2026-11-19
 

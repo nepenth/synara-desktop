@@ -1,0 +1,11 @@
+{
+  "version": "3.3.0",
+  "headline": "Folders for your rooms",
+  "items": [
+    { "text": "Group rooms into your own folders. Right-click a room and choose Move to folder; folders sync across your devices.", "platforms": ["desktop"] },
+    { "text": "Group rooms into your own folders. Long-press a room and choose Move to folder; folders sync across your devices.", "platforms": ["ios"] },
+    { "text": "The room you are in is no longer bold. Bold now means unread, nothing else.", "platforms": ["desktop"] },
+    { "text": "Shortcuts such as Cmd/Ctrl+K work from the moment the window appears.", "platforms": ["desktop"] },
+    { "text": "Reading a room offline no longer makes the timeline jump as connection banners come and go.", "platforms": ["ios"] }
+  ]
+}
