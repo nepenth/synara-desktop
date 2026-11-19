@@ -278,9 +278,6 @@ rooms renders only the rows on screen while every section header stays
 mounted. Browser proof: `synara/e2e/room-folders.spec.ts` on the room-list
 harness (`?roomFolders`).
 
-## Not done here
-
-- iOS UI.
 ## iOS UI
 
 Branch `feat/room-folders-ios`. Behaviour and copy follow the desktop UI
@@ -348,7 +345,7 @@ Branch `feat/room-folders-ios`. Behaviour and copy follow the desktop UI
 
 ## Not done here
 
-- Desktop UI (separate branch, `feat/room-folders-desktop`).
+- Drag and drop: rooms are filed from their menu and folders reordered from the folder's menu.
 - Room ids the store never learned about (rooms left long ago and forgotten)
   are kept until the user unfiles them; they are hidden from the list.
 - The room-notes projection in `image_packs_live.rs` is the same algorithm
