@@ -1,0 +1,11 @@
+{
+  "version": "3.2.0",
+  "headline": "Easier settings, cleaner timestamps",
+  "items": [
+    { "text": "Settings are grouped by what you want to do, and search understands phrases like \"enable gif\".", "platforms": ["desktop"] },
+    { "text": "Click your profile picture to open Settings; click it again to close.", "platforms": ["desktop"] },
+    { "text": "Messages show just the time beside the name; the date is in a short day heading.", "platforms": ["desktop"] },
+    { "text": "Settings rows on iPhone respond to taps again.", "platforms": ["ios"] },
+    { "text": "After an update, Synara now shows what changed.", "platforms": ["desktop", "ios"] }
+  ]
+}

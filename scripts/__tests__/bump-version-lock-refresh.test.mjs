@@ -75,6 +75,7 @@ tauri = { path = "../tauri", version = "2.11.6" }
   write("synara-ios/project.yml", 'MARKETING_VERSION: "2.1.42"\nCURRENT_PROJECT_VERSION: "2.1.42"\n');
   write("synara-ios/Synara.xcodeproj/project.pbxproj", "MARKETING_VERSION = 2.1.42;\nCURRENT_PROJECT_VERSION = 2.1.42;\n");
   write("packaging/arch/PKGBUILD", "pkgrel=4\n");
+  write("release-notes/v2.1.43.json", "{}\n");
 
   run("cargo", ["generate-lockfile", "--offline"]);
   const originalLock = read("Cargo.lock");
@@ -98,4 +99,28 @@ tauri = { path = "../tauri", version = "2.11.6" }
   run(process.execPath, ["scripts/bump-version.mjs", "2.1.43", "--ios-build", "2.1.43"]);
   assert.equal(read("Cargo.lock"), bumpedLock);
   assert.equal(existsSync(path.join(fixture, "target")), false);
+});
+
+test("version bump stops before changing anything when the new version has no What's new notes", (t) => {
+  const fixture = mkdtempSync(path.join(tmpdir(), "synara-version-bump-notes-"));
+  t.after(() => rmSync(fixture, { recursive: true, force: true }));
+  mkdirSync(path.join(fixture, "scripts"), { recursive: true });
+  copyFileSync(path.join(root, "scripts/bump-version.mjs"), path.join(fixture, "scripts/bump-version.mjs"));
+  mkdirSync(path.join(fixture, "src-tauri"), { recursive: true });
+  const tauriConfig = JSON.stringify({ version: "2.1.42" });
+  writeFileSync(path.join(fixture, "src-tauri/tauri.conf.json"), tauriConfig);
+  let failure;
+  try {
+    execFileSync(process.execPath, ["scripts/bump-version.mjs", "2.1.43"], {
+      cwd: fixture,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    failure = error;
+  }
+  assert.ok(failure, "the bump must fail");
+  assert.match(failure.stderr, /Missing release-notes\/v2\.1\.43\.json/);
+  assert.match(failure.stderr, /docs\/whats-new-notes\.md/);
+  assert.equal(readFileSync(path.join(fixture, "src-tauri/tauri.conf.json"), "utf8"), tauriConfig);
 });
