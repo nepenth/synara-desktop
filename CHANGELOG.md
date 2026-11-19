@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- iOS: the app is now built with the iOS 27 SDK (Xcode 27.2), in CI and for TestFlight, ahead of Apple's April 2027 requirement. The minimum supported iOS version is unchanged (16.0).
 ## [3.2.1] - 2026-11-19
 
 - Linux: MP4 videos (video attachments and the video in an X post) could play with no sound, because nothing on the system decoded their AAC audio. The pacman package now depends on `gst-libav` and the .deb on `gstreamer1.0-libav` and `gstreamer1.0-plugins-good`, which provide the decoders WebKitGTK uses. If you build from source, install `gst-libav`.

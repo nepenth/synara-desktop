@@ -415,9 +415,9 @@ jobs:
     name: iOS simulator tests
     needs: [changes]
     if: needs.changes.outputs.ios == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     # Default: arm64 simulator + unit tests. Manual all-slice/device opt-ins
     # compile the full Apple graph and unsigned device Release NSE here.
     timeout-minutes: 120
@@ -492,9 +492,9 @@ jobs:
     name: iOS simulator UI tests
     needs: [changes]
     if: needs.changes.outputs.ios_ui == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     timeout-minutes: 75
     steps:
       - name: Checkout repository
@@ -550,9 +550,9 @@ jobs:
     name: iOS compile gate
     needs: [changes]
     if: needs.changes.outputs.ios_compile == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     # Runs when Swift/FFI/iOS paths changed and the simulator lane was skipped:
     # build-for-testing for the arm64 simulator slice, no simulator boot.
     timeout-minutes: 40
@@ -816,9 +816,9 @@ jobs:
     name: Seed iOS device Rust cache
     needs: [changes]
     if: needs.changes.outputs.packages == 'true'
-    runs-on: macos-26
+    runs-on: xcode-27
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     timeout-minutes: 60
     steps:
       - name: Checkout repository
@@ -827,7 +827,7 @@ jobs:
           persist-credentials: false
 
       - name: Verify pinned Apple toolchain
-        run: test "$(xcodebuild -version)" = $'Xcode 26.6\nBuild version 17F113'
+        run: test "$(xcodebuild -version)" = $'Xcode 27.2\nBuild version 27B52'
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

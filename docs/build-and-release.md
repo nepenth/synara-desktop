@@ -323,9 +323,13 @@ excluded. Inspect `npm run audit:build-cache` and the workflow cache summaries
 before increasing budgets or generations, especially with the current 10 GB
 repository limit. Toolchain changes can temporarily add extra snapshots.
 
-Apple CI jobs select **Xcode 26.6 / 17F113** using
-`DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer`, a version
-available in the [macOS 26 runner image](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md).
+Apple CI jobs and the TestFlight build run on the `xcode-27` runner image
+(macOS 27) and select **Xcode 27.2 / 27B52** using
+`DEVELOPER_DIR=/Applications/Xcode_27.2.app/Contents/Developer`, a version
+listed in the [Xcode 27 runner image](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md),
+so the app is built with the iOS 27 SDK. That image is a public preview on
+GitHub; if a job fails on the runner itself, check the image's announcements
+before the code. The deployment target stays iOS 16.
 The selected version is checked before Swift cache work; the nightly device
 cache seed checks it directly. Apple Rust cache identities include
 `DEVELOPER_DIR`, Xcode build, macOS/iOS/simulator SDK versions and Rust compiler,
