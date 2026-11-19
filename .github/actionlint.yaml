@@ -1,0 +1,8 @@
+# actionlint only knows the runner labels that were GA when it was released.
+# `xcode-27` is GitHub's hosted Xcode 27 image (macOS 27), in public preview:
+# https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md
+# Listing it here is actionlint's way to accept a label it does not know yet;
+# remove the entry once the pinned actionlint version recognises it.
+self-hosted-runner:
+  labels:
+    - xcode-27
