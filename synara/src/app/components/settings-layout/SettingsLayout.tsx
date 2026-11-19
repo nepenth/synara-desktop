@@ -31,6 +31,7 @@ import { stopPropagation } from '../../utils/keyboard';
 import * as depthCss from '../../styles/Depth.css';
 import * as css from './style.css';
 import {
+  highlightTerms,
   matchRanges,
   matchSnippet,
   searchSettings,
@@ -184,8 +185,8 @@ export function SettingsNav<T>({
   const filterId = useId();
   const resultsRef = useRef<HTMLDivElement>(null);
   const pages = useMemo(() => groups.flatMap((group) => group.items), [groups]);
-  const words = useMemo(() => searchWords(query), [query]);
-  const searching = words.length > 0;
+  const words = useMemo(() => highlightTerms(query), [query]);
+  const searching = useMemo(() => searchWords(query).length > 0, [query]);
   const resultGroups = useMemo(
     () =>
       searching
