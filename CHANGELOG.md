@@ -4,6 +4,7 @@
 
 - iOS: the app is now built with the iOS 27 SDK (Xcode 27.2), in CI and for TestFlight, ahead of Apple's April 2027 requirement. The minimum supported iOS version is unchanged (16.0).
 - iOS: a web address written without `http://` (`example.com`, `www.example.com`) in a plain message opens over `http://` on every iOS version again, as on desktop. iOS 27.2's link detector had switched such links to `https://`.
+- Desktop: keyboard shortcuts work from the moment the window shows. A shortcut pressed as the room list first appeared, such as Cmd/Ctrl+/ for the shortcut list or Cmd/Ctrl+K for search, could do nothing, because the app started listening for it a moment after drawing the window. Escape closing a thread just after it opened had the same gap, and View menu items on macOS could be missed for a moment after some settings changed.
 
 ## [3.2.1] - 2026-11-19
 

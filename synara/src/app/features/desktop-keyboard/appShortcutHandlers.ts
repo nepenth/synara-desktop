@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import type { AppShortcutAction } from './appShortcuts';
 
 /**
@@ -28,8 +28,14 @@ export const registerAppShortcutHandler = (
 export const runAppShortcutHandler = (action: AppShortcutAction): boolean =>
   handlers.get(action)?.at(-1)?.() ?? false;
 
+/**
+ * Registered in a layout effect, in the same commit that shows the component,
+ * so its key works from the first frame it is on screen (a passive effect
+ * runs after paint, and a key pressed in between went to the previous handler
+ * or none).
+ */
 export const useAppShortcutHandler = (action: AppShortcutAction, handler: AppShortcutHandler) => {
-  useEffect(() => registerAppShortcutHandler(action, handler), [action, handler]);
+  useLayoutEffect(() => registerAppShortcutHandler(action, handler), [action, handler]);
 };
 
 /** A dialog or menu is open over the app (folds portals render into this container). */

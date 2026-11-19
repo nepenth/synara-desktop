@@ -49,10 +49,15 @@ const fromPicker: Insert = async (page) => {
   await page.locator('[data-emoji-type]').first().click();
 };
 
+// The board searches 200 ms after the last keystroke and then replaces the
+// whole grid, which already shows :smile: before the search. A click that
+// lands while the results replace the grid is lost (mousedown on the old
+// button, mouseup on the new one): no emoji, the board stays open and focus
+// is on the page body. So click :smile: inside the search results only.
 const fromPickerSearch: Insert = async (page) => {
   await page.getByRole('button', { name: 'Emoji' }).click();
   await page.getByPlaceholder('Search').fill('smile');
-  await page.locator('[data-emoji-shortcode="smile"]').click();
+  await page.locator('[data-group-id="search_group"] [data-emoji-shortcode="smile"]').click();
 };
 
 const fromShortcode: Insert = async (page) => {
