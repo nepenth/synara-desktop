@@ -76,7 +76,7 @@ import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent } from '../../../components/page';
 import { NavPaneHeader } from '../../../features/nav-pane/NavPaneHeader';
-import { NavBottomBar } from '../../../features/nav-pane/NavBottomBar';
+import { NavBottomBarSlot } from '../../../features/nav-pane/NavBottomBarSlot';
 import { HideRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
 import { useMarkRoomsAsRead } from '../../../hooks/useMarkRoomsAsRead';
@@ -570,7 +570,7 @@ export function Home() {
   };
 
   return (
-    <PageNav label={roomsLabel} header={<HomeHeader />} footer={<NavBottomBar />}>
+    <PageNav label={roomsLabel} header={<HomeHeader />} footer={<NavBottomBarSlot />}>
       <NavSearchField />
       {noRoomToDisplay ? (
         roomListLoaded ? (

@@ -76,6 +76,7 @@ import { CreateSpaceModalRenderer } from '../features/create-space';
 import { SearchModalRenderer } from '../features/search';
 import { getActiveSession } from '../state/sessionBootstrap';
 import { AppSettingsRenderer, Settings } from '../features/settings';
+import { NavBottomBarHost } from '../features/nav-pane/NavBottomBarSlot';
 import { settingsPageFromSlug } from '../features/settings/settingsPages';
 import { SettingsModal } from '../components/settings-layout';
 import { RouteError } from './RouteError';
@@ -188,6 +189,9 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                         <UserRoomProfileRenderer />
                         <CreateRoomModalRenderer />
                         <CreateSpaceModalRenderer />
+                        {/* The bottom bar lives here, for the whole signed-in shell, and is
+                            placed into each pane's list column by NavBottomBarSlot. */}
+                        <NavBottomBarHost />
                         <AppSettingsRenderer />
                         <RoomSettingsRenderer />
                         <SpaceSettingsRenderer />

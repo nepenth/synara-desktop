@@ -451,8 +451,11 @@ export function AccountBarItem({ showLabel }: { showLabel: boolean }) {
  * account. Icons with tooltips; text labels once the column is wider than
  * 300px (and on Mobile, where it fills the window).
  */
-export function NavBottomBar() {
-  const showLabel = barShowsLabels(usePageNavWidth());
+export function NavBottomBar({ navWidth }: { navWidth?: number }) {
+  const columnWidth = usePageNavWidth();
+  // The shell's bar (NavBottomBarSlot) passes its column's width; a bar
+  // rendered inside a PageNav (fixtures) reads it from there.
+  const showLabel = barShowsLabels(navWidth ?? columnWidth);
   return (
     <nav className={css.Bar} aria-label="Main" data-testid="nav-bottom-bar">
       <HomeBarItem showLabel={showLabel} />

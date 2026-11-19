@@ -76,7 +76,7 @@ import {
 } from '../../../state/room-list/roomList';
 import { PageNav, PageNavContent } from '../../../components/page';
 import { NavPaneHeader } from '../../../features/nav-pane/NavPaneHeader';
-import { NavBottomBar } from '../../../features/nav-pane/NavBottomBar';
+import { NavBottomBarSlot } from '../../../features/nav-pane/NavBottomBarSlot';
 import { HideRoomListButton } from '../../../features/room-list-pane/RoomListToggleButton';
 import { RoomAvatar } from '../../../components/room-avatar';
 import { getRoomAvatarUrl } from '../../../utils/room';
@@ -649,7 +649,7 @@ export function Space() {
   );
 
   return (
-    <PageNav label={roomsLabel} header={<SpaceHeader />} footer={<NavBottomBar />}>
+    <PageNav label={roomsLabel} header={<SpaceHeader />} footer={<NavBottomBarSlot />}>
       <NavSearchField />
       {noRoomToDisplay ? (
         <>

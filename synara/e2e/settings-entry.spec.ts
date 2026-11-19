@@ -90,7 +90,7 @@ test('a link opens Settings at a page and row', async ({ page }) => {
 
 test('an unverified session: the avatar warns and opens Security & recovery', async ({ page }) => {
   await page.goto(`${HARNESS}?unverified#/home/`);
-  await expect(avatar(page)).toHaveAccessibleName('Settings, this device is not verified');
+  await expect(avatar(page)).toHaveAccessibleName('Settings, this session is not verified');
   await avatar(page).click();
   await expect(pageTitle(page)).toHaveText('Security & recovery');
   await expect(page.locator('[data-setting-title="Verify this session"]').first()).toBeVisible();
@@ -119,6 +119,75 @@ test('the avatar keeps its picture moving between Home and Activity', async ({ p
   expect(
     await page.evaluate(() => (window as unknown as { fallbackSeen: number }).fallbackSeen)
   ).toBe(0);
+});
+
+test('the bar is mounted once: the same nodes survive Home, Activity and Approvals', async ({
+  page,
+}) => {
+  await serveMedia(page);
+  await page.goto(`${HARNESS}?avatar&unverified#/home/`);
+  const bar = page.getByTestId('nav-bottom-bar');
+  const badge = avatar(page).locator('[data-badge-role], [aria-hidden="true"]').first();
+  await expect(avatar(page).locator('img')).toHaveAttribute('data-image-loaded', 'true');
+  await expect(avatar(page)).toHaveAccessibleName('Settings, this session is not verified');
+  await expect(badge).toBeVisible();
+  // Tag the bar, the avatar picture and the warning badge, and watch for the
+  // initial or a missing badge in between.
+  await page.evaluate(() => {
+    const win = window as unknown as {
+      tagged: Element[];
+      fallbackSeen: number;
+      badgeMissing: number;
+    };
+    const button = document.querySelector('[data-testid="nav-bar-account"]')!;
+    win.tagged = [
+      document.querySelector('[data-testid="nav-bottom-bar"]')!,
+      button.querySelector('img')!,
+      button.querySelector('span[aria-hidden="true"]')!,
+    ];
+    win.fallbackSeen = 0;
+    win.badgeMissing = 0;
+    new MutationObserver(() => {
+      const current = document.querySelector('[data-testid="nav-bar-account"]');
+      if (!current) return;
+      if (!current.querySelector('img')) win.fallbackSeen += 1;
+      if (!current.querySelector('span[aria-hidden="true"]')) win.badgeMissing += 1;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  for (const place of ['activity', 'approvals', 'home']) {
+    await page.getByTestId(`nav-bar-${place}`).click();
+    await page.waitForTimeout(200);
+    await expect(bar).toBeVisible();
+  }
+  const result = await page.evaluate(() => {
+    const win = window as unknown as {
+      tagged: Element[];
+      fallbackSeen: number;
+      badgeMissing: number;
+    };
+    const button = document.querySelector('[data-testid="nav-bar-account"]')!;
+    const now = [
+      document.querySelector('[data-testid="nav-bottom-bar"]'),
+      button.querySelector('img'),
+      button.querySelector('span[aria-hidden="true"]'),
+    ];
+    return {
+      same: win.tagged.map((node, index) => node === now[index] && node.isConnected),
+      fallbackSeen: win.fallbackSeen,
+      badgeMissing: win.badgeMissing,
+    };
+  });
+  expect(result).toEqual({ same: [true, true, true], fallbackSeen: 0, badgeMissing: 0 });
+  // The highlight follows the route, and the bar still sits in the list column.
+  await expect(page.getByTestId('nav-bar-home')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#synara-room-list-pane [data-testid="nav-bottom-bar"]')).toHaveCount(
+    1
+  );
+  // The toggle and the unverified route still work.
+  await avatar(page).click();
+  await expect(pageTitle(page)).toHaveText('Security & recovery');
+  await page.keyboard.press('Escape');
+  await expect(dialog(page)).toHaveCount(0);
 });
 
 test('the composer keeps its GIF item with GIF search off, and /gif leads to the setting', async ({

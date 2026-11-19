@@ -10,7 +10,7 @@ export type BarBadge =
   /** The 8px unread dot (neutral). */
   | { kind: 'dot' }
   | { kind: 'count'; count: number; highlight: boolean }
-  /** A solid status pill: approvals with partial coverage, unverified devices. */
+  /** A solid status pill: approvals with partial coverage, unverified sessions. */
   | { kind: 'status'; text: string; tone: 'Success' | 'Warning' | 'Critical' };
 
 const NONE: BarBadge = { kind: 'none' };
@@ -110,7 +110,7 @@ export const accountBarState = (
   if (!canOfferVerification) return { label: 'Settings', badge: NONE };
   if (ownUnverified) {
     return {
-      label: 'Settings, this device is not verified',
+      label: 'Settings, this session is not verified',
       badge: { kind: 'status', text: '!', tone: 'Critical' },
       verify: 'this-device',
     };
@@ -118,7 +118,7 @@ export const accountBarState = (
   if (otherUnverifiedCount > 0) {
     return {
       label: `Settings, ${otherUnverifiedCount} unverified ${
-        otherUnverifiedCount === 1 ? 'device' : 'devices'
+        otherUnverifiedCount === 1 ? 'session' : 'sessions'
       }`,
       badge: { kind: 'status', text: String(otherUnverifiedCount), tone: 'Warning' },
       verify: 'other-devices',
