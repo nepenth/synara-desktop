@@ -131,7 +131,9 @@ export type RoomSelectorVariants = RecipeVariants<typeof NavItem>;
 
 /**
  * One type scale with the timeline: 15px names on a 20px line. Read rows are
- * W400 so they recede; unread and selected rows are W600. Rows stay 32px.
+ * W400 so they recede; only unread rows are W600. Weight means "needs you"
+ * and nothing else: the selected row is marked by its fill and on-container
+ * text, at the weight its read state gives it. Rows stay 32px.
  */
 export const NavItemContent = style({
   paddingLeft: config.space.S200,
@@ -149,7 +151,7 @@ export const NavItemContent = style({
     '&:hover': {
       textDecoration: 'unset',
     },
-    [`.${NavItemBase}[data-highlight=true] &, .${NavItemBase}[data-selected=true] &`]: {
+    [`.${NavItemBase}[data-highlight=true] &`]: {
       fontWeight: config.fontWeight.W600,
     },
   },
