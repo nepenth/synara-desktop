@@ -70,15 +70,18 @@ boot() {
   local version="$1" device_type_name="$2"
   settle
   local runtime_id device_type_id
+  # The image has two iOS 27.2 runtimes: the general one and one only for the
+  # iPhone Duo (iOS-27-2-iPhone19-4). Take the one that runs this device type.
   runtime_id="$(xcrun simctl list runtimes -j | python3 -I -c '
 import json, sys
-want = sys.argv[1]
+want, device = sys.argv[1], sys.argv[2]
 for r in json.load(sys.stdin)["runtimes"]:
-    if r.get("platform") == "iOS" and r.get("version") == want and r.get("isAvailable"):
+    if r.get("platform") == "iOS" and r.get("version") == want and r.get("isAvailable") \
+            and any(d.get("name") == device for d in r.get("supportedDeviceTypes", [])):
         print(r["identifier"]); break
-' "$version")"
+' "$version" "$device_type_name")"
   if [[ -z "$runtime_id" ]]; then
-    log "no available iOS $version simulator runtime for $(xcodebuild -version | head -1)"
+    log "no available iOS $version simulator runtime for $device_type_name with $(xcodebuild -version | head -1)"
     diagnose
     return 1
   fi
