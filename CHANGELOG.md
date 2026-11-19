@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## [3.2.1] - 2026-11-19
+
+- Linux: MP4 videos (video attachments and the video in an X post) could play with no sound, because nothing on the system decoded their AAC audio. The pacman package now depends on `gst-libav` and the .deb on `gstreamer1.0-libav` and `gstreamer1.0-plugins-good`, which provide the decoders WebKitGTK uses. If you build from source, install `gst-libav`.
 - iOS Settings are grouped like desktop's: your account at the top, then App (General, Appearance, Notifications), Chat (Messages, Media & links, Privacy), Account (Security & recovery, Sessions) and Advanced (Advanced, Diagnostics, About), with Log out last. 24-hour time is on General; Sync drafts across devices is on Messages; GIF search, Play GIF links inline, Link previews, Show X posts and Shorten long links are on Media & links (was "GIFs & Link Previews"); Hide typing & read receipts and Blocked users are on Privacy; the session list is on Sessions; the call service status and the session storage and message security readouts are on Advanced; the push delivery log is on Diagnostics, still linked from Notifications; Licenses, Privacy policy and Support are rows of About. Section and row names use sentence case and match desktop's, such as "Direct messages" and "Mentions of your user ID". No setting was removed or changed, and every setting keeps its stored value.
 - Desktop: if the message box runs into an error, it no longer replaces the whole screen with "Something went wrong". The message box reloads in place with your draft, reply and attachments, and gets focus back if it had it. If it fails again right away, a one-line notice takes its place ("The message box ran into a problem. Your draft is saved.") with Try again, Start fresh and Copy draft. The same applies to the thread pane composer and to editing a message in place. Each contained error is written to the desktop log, without the draft's text.
 

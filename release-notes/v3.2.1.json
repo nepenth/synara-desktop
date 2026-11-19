@@ -1,0 +1,9 @@
+{
+  "version": "3.2.1",
+  "headline": "Settings that match on iPhone, a sturdier message box",
+  "items": [
+    { "text": "iPhone Settings use the same groups and page names as desktop; every setting keeps its value.", "platforms": ["ios"] },
+    { "text": "GIF and link options are together under Media & links; blocked users are under Privacy.", "platforms": ["ios"] },
+    { "text": "If the message box hits an error, it reloads in place with your draft instead of taking over the screen.", "platforms": ["desktop"] }
+  ]
+}

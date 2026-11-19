@@ -1,0 +1,3 @@
+Synara 3.2.1 regroups iPhone and iPad Settings to match desktop: App, Chat, Account and Advanced, with Log out last. No setting was removed and every setting keeps its value.
+
+Please test: open each Settings page and check your settings are as you left them. On iPad, check that each page opens in the detail column, including the pages under About.
