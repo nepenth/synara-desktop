@@ -64,7 +64,7 @@ test('Devices Security explains backup-only key recovery, not a forwarding Switc
   // No Switch in this file: verification and forwarding are status, not toggles.
   assert.doesNotMatch(devices, /\bSwitch\b/);
   const developerTools = readFileSync(
-    join(process.cwd(), 'src/app/features/settings/developer-tools/DevelopTools.tsx'),
+    join(process.cwd(), 'src/app/features/settings/advanced/Advanced.tsx'),
     'utf8'
   );
   assert.doesNotMatch(developerTools, /Share room keys with my verified devices/);

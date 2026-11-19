@@ -31,10 +31,10 @@ import { useAtomValue } from 'jotai';
 import FocusTrap from '../../components/FocusTrap';
 import { UnreadBadge } from '../../components/unread-badge';
 import { UserAvatar } from '../../components/user-avatar';
-import { SettingsModal } from '../../components/settings-layout';
 import { LogoutDialog } from '../../components/LogoutDialog';
 import { usePageNavWidth } from '../../components/page';
-import { Settings, SettingsPages } from '../settings';
+import { verificationSettingsLocation } from '../settings/settingsPages';
+import { useOpenAppSettings } from '../../state/appSettings';
 import { useNativeNavigationScope } from '../../state/hooks/navigationUnread';
 import { useHomeSelected } from '../../hooks/router/useHomeSelected';
 import { useDirectSelected } from '../../hooks/router/useDirectSelected';
@@ -428,7 +428,7 @@ function AccountBarItemView({
   const profile = useUserProfile(userId);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
-  const [settingsPage, setSettingsPage] = useState<SettingsPages | 'default'>();
+  const openSettings = useOpenAppSettings();
   const [logout, setLogout] = useState(false);
   const { label, badge, verify } = accountBarState(canOffer, ownUnverified, otherUnverifiedCount);
 
@@ -437,7 +437,6 @@ function AccountBarItemView({
     ? resolveMatrixThumbnailUrl(profile.avatarUrl, 96, { useAuthentication })
     : undefined;
   const closeMenu = () => setMenuAnchor(undefined);
-  const closeSettings = () => setSettingsPage(undefined);
 
   return (
     <>
@@ -481,11 +480,11 @@ function AccountBarItemView({
                 verify={verify}
                 onSettings={() => {
                   closeMenu();
-                  setSettingsPage('default');
+                  openSettings();
                 }}
                 onVerify={() => {
                   closeMenu();
-                  setSettingsPage(SettingsPages.DevicesPage);
+                  if (verify) openSettings(verificationSettingsLocation(verify));
                 }}
                 onLogout={() => {
                   closeMenu();
@@ -495,14 +494,6 @@ function AccountBarItemView({
             </FocusTrap>
           }
         />
-      )}
-      {settingsPage && (
-        <SettingsModal requestClose={closeSettings}>
-          <Settings
-            initialPage={settingsPage === 'default' ? undefined : settingsPage}
-            requestClose={closeSettings}
-          />
-        </SettingsModal>
       )}
       {logout && <LogoutDialog onClose={() => setLogout(false)} />}
     </>

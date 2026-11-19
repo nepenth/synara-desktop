@@ -7,6 +7,8 @@ import {
   createRoutesFromElements,
   redirect,
   useNavigate,
+  useParams,
+  useSearchParams,
 } from 'react-router-dom';
 
 import { ClientConfig } from '../hooks/useClientConfig';
@@ -19,6 +21,7 @@ import {
   INBOX_PATH,
   REGISTER_PATH,
   RESET_PASSWORD_PATH,
+  SETTINGS_PAGE_PATH,
   SETTINGS_PATH,
   SPACE_PATH,
   _CREATE_PATH,
@@ -72,7 +75,8 @@ import { Create } from './client/create';
 import { CreateSpaceModalRenderer } from '../features/create-space';
 import { SearchModalRenderer } from '../features/search';
 import { getActiveSession } from '../state/sessionBootstrap';
-import { Settings } from '../features/settings';
+import { AppSettingsRenderer, Settings } from '../features/settings';
+import { settingsPageFromSlug } from '../features/settings/settingsPages';
 import { SettingsModal } from '../components/settings-layout';
 import { RouteError } from './RouteError';
 import { ApprovalInboxProvider } from '../features/approvals/ApprovalInboxProvider';
@@ -97,13 +101,26 @@ const lastRoomLoader =
     return target ? redirect(target) : null;
   };
 
+/**
+ * `/settings/` opens on the last page viewed; `/settings/<page>/` opens that
+ * page, and `?setting=<row title>` also scrolls to and highlights the row.
+ */
 function SettingsRoute() {
   const navigate = useNavigate();
+  const { page } = useParams();
+  const [searchParams] = useSearchParams();
   const closeSettings = () => navigate(getHomePath());
+  const initialPage = settingsPageFromSlug(page);
+  const initialSetting = searchParams.get('setting') ?? undefined;
 
   return (
     <SettingsModal requestClose={closeSettings}>
-      <Settings requestClose={closeSettings} />
+      <Settings
+        key={`${page ?? ''}:${initialSetting ?? ''}`}
+        initialPage={initialPage}
+        initialSetting={initialSetting}
+        requestClose={closeSettings}
+      />
     </SettingsModal>
   );
 }
@@ -171,6 +188,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                         <UserRoomProfileRenderer />
                         <CreateRoomModalRenderer />
                         <CreateSpaceModalRenderer />
+                        <AppSettingsRenderer />
                         <RoomSettingsRenderer />
                         <SpaceSettingsRenderer />
                         <NativeVerificationInboxRenderer />
@@ -185,6 +203,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
         }
       >
         <Route path={SETTINGS_PATH} element={<SettingsRoute />} />
+        <Route path={SETTINGS_PAGE_PATH} element={<SettingsRoute />} />
         {/*
           One Home list for rooms and DMs (NAV-12): the pane stays mounted
           across `/home/` and `/direct/` routes; DMs keep their own route.

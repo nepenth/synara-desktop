@@ -84,6 +84,8 @@ export const _NOTIFICATIONS_PATH = 'notifications/';
 export const _INVITES_PATH = 'invites/';
 export const _LATER_PATH = 'later/';
 export const SETTINGS_PATH = '/settings/';
+/** One App Settings page; `?setting=<row title>` reveals that row. */
+export const SETTINGS_PAGE_PATH = '/settings/:page/';
 export const INBOX_PATH = '/inbox/';
 export type InboxNotificationsPathSearchParams = {
   only?: string;

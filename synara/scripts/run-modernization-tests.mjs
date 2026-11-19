@@ -124,6 +124,8 @@ const tests = [
   'src/app/features/room/__tests__/threadDisplay.test.ts',
   'src/app/features/room/__tests__/nativeFocusRoute.test.ts',
   'src/app/features/settings/__tests__/settingsSearchIndex.test.ts',
+  'src/app/features/settings/__tests__/settingsInventory.test.ts',
+  'src/app/features/settings/__tests__/settingsPages.test.ts',
   'src/app/features/room/__tests__/nativeSendText.test.ts',
   'src/app/features/room/__tests__/nativeComposerDraftOwner.test.ts',
   'src/app/features/room/__tests__/nativeComposerReplyRoute.test.ts',
