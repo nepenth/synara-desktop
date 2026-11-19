@@ -1,6 +1,6 @@
 {
   "name": "synara-desktop",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "description": "Synara Desktop, a Matrix client for macOS and Linux with a shared Rust core.",
   "engines": {
     "node": ">=24.13.1"
@@ -22,6 +22,7 @@
     "check:mip1-evidence": "node scripts/check-mip1-commit-evidence.mjs --base main",
     "check:production-smoke": "node scripts/check-production-smoke-checklist.mjs",
     "check:release-updater": "node scripts/check-release-updater.mjs",
+    "check:whats-new": "node scripts/check-whats-new.mjs",
     "check:repo-layout": "node scripts/check-repository-layout.mjs",
     "check:runtime-assets": "node scripts/check-runtime-assets.mjs",
     "bump:version": "node scripts/bump-version.mjs",

@@ -7,7 +7,10 @@ final class AppRouter: ObservableObject {
     @Published var roomsPath: [AppRoute] = []
     @Published var activityPath: [AppRoute] = []
     @Published var laterPath: [AppRoute] = []
-    @Published var settingsPath: [AppRoute] = []
+    /// The phone Settings stack. Its rows push `SettingsPage` values, so the
+    /// path holds pages rather than `AppRoute`s: a typed `[AppRoute]` path
+    /// cannot append a `SettingsPage`, and every row would silently do nothing.
+    @Published var settingsPath: [SettingsPage] = []
     @Published var sheetDestination: SheetDestination?
     @Published private(set) var pendingDeepLink: AppRoute?
 
@@ -20,7 +23,8 @@ final class AppRouter: ObservableObject {
         case .later:
             return Binding(get: { self.laterPath }, set: { self.laterPath = $0 })
         case .settings:
-            return Binding(get: { self.settingsPath }, set: { self.settingsPath = $0 })
+            // Settings never holds an `AppRoute`; its pages live in `settingsPath`.
+            return .constant([])
         }
     }
 

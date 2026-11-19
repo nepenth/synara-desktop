@@ -44,6 +44,11 @@
       "type": "string",
       "enum": ["auto", "on", "off"]
     },
+    "whatsNewSeenVersion": {
+      "$comment": "The last version whose What's new notes this device showed; empty before the first record.",
+      "type": "string",
+      "maxLength": 64
+    },
     "agentWidgetEntries": {
       "type": "array",
       "maxItems": 32,

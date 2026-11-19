@@ -87,7 +87,8 @@
       "desktopDiagnosticsRoomState": false,
       "desktopDiagnosticsOverlay": false,
       "agentWidgetEntries": [],
-      "roomListCollapsed": false
+      "roomListCollapsed": false,
+      "whatsNewSeenVersion": "3.1.1"
     }
   },
   "invalid": {

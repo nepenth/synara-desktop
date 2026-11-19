@@ -8,7 +8,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Button, Icon, Icons, Spinner, Text } from 'folds';
+import { Box, Button, Icon, Icons, Spinner, Text } from 'folds';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { SettingTile } from '../../components/setting-tile';
 import {
@@ -26,6 +26,8 @@ import {
   updateErrorMessage,
 } from '../../utils/desktopUpdater';
 import { APP_VERSION, openExternalUrl } from '../../utils/appLinks';
+import { parseUpdateNotes } from '../whats-new/whatsNewNotes';
+import { WhatsNewList } from '../whats-new/WhatsNewCard.css';
 
 const CHECK_FOR_UPDATES_EVENT = 'synara://check-for-updates';
 const BACKGROUND_CHECK_INITIAL_DELAY_MS = 10_000;
@@ -118,6 +120,35 @@ const progressLabel = (progress?: DesktopUpdateDownloadProgress): string => {
   return `Downloaded ${percent}%.`;
 };
 
+/**
+ * The release's notes from the update metadata: the "What's new" headline
+ * and "• " items (scripts/generate-release-updater-metadata.mjs), drawn as
+ * a short list. Older free-text notes show as paragraphs.
+ */
+export function UpdateNotes({ body }: { body: string }) {
+  const { paragraphs, bullets } = parseUpdateNotes(body);
+  return (
+    <Box direction="Column" gap="200" data-update-notes="">
+      {paragraphs.map((paragraph, index) => (
+        <Text key={paragraph} size="T300" priority={index === 0 ? '400' : '300'}>
+          {paragraph}
+        </Text>
+      ))}
+      {bullets.length > 0 && (
+        <ul className={WhatsNewList}>
+          {bullets.map((bullet) => (
+            <li key={bullet}>
+              <Text size="T300" priority="400">
+                {bullet}
+              </Text>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Box>
+  );
+}
+
 function DesktopUpdaterPrompt({
   state,
   installAvailableUpdate,
@@ -159,11 +190,7 @@ function DesktopUpdaterPrompt({
       }}
       onCancel={isAvailable ? dismissPrompt : closePrompt}
     >
-      {result?.status === 'available' && result.body && (
-        <Text size="T300" priority="400" style={{ whiteSpace: 'pre-wrap' }}>
-          {result.body}
-        </Text>
-      )}
+      {result?.status === 'available' && result.body && <UpdateNotes body={result.body} />}
       {state.installing && (
         <Text size="T300" priority="400" role="status">
           {progressLabel(state.downloadProgress)}

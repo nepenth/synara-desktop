@@ -26,6 +26,8 @@ const HASH_VERSION = "synara-ios-tests-inputs-v1";
 export const IOS_TEST_INPUT_PATHS = [
   // Swift app, packages, project spec and its build scripts.
   "synara-ios",
+  // "What's new" notes the app bundles (project.yml) and its tests read.
+  "release-notes",
   // The Rust Core and NSE Core built into the XCFrameworks, and the workspace
   // that resolves them (src-tauri is a member, so its manifest is read too).
   "crates",

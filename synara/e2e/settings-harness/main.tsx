@@ -1,6 +1,7 @@
 // The production app shell (router, ClientRoot, Settings, room header) with
 // only native IPC answered by fixtures, so settings layout and menus render
 // exactly as they ship.
+import './seedWhatsNew';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { enableMapSet } from 'immer';
@@ -13,6 +14,7 @@ import '../../src/app/i18n';
 import { setSessionBootstrapResult } from '../../src/app/state/sessionBootstrap';
 import type { RoomSummary } from '../../src/app/features/matrix-dto/room';
 import { presentationFor } from '../room-list-harness/presentation';
+import nextReleaseNotes from '../../../release-notes/v3.2.0.json';
 
 enableMapSet();
 
@@ -295,10 +297,35 @@ const fixtures: Record<string, Fixture> = {
     return null;
   },
 };
+// `?updatePrompt`: a macOS build whose updater finds 3.2.0, with the notes
+// the release workflow writes into latest.json (headline, then "• " items).
+const UPDATE_NOTES = [
+  nextReleaseNotes.headline,
+  ...nextReleaseNotes.items
+    .filter((item) => item.platforms.includes('desktop'))
+    .map((item) => `• ${item.text}`),
+].join('\n');
+if (query.has('updatePrompt')) {
+  Object.assign(fixtures, {
+    desktop_get_performance_capabilities: { platform: 'macos' },
+    'plugin:updater|check': {
+      rid: 1,
+      currentVersion: '3.1.1',
+      version: nextReleaseNotes.version,
+      date: '2026-11-20T00:00:00Z',
+      body: UPDATE_NOTES,
+      rawJson: {},
+    },
+  });
+}
 const unknown = new Set<string>();
 let callbackId = 0;
 Object.assign(window, {
-  __SYNARA_DESKTOP__: { platform: 'tauri', os: 'linux' },
+  __SYNARA_DESKTOP__: {
+    platform: 'tauri',
+    os: query.has('updatePrompt') ? 'macos' : 'linux',
+    supportsUpdater: query.has('updatePrompt'),
+  },
   __TAURI_INTERNALS__: {
     metadata: {
       currentWindow: { label: 'main' },
@@ -323,15 +350,20 @@ Object.assign(window, {
   __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => undefined },
   synaraUnknownCommands: unknown,
 });
-setSessionBootstrapResult({
-  source: 'native',
-  session: {
-    userId: identity.userId,
-    deviceId: identity.deviceId,
-    baseUrl: identity.homeserverUrl,
-    sessionGeneration: String(identity.sessionGeneration),
-  },
-});
+// `?signedOut`: no stored session, as on a fresh install (the sign-in screen).
+setSessionBootstrapResult(
+  query.has('signedOut')
+    ? { source: 'none' }
+    : {
+        source: 'native',
+        session: {
+          userId: identity.userId,
+          deviceId: identity.deviceId,
+          baseUrl: identity.homeserverUrl,
+          sessionGeneration: String(identity.sessionGeneration),
+        },
+      }
+);
 const theme = query.get('theme') === 'light' ? [synaraLightTheme] : [darkTheme, 'dark-theme'];
 document.body.classList.add(configClass, varsClass, ...theme);
 createRoot(document.getElementById('root')!).render(<App />);

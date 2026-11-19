@@ -10,8 +10,8 @@ settings:
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "3.1.1"
-    CURRENT_PROJECT_VERSION: "3.1.1"
+    MARKETING_VERSION: "3.2.0"
+    CURRENT_PROJECT_VERSION: "3.2.0"
     SYNARA_CRITICAL_ALERTS_ENABLED: "NO"
     SYNARA_NOTIFICATION_FILTERING_ENABLED: "NO"
     # User-facing copy lives in String Catalogs: Synara/Resources/Localizable.xcstrings
@@ -32,6 +32,12 @@ targets:
     sources:
       - path: Synara
       - path: SynaraShared
+      # "What's new" notes (docs/whats-new-notes.md), copied as a folder so
+      # each release's new file is bundled without regenerating the project.
+      # The app reads release-notes/v<CFBundleShortVersionString>.json.
+      - path: ../release-notes
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: SynaraCore
         product: SynaraCore

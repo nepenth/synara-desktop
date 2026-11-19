@@ -1094,6 +1094,9 @@
     "Close" : {
 
     },
+    "Close What's New" : {
+
+    },
     "Closing…" : {
 
     },
@@ -1672,6 +1675,9 @@
 
     },
     "Forwarding was not completed." : {
+
+    },
+    "Full Release Notes" : {
 
     },
     "Full Screen" : {
@@ -2326,6 +2332,9 @@
 
     },
     "Opens the post in your browser" : {
+
+    },
+    "Opens the release notes on GitHub" : {
 
     },
     "Opens the room timeline" : {
@@ -3690,6 +3699,12 @@
 
     },
     "What are you doing?" : {
+
+    },
+    "What's New" : {
+
+    },
+    "What's New in %@" : {
 
     },
     "When on, this device hides automatic typing status and read receipts. Choosing Mark as Read still sends a private receipt." : {

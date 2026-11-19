@@ -216,12 +216,9 @@ struct SynaraSettingsCanvas: View {
         Group {
             switch layout {
             case .stacked:
-                NavigationStack(path: router.binding(for: .settings)) {
+                NavigationStack(path: $router.settingsPath) {
                     SettingsView()
                         .synaraConnectionChrome()
-                        .navigationDestination(for: AppRoute.self) { route in
-                            RoutePlaceholderView(route: route)
-                        }
                 }
             case .split:
                 NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -236,7 +233,13 @@ struct SynaraSettingsCanvas: View {
                 } detail: {
                     NavigationStack {
                         SettingsPageView(page: selection ?? .account)
+                            // Pages push others by value (About › What's New).
+                            .navigationDestination(for: SettingsPage.self) { page in
+                                SettingsPageView(page: page)
+                            }
                     }
+                    // A new sidebar selection starts its own stack.
+                    .id(selection)
                     .accessibilityIdentifier("SettingsDetailColumn")
                 }
                 .navigationSplitViewStyle(.balanced)

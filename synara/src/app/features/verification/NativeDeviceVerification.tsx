@@ -41,6 +41,7 @@ import {
   verificationRequestNeedsSasStart,
   VERIFICATION_CLOSE_FAILED_COPY,
 } from './nativeVerification';
+import { useBlockWhatsNew } from '../../state/whatsNew';
 
 const POLL_INTERVAL_MS = 500;
 
@@ -551,6 +552,9 @@ export function NativeVerificationInboxRenderer() {
       unsubscribe();
     };
   }, []);
+
+  // A verification request needs an answer before "What's new".
+  useBlockWhatsNew(!unavailable && !!request);
 
   if (unavailable) return null;
   if (!request) return null;

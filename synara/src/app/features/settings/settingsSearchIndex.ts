@@ -864,6 +864,12 @@ export const APP_SETTINGS_SEARCH_INDEX: AppSettingsSearchEntry[] = [
   // About
   {
     page: P.AboutPage,
+    section: "What's new",
+    title: "What's new",
+    synonyms: ['release notes', 'changes', 'changelog', 'new features', 'update', 'version'],
+  },
+  {
+    page: P.AboutPage,
     section: 'Credits',
     title: 'Credits',
     synonyms: ['licenses', 'open source', 'thanks', 'attribution'],

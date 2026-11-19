@@ -133,7 +133,7 @@ if changed .github/workflows/ci.yml scripts/ci-scopes.sh "${RUST_CACHE_PATHS[@]}
 fi
 
 if changed .github/workflows .github/actions devAssets packaging .node-version \
-  config.json package.json package-lock.json scripts synara; then
+  config.json package.json package-lock.json scripts synara release-notes; then
   VALIDATE_FRONTEND=true
 fi
 
