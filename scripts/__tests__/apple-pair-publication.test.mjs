@@ -346,9 +346,12 @@ test("unsupported artifact types fail closed without treating comparison errors 
     const beforeFramework = lstatSync(pair.destinationFramework, {
       bigint: true,
     });
+    // The limit only catches a hang on the FIFO; a working script exits in
+    // well under a second. 5 s was too short on a loaded macOS runner, where
+    // the script was killed (status 143) before it could exit with 2.
     const result = spawnSync("bash", invocation(pair), {
       encoding: "utf8",
-      timeout: 5000,
+      timeout: 60000,
     });
     assert.equal(result.status, 2, result.stderr);
     assert.match(result.stderr, /unsupported generated artifact type/);

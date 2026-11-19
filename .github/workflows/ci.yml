@@ -439,12 +439,14 @@ jobs:
 
       # Boot the exact test device before anything expensive, so a runtime
       # problem on the image fails in the first minutes with diagnostics, not
-      # after the build (synara-ios/scripts/ci-simulator.sh). ci-build.sh checks
-      # it is still booted and mounted right before testing on it.
+      # after the build (synara-ios/scripts/ci-simulator.sh). Then park it: a
+      # just-booted simulator's first-boot work slowed the build steps beside it.
+      # ci-build.sh boots it again and checks it right before testing on it.
       - name: Boot iOS test simulator
         run: |
           udid="$(synara-ios/scripts/ci-simulator.sh boot "$IOS_SIMULATOR_RUNTIME" "$IOS_SIMULATOR_DEVICE")"
           echo "IOS_SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
+          synara-ios/scripts/ci-simulator.sh park "$udid"
 
       - name: Install Rust 1.96 and Apple targets
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
@@ -546,12 +548,14 @@ jobs:
 
       # Boot the exact test device before anything expensive, so a runtime
       # problem on the image fails in the first minutes with diagnostics, not
-      # after the build (synara-ios/scripts/ci-simulator.sh). ci-build.sh checks
-      # it is still booted and mounted right before testing on it.
+      # after the build (synara-ios/scripts/ci-simulator.sh). Then park it: a
+      # just-booted simulator's first-boot work slowed the build steps beside it.
+      # ci-build.sh boots it again and checks it right before testing on it.
       - name: Boot iOS test simulator
         run: |
           udid="$(synara-ios/scripts/ci-simulator.sh boot "$IOS_SIMULATOR_RUNTIME" "$IOS_SIMULATOR_DEVICE")"
           echo "IOS_SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
+          synara-ios/scripts/ci-simulator.sh park "$udid"
 
       - name: Install Rust 1.96 and Apple targets
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96

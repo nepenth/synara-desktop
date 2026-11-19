@@ -8,9 +8,14 @@
 #       Settle, pick the runtime of that version that runs that device type,
 #       create a fresh device on it, boot it, wait until it has finished
 #       booting, and print its UDID (the only line on stdout).
+#   ci-simulator.sh park <udid>
+#       Shut the device down so it does not compete with the build.
+#   ci-simulator.sh ready <udid>
+#       Boot a parked device again (fast: it has done its first boot) and check
+#       it. Run right before xcodebuild.
 #   ci-simulator.sh check <udid>
-#       Fail unless that device is still booted, its runtime is still mounted
-#       and it answers a command. Run right before xcodebuild.
+#       Fail unless that device is booted, its runtime is still mounted and it
+#       answers a command.
 #   ci-simulator.sh smoke <udid>
 #       Prove the device works without building anything: run launchctl in it
 #       and launch the built-in Settings app.
@@ -24,8 +29,10 @@
 # simulator runs from (actions/runner-images#14946, #15334; Apple lists it as a
 # known issue in the Xcode 27.3 release notes, 191574717). The CI jobs boot
 # their device first, before any build, so a missing or broken runtime fails in
-# the first minutes with this script's diagnostics, and check it again right
-# before testing.
+# the first minutes with this script's diagnostics, then park it: a freshly
+# booted simulator runs its first-boot work for minutes and slowed the build
+# steps beside it until a 5 s test timeout fired. Right before testing they boot
+# it again and check it.
 set -euo pipefail
 
 log() { echo "ci-simulator: $*" >&2; }
@@ -129,10 +136,12 @@ for d in json.load(sys.stdin)["devicetypes"]:
 }
 
 check() {
-  local udid="$1" problem runtimes
+  local udid="$1" problem runtimes started=$SECONDS
   runtimes="$(mktemp "${TMPDIR:-/tmp}/ci-simulator-runtimes.XXXXXX")"
-  xcrun simctl runtime list -j > "$runtimes"
-  problem="$(xcrun simctl list devices -j | python3 -I -c '
+  with_timeout 180 xcrun simctl runtime list -j > "$runtimes"
+  log "runtime list took $((SECONDS - started)) s"
+  started=$SECONDS
+  problem="$(with_timeout 180 xcrun simctl list devices -j | python3 -I -c '
 import json, os, sys
 udid, runtimes_path = sys.argv[1], sys.argv[2]
 devices = json.load(sys.stdin)["devices"]
@@ -150,6 +159,8 @@ if not any(m and os.path.isdir(m) for m in mounts):
     print("runtime " + runtime + " of device " + udid + " is no longer mounted (the image unmounted it)")
 ' "$udid" "$runtimes")"
   rm -f "$runtimes"
+  log "device list took $((SECONDS - started)) s"
+  started=$SECONDS
   if [[ -z "$problem" ]] && ! with_timeout 60 xcrun simctl spawn "$udid" launchctl print system > /dev/null 2>&1; then
     problem="device $udid is booted but does not answer simctl spawn"
   fi
@@ -158,7 +169,24 @@ if not any(m and os.path.isdir(m) for m in mounts):
     diagnose
     return 1
   fi
-  log "device $udid is still booted and its runtime is mounted"
+  log "device $udid is still booted, its runtime is mounted and it answered in $((SECONDS - started)) s"
+}
+
+park() {
+  local udid="$1"
+  with_timeout 120 xcrun simctl shutdown "$udid"
+  log "device $udid is shut down until the tests"
+}
+
+ready() {
+  local udid="$1" started=$SECONDS
+  if ! with_timeout "${CI_SIMULATOR_BOOT_SECONDS:-600}" xcrun simctl bootstatus "$udid" -b >&2; then
+    log "simulator $udid did not boot again"
+    diagnose
+    return 1
+  fi
+  log "booted again in $((SECONDS - started)) s"
+  check "$udid"
 }
 
 smoke() {
@@ -188,14 +216,14 @@ diagnose() {
     | grep -iE 'unmount|duplicate|eject|fail|error|prefer' | tail -n 200 >&2 || true
 }
 
-usage="usage: $0 settle | boot <iOS version> <device type name> | check <udid> | smoke <udid> | remove <udid> | diagnose"
+usage="usage: $0 settle | boot <iOS version> <device type name> | park <udid> | ready <udid> | check <udid> | smoke <udid> | remove <udid> | diagnose"
 case "${1:-}" in
   settle) settle ;;
   boot)
     [[ $# -eq 3 ]] || { log "$usage"; exit 2; }
     boot "$2" "$3"
     ;;
-  check | smoke | remove)
+  park | ready | check | smoke | remove)
     [[ $# -eq 2 ]] || { log "$usage"; exit 2; }
     "$1" "$2"
     ;;

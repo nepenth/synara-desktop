@@ -335,10 +335,12 @@ The simulator test jobs set `IOS_SIMULATOR_RUNTIME=27.2` and
 `IOS_SIMULATOR_DEVICE=iPhone 17`. Their first step after checkout,
 `synara-ios/scripts/ci-simulator.sh boot`, waits for the runtimes to be mounted,
 picks the 27.2 runtime that runs an iPhone 17 (the image also has an iPhone
-Duo-only 27.2 runtime), creates a fresh device, and waits for
-`simctl bootstatus`. `ci-build.sh` then checks the device is still booted, its
-runtime still mounted and answering, and tests on its UDID instead of whichever
-"iPhone 17" xcodebuild picks by name. The unit suite runs on that one device
+Duo-only 27.2 runtime), creates a fresh device, waits for `simctl bootstatus`,
+and shuts the device down again: a just-booted simulator's first-boot work
+slowed the build steps beside it enough for a 5 s test timeout to fire. After
+the build, `ci-build.sh` boots it again (seconds, now that it has booted once),
+checks its runtime is still mounted and it answers, and tests on its UDID
+instead of whichever "iPhone 17" xcodebuild picks by name. The unit suite runs on that one device
 without parallel clones. On this image `simdiskimaged` can unmount a runtime
 after CoreSimulator starts
 ([runner-images#14946](https://github.com/actions/runner-images/issues/14946),
@@ -358,8 +360,8 @@ with, not the simulator OS, so if 27.2 stays unreliable on the image,
   `gh workflow run ios-simulator-smoke.yml --ref <branch> -f runtime=27.0`
   (inputs: `xcode`, `runtime`, `device`); a pull request that changes the
   script or the workflow runs it by itself.
-- *A runtime problem in the real jobs* now fails in their first minutes, in the
-  "Boot iOS test simulator" step, before the Rust and Swift builds.
+- *A runtime problem in the real jobs* now fails in their first two minutes, in
+  the "Boot iOS test simulator" step, before the Rust and Swift builds.
 - *Cold builds:* compiler caches are keyed by toolchain, so a new Xcode starts
   with no snapshot and the first run builds everything, about 30 minutes for
   the Apple Rust slice. A pull request whose `iOS simulator tests` job finds no
