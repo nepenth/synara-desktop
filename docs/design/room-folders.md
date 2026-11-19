@@ -2,6 +2,8 @@
 
 Status: **core and desktop UI implemented** (`feat/room-folders-core`,
 `feat/room-folders-desktop`). iOS UI builds on the API below.
+Status: **core and iOS UI implemented** (`feat/room-folders-core`,
+`feat/room-folders-ios`). Desktop UI builds on the API below.
 
 User-defined room folders are custom sidebar sections, like Slack's. A user
 files rooms into named folders. Folders sync across the user's own devices
@@ -279,6 +281,74 @@ harness (`?roomFolders`).
 ## Not done here
 
 - iOS UI.
+## iOS UI
+
+Branch `feat/room-folders-ios`. Behaviour and copy follow the desktop UI
+(`feat/room-folders-desktop`); the same words, sentence case.
+
+- **Sections.** The Rooms list shows Favorites, then one section per folder
+  in folder order, then the space groups (or the selected space), Rooms,
+  Direct messages and Low priority. Which section a row goes in is Core's
+  `roomSectionPlacement` per row; the folders, their rooms and their Recent
+  and Name orders are `RoomListSnapshotDto.folders`
+  (`RoomListFolders` in `RoomListService.swift`). A filed room leaves Rooms,
+  its space group or Low priority; a filed low-priority room stays in its
+  folder, last, as Core orders it. A row filed in a folder the snapshot does
+  not list stays in its default section.
+- **Which folders show.** With no space selected, every folder, an empty one
+  as a single "No rooms" line. In a space, a folder shows with that space's
+  rooms only; a folder with none of them is hidden unless it holds no rooms
+  anywhere (so a new folder is visible, as on desktop). While a filter chip
+  other than All (Unread, Mentions, Agents) or a search is active, the chip
+  applies inside folders and a folder with no matching rows is hidden.
+- **Order.** Rooms in a folder follow the list's one sort (Recent →
+  `recentOrder`, Name → `nameOrder`).
+- **Header.** The shared `RoomListSectionHeader` (count, chevron), a
+  heading for VoiceOver. Collapse key `folder:<id>` in the same
+  `synara.roomListCollapsedSections` store. A collapsed section keeps its
+  unread rows and, on iPad's split view, the open conversation (this now
+  applies to every section). While collapsed the header shows the folder's
+  mentions as the red badge, otherwise a small unread dot, and its label reads
+  "Work, 2 mentions" or "Work, unread", then "Collapsed". The unread is
+  Core's rollup when the section lists every room of the folder, otherwise
+  the rows shown, using Core's `unreadRoomIds` for which rooms count.
+- **Managing folders.** The header's trailing ellipsis menu and a long press
+  on the header offer Rename, Move up, Move down (disabled at the ends) and
+  Delete folder, which asks first: "Delete the Work folder?" / "Its rooms go
+  back to Rooms. You stay in every room, and your other devices update too."
+  The title menu (spaces and sort) has New folder.
+- **Filing.** A room's long-press menu has Move to folder (not for DMs;
+  favorites included): every folder with a check on the current one, New
+  folder… (creates and files in one `roomFoldersCreate(name:roomId:)` call)
+  and, when filed, Remove from folder. No swipe action.
+- **Name sheet.** New folder and Rename share one sheet in the New room
+  sheet's style (Form, Cancel, Create or Save): one Name field, the save
+  disabled until the name has 1–64 characters after trimming, the length
+  rule shown once something invalid is typed, and a failed save's copy under
+  the field. An unchanged rename just closes.
+- **Errors.** Every failure shows Core's code as desktop's copy
+  (`RoomFolderError` in `RoomFoldersService.swift`): in the sheet for create
+  and rename, in an alert for move, delete and filing. Never silently.
+- **Read-only.** `readOnly` from `roomFoldersSnapshot()` (read when the list
+  appears, and from every command's result) hides every management action;
+  an `unsupported-version` failure turns it on too.
+- **Data flow.** `SharedCoreRoomListService` keeps the snapshot's folders
+  beside its rows (`roomFolderSections()`); the list reads them with every
+  delivered state, since a rename changes no row. Commands go through
+  `SharedCoreRoomFoldersService` (`AppEnvironment.roomFolders`), which
+  normalizes names and maps `RoomFoldersCommandError`; after a success the
+  list reloads at once, and Core's room-list signal follows.
+- **iPad.** The split view uses the same `RoomListView`.
+- **Tests.** `SynaraTests/RoomFoldersTests.swift` (sections, filters,
+  spaces, order, collapse, unread, copy, the service over a fake core) and
+  UI tests `testRoomFolder*` / `testReadOnlyRoomFolders…` on the mock list
+  (`SYNARA_UI_TEST_ROOM_FOLDERS=1`, `…_ROOM_FOLDERS_ERROR=<code>`,
+  `…_ROOM_FOLDERS_READ_ONLY=1`; `MockRoomFolderStore`). The mock builds its
+  folder sections with Core's free functions; the app reads Core's.
+
+## Not done here
+
+- Desktop UI (separate branch, `feat/room-folders-desktop`).
 - Room ids the store never learned about (rooms left long ago and forgotten)
   are kept until the user unfiles them; they are hidden from the list.
 - The room-notes projection in `image_packs_live.rs` is the same algorithm

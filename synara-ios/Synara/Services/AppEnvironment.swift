@@ -83,6 +83,8 @@ struct AppEnvironment {
     /// Slash commands, their suggestions and typed "@Name" mentions, run by Core.
     /// The default sends every text as typed.
     var composerCommands: ComposerCommandServicing = MockComposerCommandService()
+    /// User room folders (Rooms list sections), written through Core.
+    var roomFolders: RoomFoldersServicing = MockRoomFoldersService()
 
     @MainActor
     static func live() -> AppEnvironment {
@@ -195,7 +197,8 @@ struct AppEnvironment {
             outgoingSends: outgoingSends,
             draftSync: SharedCoreDraftSyncService(host: host),
             agentQuestions: SharedCoreAgentQuestionService(host: host),
-            composerCommands: SharedCoreComposerCommandService(host: host)
+            composerCommands: SharedCoreComposerCommandService(host: host),
+            roomFolders: SharedCoreRoomFoldersService(core: core)
         )
     }
 
@@ -234,7 +237,8 @@ struct AppEnvironment {
         connectionStatus: ConnectionStatusStore = ConnectionStatusStore(),
         outgoingSends: OutgoingSendCoordinator? = nil,
         agentQuestions: AgentQuestionAnswering = MockAgentQuestionService(),
-        composerCommands: ComposerCommandServicing = MockComposerCommandService()
+        composerCommands: ComposerCommandServicing = MockComposerCommandService(),
+        roomFolders: RoomFoldersServicing = MockRoomFoldersService()
     ) -> AppEnvironment {
         let resolvedOutgoingSends = outgoingSends ?? OutgoingSendCoordinator(
             messageSender: messageSender,
@@ -283,7 +287,8 @@ struct AppEnvironment {
             connectionStatus: connectionStatus,
             outgoingSends: resolvedOutgoingSends,
             agentQuestions: agentQuestions,
-            composerCommands: composerCommands
+            composerCommands: composerCommands,
+            roomFolders: roomFolders
         )
     }
 

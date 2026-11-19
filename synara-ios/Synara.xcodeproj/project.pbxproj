@@ -80,6 +80,7 @@
 		419B9F03148398DE4E43CC2E /* SynaraShared.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 3B92E44E64D8969D07AB3A4C /* SynaraShared.xcstrings */; };
 		41FC7B292DE64AD0C485C6E3 /* SynaraMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBE1E4A32C918309E6AA85A /* SynaraMotion.swift */; };
 		439E6C602CC55DF08520952C /* CryptoVerificationPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D151178FEAF6AA24CF435C4 /* CryptoVerificationPresentationTests.swift */; };
+		44A38F6C8CD0D13D4739274E /* RoomFolderNameSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C8DFFEDA36C0779E74A7208 /* RoomFolderNameSheet.swift */; };
 		45A81BBF0EAA6C9BB66F3BDC /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 90781FE90E75973DEAD27FA5 /* Localizable.xcstrings */; };
 		45DB0A08CF868FFA984A3B0D /* SecureSessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */; };
 		46D1B37442FA446C39C64390 /* SynaraMessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = A250FE1A7BB064F16F28C795 /* SynaraMessageBubble.swift */; };
@@ -129,6 +130,7 @@
 		7247DDD14FE03A17AEC96541 /* SessionCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26D5EAB60408E1F01AB36535 /* SessionCoordinatorTests.swift */; };
 		756628B89DF39EECC04469D7 /* SessionCryptoStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6111FDE94FF894CB640BD95 /* SessionCryptoStoreTests.swift */; };
 		76AE72648BA28AFF732BB8F6 /* RoomListServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */; };
+		76E92E3F3B29AC77E2AECAE1 /* RoomFoldersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 884CB98AD640943FF9448AED /* RoomFoldersTests.swift */; };
 		77BB9B4205AFA015039056CA /* SynaraNotificationDiagnosticReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B95960CDE57677680BDB4E /* SynaraNotificationDiagnosticReport.swift */; };
 		7AACA3CBB4EFEA0B37D140AC /* SynaraNseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9E884BD5BADA8458FC94D90D /* SynaraNseCore */; };
 		7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55BBDF32970A214C2829B1B /* AppRouteTests.swift */; };
@@ -189,6 +191,7 @@
 		B168772BB20CCA4CBEFEB88F /* SharedCoreRoomCreate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8748C7ACF87406A7CABAFF67 /* SharedCoreRoomCreate.swift */; };
 		B8885E152FFECEAEC09B77B1 /* SharedCoreLater.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1689B3F4DF0713A4E355BA4 /* SharedCoreLater.swift */; };
 		B9E323A9FA09B7910E6F11C3 /* SharedCoreTimelineMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8AFDF08C8140FD041C9DD20 /* SharedCoreTimelineMedia.swift */; };
+		BDFFC85039849544249548EA /* RoomFoldersService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B7D2DFFA066EA777FEE033 /* RoomFoldersService.swift */; };
 		BE33F8C817E797AB7182C4C0 /* SynaraDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E13415F14EC8A65D465380C /* SynaraDesign.swift */; };
 		BFD957777F3C28C1ED7C69AD /* MatrixLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBE437294BD93B48D7CDF75 /* MatrixLifecycleTests.swift */; };
 		C1B843F245435F156EA81AEB /* SharedCoreRoomListUpdates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03AC3AA739D0F212EB229563 /* SharedCoreRoomListUpdates.swift */; };
@@ -403,10 +406,12 @@
 		8499E60EE280EF350D65EF0C /* CryptoVerificationPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoVerificationPresentation.swift; sourceTree = "<group>"; };
 		85529BF4C0D8FDD7A8861FCF /* TimelineRedactConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineRedactConfirmation.swift; sourceTree = "<group>"; };
 		86A2688BEAABC5E3684A7C77 /* SynaraCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SynaraCore; path = SynaraCore; sourceTree = SOURCE_ROOT; };
+		86B7D2DFFA066EA777FEE033 /* RoomFoldersService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomFoldersService.swift; sourceTree = "<group>"; };
 		86F9C06B005B86F1C39DBB5A /* SharedCoreRecentEmoji.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRecentEmoji.swift; sourceTree = "<group>"; };
 		8748C7ACF87406A7CABAFF67 /* SharedCoreRoomCreate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomCreate.swift; sourceTree = "<group>"; };
 		8809AE831952D397FC6221F3 /* SynaraNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraNavigation.swift; sourceTree = "<group>"; };
 		880B4D02B76BBBD3B9CCDFD4 /* RoomMemberActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomMemberActionsTests.swift; sourceTree = "<group>"; };
+		884CB98AD640943FF9448AED /* RoomFoldersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomFoldersTests.swift; sourceTree = "<group>"; };
 		88D6CA89BB7B9529C53D2776 /* SharedCoreOwnerUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreOwnerUpdates.swift; sourceTree = "<group>"; };
 		8A4D48D89C01C70901919CAB /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		8A5CC96CDA94EE562BDBA416 /* Synara.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Synara.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -428,6 +433,7 @@
 		9975634D76234E39E607E3EF /* NotificationDeliveryCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationDeliveryCoordinatorTests.swift; sourceTree = "<group>"; };
 		9A3E2D83D3C17850385E7490 /* SelectableMessageTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableMessageTextView.swift; sourceTree = "<group>"; };
 		9C27D39453334A937CA94F37 /* ComposerAttributedMarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAttributedMarkdownTests.swift; sourceTree = "<group>"; };
+		9C8DFFEDA36C0779E74A7208 /* RoomFolderNameSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomFolderNameSheet.swift; sourceTree = "<group>"; };
 		9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraUITests.swift; sourceTree = "<group>"; };
 		9D8EFBA523C85F4A26D124B2 /* SynaraCanvasLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraCanvasLayout.swift; sourceTree = "<group>"; };
 		9DA6E8858D607B040754AF0E /* AgentActionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActionResolverTests.swift; sourceTree = "<group>"; };
@@ -602,6 +608,7 @@
 				92CBE5CC8CAB2C4CB79F2778 /* MentionProfile.swift */,
 				E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */,
 				AF6F2D9A62CF70F391CBB5D0 /* RichLinkEmbeds.swift */,
+				9C8DFFEDA36C0779E74A7208 /* RoomFolderNameSheet.swift */,
 				417DD4194803886BB803C6A6 /* RoomListView.swift */,
 				B42CD56983A15A5B633E1412 /* RoomMemberActions.swift */,
 				3B0EB5A7A2E6623F144D5280 /* RoomNotesView.swift */,
@@ -737,6 +744,7 @@
 				00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */,
 				A602AD446A2DD4C7C3A476ED /* PushService.swift */,
 				FB14C2D087E86B31DB4605B5 /* RemoteContent.swift */,
+				86B7D2DFFA066EA777FEE033 /* RoomFoldersService.swift */,
 				B6E7399D69CF6418A4206407 /* RoomListService.swift */,
 				064AE0CF5C5EA3F037120480 /* RoomNotesService.swift */,
 				A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */,
@@ -895,6 +903,7 @@
 				A1BA2F3A13CFE7CF46E4AFB9 /* OutgoingSendServiceTests.swift */,
 				4697063405B601DC0FE6F086 /* PerformanceFixtureTests.swift */,
 				40037D97F31F787EA20BD7AE /* PushServiceTests.swift */,
+				884CB98AD640943FF9448AED /* RoomFoldersTests.swift */,
 				0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */,
 				880B4D02B76BBBD3B9CCDFD4 /* RoomMemberActionsTests.swift */,
 				AA398093E16277847EDB79DB /* RoomReadMarkerServiceTests.swift */,
@@ -1139,6 +1148,7 @@
 				C711FD4FC94D9CC0EA73CCD7 /* OutgoingSendServiceTests.swift in Sources */,
 				195E1F1A887EF41A86A02A3A /* PerformanceFixtureTests.swift in Sources */,
 				88AAAD208C97C1A9EFF8AFE5 /* PushServiceTests.swift in Sources */,
+				76E92E3F3B29AC77E2AECAE1 /* RoomFoldersTests.swift in Sources */,
 				76AE72648BA28AFF732BB8F6 /* RoomListServiceTests.swift in Sources */,
 				E9498DFC9C30D4B0D09B41AA /* RoomMemberActionsTests.swift in Sources */,
 				9105AE3CB60343D07B999895 /* RoomReadMarkerServiceTests.swift in Sources */,
@@ -1224,6 +1234,8 @@
 				53A96EF2B937BE57AE02A15C /* PushService.swift in Sources */,
 				3C08B5352639BCAD47E518EB /* RemoteContent.swift in Sources */,
 				5F8723D8EBC44C1B6FA833B3 /* RichLinkEmbeds.swift in Sources */,
+				44A38F6C8CD0D13D4739274E /* RoomFolderNameSheet.swift in Sources */,
+				BDFFC85039849544249548EA /* RoomFoldersService.swift in Sources */,
 				A72441DA6F04ED38E6AFA5FD /* RoomListService.swift in Sources */,
 				2F7828F754C6D475F5E161B4 /* RoomListView.swift in Sources */,
 				6EB6E0D52F1BFEC86225456D /* RoomMemberActions.swift in Sources */,

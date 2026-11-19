@@ -917,7 +917,17 @@ private extension AppEnvironment {
             timeline = MockTimelineService()
         }
 
-        let roomList = processEnvironment["SYNARA_UI_TEST_FAVORITES"] == "1"
+        // Room folders over the small fixture. `..._ROOM_FOLDERS_ERROR` (a
+        // Core error id without its prefix) fails every create and rename.
+        let folderStore: MockRoomFolderStore? = processEnvironment["SYNARA_UI_TEST_ROOM_FOLDERS"] == "1"
+            ? MockRoomFolderStore.uiTestFixture(
+                nameFailureCode: processEnvironment["SYNARA_UI_TEST_ROOM_FOLDERS_ERROR"].map { "v-room-folders.\($0)" },
+                readOnly: processEnvironment["SYNARA_UI_TEST_ROOM_FOLDERS_READ_ONLY"] == "1"
+            )
+            : nil
+        let roomList = folderStore != nil
+            ? MockRoomListService(folderStore: folderStore)
+            : processEnvironment["SYNARA_UI_TEST_FAVORITES"] == "1"
             ? MockRoomListService(state: .loaded([
                 RoomSummary(id: "!project:matrix.org", name: "Product", lastMessagePreview: "Fixture message",
                     unreadCount: 1, hasHighlight: false, kind: .room, membership: .joined,
@@ -1035,7 +1045,8 @@ private extension AppEnvironment {
             settings: uiTestSettings(processEnvironment),
             composerCommands: processEnvironment["SYNARA_UI_TEST_COMPOSER_COMMANDS"] == "1"
                 ? MockComposerCommandService.uiTestFixture()
-                : MockComposerCommandService()
+                : MockComposerCommandService(),
+            roomFolders: MockRoomFoldersService(store: folderStore ?? MockRoomFolderStore())
         )
     }
 

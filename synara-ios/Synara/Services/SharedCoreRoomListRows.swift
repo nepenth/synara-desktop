@@ -53,6 +53,8 @@ enum SharedCoreRoomListRows {
     var notificationMode: String? = nil
     /// Unread events that notify under the room's push rules.
     var notificationCount: Int = 0
+    /// Core's room-folder membership (`RoomListRoomDto.folderId`).
+    var folderId: String? = nil
     }
 
     struct InviteRow {
@@ -113,7 +115,9 @@ enum SharedCoreRoomListRows {
                 directUserId: room.directUserId,
                 encryptionStatus: room.encryptionStatus,
                 notificationMode: SharedCoreRoomDetails.notificationMode(room.notificationMode),
-                unreadNotificationCount: room.notificationCount
+                unreadNotificationCount: room.notificationCount,
+                folderID: room.folderId,
+                highlightCount: room.highlightCount
             )
         }
         let inviteRows = invites
