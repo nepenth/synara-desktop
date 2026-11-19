@@ -1,5 +1,5 @@
 // Production presenters and composer layout/styles with fixture data and preview actions.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { decideAgentApprovalWithNativeOwner } from '../../src/app/features/room/nativeReactionOwner';
@@ -26,7 +26,8 @@ import {
 import { ApprovalsView } from '../../src/app/features/approvals/Approvals';
 import type { ApprovalInboxItem } from '../../src/app/features/approvals/nativeApprovalInbox';
 import { ApprovalsBarItem } from '../../src/app/features/nav-pane/NavBottomBar';
-import { useEditor } from '../../src/app/components/editor/Editor';
+import type { Editor } from 'slate';
+import { Transforms } from 'slate';
 import {
   createEmoticonElement,
   createMentionElement,
@@ -49,6 +50,8 @@ import {
 } from '../../src/app/components/editor/input';
 import { Toolbar } from '../../src/app/components/editor/Toolbar';
 import { RoomComposer } from '../../src/app/features/room/RoomComposer';
+import { ComposerSafetyNet } from '../../src/app/features/room/ComposerSafetyNet';
+import type { ComposerRestore } from '../../src/app/features/room/composerSafetyNetPolicy';
 import * as composerCss from '../../src/app/features/room/RoomComposer.css';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -81,6 +84,9 @@ let sessionGeneration = 1;
 let finishDecision: (() => void) | undefined;
 let lastDiscoveryActive = false;
 let holdReadback = false;
+// What the composer safety net logged to the desktop log.
+const composerLog: string[] = [];
+Object.assign(window, { synaraComposerLog: composerLog });
 const makeItem = (
   age: number,
   room = 'book',
@@ -150,6 +156,10 @@ Object.assign(window, {
         };
       }
       if (command === 'desktop_spellcheck_enable') return true;
+      if (command === 'desktop_append_log') {
+        composerLog.push(String(args?.message));
+        return undefined;
+      }
       throw new Error(`Unexpected fixture command: ${command}`);
     },
   },
@@ -164,10 +174,46 @@ document.body.classList.add(
 document.body.style.background = color.Background.Container;
 document.body.style.color = color.Background.OnContainer;
 
-function ComposerPreview() {
-  const editor = useEditor();
+// Specs make the composer throw while it renders, as a Slate node with no DOM
+// does, to drive the safety net: `synaraComposerFail()` fails this mount, and
+// `{ alsoNext: true }` the remount after it too (a draft that throws again).
+const failingGenerations = new Set<number>();
+function ComposerFailureProbe({ generation }: { generation: number }) {
+  const [, rerender] = useState(0);
+  useEffect(() => {
+    Object.assign(window, {
+      synaraComposerFail: (options?: { alsoNext?: boolean }) => {
+        failingGenerations.add(generation);
+        if (options?.alsoNext) failingGenerations.add(generation + 1);
+        rerender((value) => value + 1);
+      },
+    });
+  }, [generation]);
+  if (failingGenerations.has(generation)) {
+    throw new Error('Cannot resolve a DOM node from Slate node: {"text":"draft words"}');
+  }
+  return null;
+}
+
+function ComposerPreview({
+  editor,
+  restore,
+  generation,
+  title = true,
+}: {
+  editor: Editor;
+  restore?: ComposerRestore;
+  generation: number;
+  title?: boolean;
+}) {
   // Browser specs drive and inspect the Slate document through this handle.
   Object.assign(window, { synaraComposerEditor: editor });
+  // The harness keeps no stored draft: a remount starts from what the safety net held.
+  useEffect(() => {
+    if (restore && restore.nodes.length > 0) Transforms.insertFragment(editor, restore.nodes);
+    // Once per mount, as RoomInput restores its draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
   const [toolbar, setToolbar] = useState(query.has('toolbar'));
   // The production emoji board, wired as RoomInput wires it.
   const [emojiBoardOpen, setEmojiBoardOpen] = useState(false);
@@ -201,7 +247,8 @@ function ComposerPreview() {
   };
   return (
     <>
-      <Text size="H5">Composer preview</Text>
+      {title && <Text size="H5">Composer preview</Text>}
+      <ComposerFailureProbe generation={generation} />
       <div data-testid="composer" style={{ marginTop: 16 }}>
         {mentionQuery && (
           <AutocompleteMenu
@@ -446,7 +493,13 @@ function Fixture() {
   if (query.has('composer'))
     return (
       <main style={{ maxWidth: 1080, margin: '64px auto', padding: '0 24px' }}>
-        <ComposerPreview />
+        <Text size="H5">Composer preview</Text>
+        <ComposerSafetyNet
+          surface="room"
+          recoveryWindowMs={Number(query.get('recoveryWindow')) || undefined}
+        >
+          {(session) => <ComposerPreview {...session} title={false} />}
+        </ComposerSafetyNet>
         <p style={{ marginTop: 20, fontSize: 14, opacity: 0.7 }}>
           Type a draft or toggle formatting to review the feel. This preview does not send messages.
         </p>
@@ -608,7 +661,9 @@ function Fixture() {
             </p>
           )}
           <div style={{ padding: 24 }}>
-            <ComposerPreview />
+            <ComposerSafetyNet surface="room">
+              {(session) => <ComposerPreview {...session} />}
+            </ComposerSafetyNet>
           </div>
         </main>
       </div>

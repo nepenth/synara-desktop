@@ -148,6 +148,7 @@ import { draftSlotFor } from './nativeDraftSync';
 import { createCoalescingScheduler } from './coalescingScheduler';
 import { BEFORE_QUIT_EVENT } from '../../utils/beforeQuit';
 import { createComposerDraftPersistence, type DraftTarget } from './composerDraftPersistence';
+import type { ComposerRestore } from './composerSafetyNetPolicy';
 import {
   DEFAULT_POLL_SELECTIONS,
   MAX_POLL_SELECTIONS,
@@ -258,10 +259,41 @@ interface RoomInputProps {
    * Without it the composer follows the room's open thread view.
    */
   threadRootOverride?: string;
+  /**
+   * Set when the composer safety net remounts this composer after an error:
+   * the draft to start with, in place of the stored one. `empty` (Start
+   * fresh) erases the stored draft the way erasing the text does.
+   */
+  restore?: ComposerRestore;
 }
+
+/** The local draft key: the room, or `room#thread:root` for a thread pane. */
+export const roomInputDraftKey = (roomId: string, threadRootOverride?: string): string =>
+  threadRootOverride ? `${roomId}#thread:${threadRootOverride}` : roomId;
+
+/**
+ * The safety net's draft keeper for one room composer: writes the draft it
+ * holds where RoomInput reads it on mount (the draft atom and localStorage).
+ */
+export const useKeepRoomInputDraft = (roomId: string, threadRootOverride?: string) => {
+  const store = useStore();
+  const draftKey = roomInputDraftKey(roomId, threadRootOverride);
+  return useCallback(
+    (restore: ComposerRestore) => {
+      if (restore.mode === 'empty') return;
+      saveRoomDraft(window.localStorage, getSafeMyUserId(), draftKey, restore.nodes);
+      store.set(
+        roomIdToMsgDraftAtomFamily(draftKey),
+        JSON.parse(JSON.stringify(restore.nodes)) as Descendant[]
+      );
+    },
+    [draftKey, store]
+  );
+};
+
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-  ({ editor, roomId, room, threadRootOverride }, ref) => {
-    const draftKey = threadRootOverride ? `${roomId}#thread:${threadRootOverride}` : roomId;
+  ({ editor, roomId, room, threadRootOverride, restore }, ref) => {
+    const draftKey = roomInputDraftKey(roomId, threadRootOverride);
     const clientConfig = useClientConfig();
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
     const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
@@ -693,7 +725,25 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       };
     }, [draftKey]);
 
+    // A safety-net remount brings the draft it held, for this draft only.
+    const restoreRef = useRef(restore ? { draftKey, restore } : undefined);
+    const restoredKeyRef = useRef<string | undefined>(undefined);
     useEffect(() => {
+      const override = restoreRef.current;
+      if (override) {
+        restoreRef.current = undefined;
+        if (override.draftKey === draftKey) {
+          restoredKeyRef.current = draftKey;
+          if (override.restore.nodes.length > 0) {
+            Transforms.insertFragment(editor, override.restore.nodes);
+          }
+          return;
+        }
+      }
+      // The failed composer's cleanup stores the same draft as it closes;
+      // it is already in the editor.
+      if (restoredKeyRef.current === draftKey) return;
+      restoredKeyRef.current = undefined;
       const storedDraft = loadRoomDraft(window.localStorage, getSafeMyUserId(), draftKey);
       const draft = msgDraft.length > 0 ? msgDraft : storedDraft;
       // A blank draft (an empty list older builds kept) is dropped rather than
@@ -725,6 +775,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         }),
       []
     );
+    // Start fresh after a composer failure: the stored and synced draft are
+    // cleared the way erasing the text clears them.
+    const startFreshRef = useRef(restore?.mode === 'empty');
+    useEffect(() => {
+      if (!startFreshRef.current) return;
+      startFreshRef.current = false;
+      syncedDraft.noteChange();
+      draftPersistence.change({ draftKey, roomId, slot: draftSlot }, undefined);
+      setMsgDraft([]);
+      // Once, for the draft this composer opened with.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     useEffect(() => {
       const flush = () => draftPersistence.flush();
       const onVisibility = () => {
