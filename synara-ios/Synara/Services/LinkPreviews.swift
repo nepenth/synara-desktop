@@ -4,8 +4,8 @@ import Network
 import SynaraCore
 import UIKit
 
-/// Which link of a message gets a preview card (Settings → GIFs & Link
-/// Previews → Link previews), with desktop's rules: only the first link, and
+/// Which link of a message gets a preview card (Settings › Media & links ›
+/// Link previews), with desktop's rules: only the first link, and
 /// none when the setting is off, for media, agent cards and approvals, or
 /// when the message already shows an inline GIF or an X post.
 enum LinkPreviewPolicy {

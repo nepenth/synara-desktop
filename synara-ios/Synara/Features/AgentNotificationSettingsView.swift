@@ -91,6 +91,7 @@ struct AgentNotificationSettingsView: View {
                             }
                             .accessibilityLabel("Remove \(id)")
                         }
+                        .accessibilityIdentifier("AgentNotificationAgent-\(id)")
                     }
                     if preferences.agentUserIDs.isEmpty {
                         Text("No agents selected. All message categories continue to notify.")
@@ -103,11 +104,12 @@ struct AgentNotificationSettingsView: View {
                         .onSubmit(addAgent)
                         .accessibilityLabel("Agent Matrix user ID")
                         .accessibilityIdentifier("AgentNotificationUserIDField")
-                    Button("Add Agent", action: addAgent)
+                    Button("Add agent", action: addAgent)
                         .disabled(agentID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityIdentifier("AgentNotificationAddButton")
                 }
             } header: {
-                Text("Agent Accounts")
+                Text("Agent accounts")
             } footer: {
                 Text("Add each agent’s full Matrix ID. Once you add one, only listed agents can send urgent approval alerts, even in muted rooms. With none listed, approval alerts follow each room’s notification settings.")
             }
@@ -121,7 +123,7 @@ struct AgentNotificationSettingsView: View {
                     Toggle("Notify for final responses", isOn: preference(\.notifyFinalResponses))
                         .accessibilityIdentifier("AgentNotifyFinalResponsesToggle")
                 } header: {
-                    Text("Message Categories")
+                    Text("Message categories")
                 } footer: {
                     Text("Messages that start with 🛠 Tool activity or 💬 Commentary count as those categories. Other messages from these agents count as final responses. Approval requests can still send urgent alerts, and every message stays in the conversation.")
                 }
@@ -136,7 +138,7 @@ struct AgentNotificationSettingsView: View {
                     }
                     .accessibilityElement(children: .combine)
                 }
-                Button("Refresh Settings") {
+                Button("Refresh settings") {
                     Task { await refresh() }
                 }
                 .disabled(editor.isSaving || editor.isLoading)
@@ -154,7 +156,7 @@ struct AgentNotificationSettingsView: View {
                 Text("Changes save to your account as you make them. Some encrypted alerts may still show as generic activity, even with previews hidden.")
             }
         }
-        .navigationTitle("Agent Notifications")
+        .navigationTitle("Agent notifications")
         .synaraSettingsChrome()
         .accessibilityIdentifier("AgentNotificationSettingsScreen")
         .task {

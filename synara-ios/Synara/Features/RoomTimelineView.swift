@@ -8324,7 +8324,7 @@ private struct TimelineRow: View {
     }
 
     /// A plain message that is nothing but a Klipy or GIPHY link plays as
-    /// the GIF (Settings → Play GIF Links Inline), as on desktop.
+    /// the GIF (Settings › Media & links › Play GIF links inline), as on desktop.
     private var inlineGif: InlineGifLink? {
         guard case let .text(body) = item.kind,
               environment.settings.bool(for: RichLinkSettings.inlineGifLinksKey),
@@ -8336,7 +8336,7 @@ private struct TimelineRow: View {
         return link
     }
 
-    /// The message's first link, when it is an X post (Settings → Show X Posts).
+    /// The message's first link, when it is an X post (Settings › Media & links › Show X posts).
     private var xPostLink: String? {
         let body: String
         switch item.kind {
