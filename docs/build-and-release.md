@@ -331,21 +331,50 @@ so the app is built with the iOS 27 SDK. That image is a public preview on
 GitHub; if a job fails on the runner itself, check the image's announcements
 before the code. The deployment target stays iOS 16.
 
-The simulator test jobs set `IOS_SIMULATOR_RUNTIME=27.2`: `synara-ios/scripts/ci-build.sh`
-then creates a fresh iPhone 17 on exactly that runtime with
-`synara-ios/scripts/ci-simulator.sh boot`, waits for `simctl bootstatus`, and
-tests on its UDID, rather than on whichever "iPhone 17" xcodebuild picks by
-name. The unit suite runs on that one device without parallel clones. Each job
-first runs `ci-simulator.sh settle`, which starts CoreSimulator and waits for
-the runtimes to be mounted: on this image `simdiskimaged` can unmount a runtime
-soon after CoreSimulator starts
+The simulator test jobs set `IOS_SIMULATOR_RUNTIME=27.2` and
+`IOS_SIMULATOR_DEVICE=iPhone 17`. Their first step after checkout,
+`synara-ios/scripts/ci-simulator.sh boot`, waits for the runtimes to be mounted,
+picks the 27.2 runtime that runs an iPhone 17 (the image also has an iPhone
+Duo-only 27.2 runtime), creates a fresh device, and waits for
+`simctl bootstatus`. `ci-build.sh` then checks the device is still booted, its
+runtime still mounted and answering, and tests on its UDID instead of whichever
+"iPhone 17" xcodebuild picks by name. The unit suite runs on that one device
+without parallel clones. On this image `simdiskimaged` can unmount a runtime
+after CoreSimulator starts
 ([runner-images#14946](https://github.com/actions/runner-images/issues/14946),
 [#15334](https://github.com/actions/runner-images/issues/15334)), which showed
 up as "The iOS 27.2 simulator runtime is not available" and as clones that never
-answered. A failed test step prints the runtime state and the `simdiskimaged`
-log. The App Store requirement is the SDK the app is built with, not the
-simulator OS, so if 27.2 stays unreliable on the image, `IOS_SIMULATOR_RUNTIME`
-can drop to 27.0 while the build keeps the iOS 27.2 SDK.
+answered. A failed boot, check or test step prints the runtime state and the
+`simdiskimaged` log. The App Store requirement is the SDK the app is built
+with, not the simulator OS, so if 27.2 stays unreliable on the image,
+`IOS_SIMULATOR_RUNTIME` can drop to 27.0 while the build keeps the iOS 27.2 SDK.
+
+**Iterating on iOS CI quickly.** Each loop below is cheaper than a full run:
+
+- *The image, its runtimes or `ci-simulator.sh`:* the **iOS simulator smoke**
+  workflow (`.github/workflows/ios-simulator-smoke.yml`) boots the test device
+  and launches Settings in it in about three minutes, with no Rust and no
+  xcodebuild. Run it with
+  `gh workflow run ios-simulator-smoke.yml --ref <branch> -f runtime=27.0`
+  (inputs: `xcode`, `runtime`, `device`); a pull request that changes the
+  script or the workflow runs it by itself.
+- *A runtime problem in the real jobs* now fails in their first minutes, in the
+  "Boot iOS test simulator" step, before the Rust and Swift builds.
+- *Cold builds:* compiler caches are keyed by toolchain, so a new Xcode starts
+  with no snapshot and the first run builds everything, about 30 minutes for
+  the Apple Rust slice. A pull request whose `iOS simulator tests` job finds no
+  Rust or Xcode compiler snapshot for its toolchain saves one after building,
+  pass or fail (`seed-pull-request` in `setup-rust-cache`, `save-xcode-cache`).
+  GitHub scopes it to that pull request, so only its own later runs use it and
+  main's snapshots are untouched. The Rust snapshot is about 0.7 to 1.2 GB and
+  the Xcode one is under 512 MiB, inside the repository's 10 GB cache limit,
+  where GitHub evicts the least recently used entries first. Pull requests that
+  find main's snapshot only read it, as before.
+- *One failing test class:* dispatch CI with the `ios_only_testing` input, e.g.
+  `gh workflow run ci.yml --ref <branch> -f ios_only_testing=SynaraTests/TimelinePolishTests`.
+  It runs only the iOS simulator job(s) whose target the list names (comma-separated
+  `Target[/Class[/test]]`), passes `-only-testing` through `ci-build.sh`
+  (`IOS_ONLY_TESTING`), and records no reusable proof for the pull request.
 
 The simulator and compile jobs install XcodeGen 2.46.0 from its GitHub release
 with a pinned SHA-256 (`.github/actions/install-xcodegen`), because Homebrew

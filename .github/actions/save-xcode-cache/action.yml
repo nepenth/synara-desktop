@@ -1,5 +1,8 @@
 name: Save bounded native Xcode compilation cache
-description: Only main publishes a successful, nonempty compiler CAS snapshot of at most 512 MiB.
+description: >-
+  Main publishes a successful, nonempty compiler CAS snapshot of at most 512 MiB.
+  A pull request that found no snapshot for its toolchain saves one too,
+  scoped to that pull request.
 inputs:
   cache-key:
     description: Weekly immutable compiler cache snapshot key
@@ -10,6 +13,9 @@ inputs:
   cache-hit:
     description: Exact weekly cache hit from setup-xcode-cache
     required: true
+  restored-key:
+    description: Snapshot restored by setup-xcode-cache, exact or by prefix; empty when none existed
+    default: ""
 runs:
   using: composite
   steps:
@@ -20,6 +26,8 @@ runs:
         CACHE_PATH: ${{ inputs.cache-path }}
         CACHE_KEY: ${{ inputs.cache-key }}
         CACHE_HIT: ${{ inputs.cache-hit }}
+        RESTORED_KEY: ${{ inputs.restored-key }}
+        EVENT_NAME: ${{ github.event_name }}
       run: |
         expected_path="$GITHUB_WORKSPACE/.xcode-cache/CompilationCache.noindex"
         if [[ "$CACHE_PATH" != "$expected_path" || -L "$CACHE_PATH" ]]; then
@@ -31,7 +39,7 @@ runs:
           size_kib="$(du -sk "$CACHE_PATH" | awk '{print $1}')"
         fi
         publish=false
-        if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+        if [[ "$GITHUB_REF" != refs/heads/main && ( "${EVENT_NAME:-}" != pull_request || -n "${RESTORED_KEY:-}" ) ]]; then
           reason="Branch and tag builds only read compiler snapshots."
         elif [[ "$CACHE_HIT" == true ]]; then
           reason="This week's immutable snapshot already exists."
@@ -39,6 +47,9 @@ runs:
           reason="No compiler objects were produced."
         elif (( size_kib > 524288 )); then
           reason="Compiler cache exceeds the 512 MiB publication budget; skipping upload."
+        elif [[ "$GITHUB_REF" != refs/heads/main ]]; then
+          publish=true
+          reason="No snapshot exists for this toolchain; seeding one scoped to this pull request."
         else
           publish=true
           reason="Publishing this week's bounded compiler snapshot from main."
@@ -50,7 +61,7 @@ runs:
           echo "$reason"
         } >> "$GITHUB_STEP_SUMMARY"
     - name: Save compiler objects from main
-      if: github.ref == 'refs/heads/main' && steps.budget.outputs.publish == 'true'
+      if: steps.budget.outputs.publish == 'true'
       uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
       with:
         path: ${{ inputs.cache-path }}

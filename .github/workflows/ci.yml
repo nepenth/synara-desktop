@@ -34,6 +34,13 @@ on:
         description: Also build Linux/Arch/macOS packages and seed the release caches
         type: boolean
         default: false
+      ios_only_testing:
+        description: >-
+          Run only these iOS tests and no other job, e.g.
+          SynaraTests/TimelinePolishTests,SynaraUITests/ComposerUITests (comma-separated
+          Target[/Class[/test]]). Empty runs the full suite.
+        type: string
+        default: ""
 
 # One lane per event and ref: a push to main never cancels the nightly run,
 # and a newer push to a PR cancels only that PR's previous run.
@@ -87,6 +94,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           PACKAGES_INPUT: ${{ inputs.packages }}
+          IOS_ONLY_TESTING_INPUT: ${{ inputs.ios_only_testing }}
           IOS_PROOF_LOOKUP: "1"
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci-scopes.sh
@@ -418,6 +426,10 @@ jobs:
     runs-on: xcode-27
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      # A fresh iPhone 17 on the iOS 27.2 runtime, the newest the image lists
+      # for Xcode 27.2 (docs/build-and-release.md).
+      IOS_SIMULATOR_RUNTIME: "27.2"
+      IOS_SIMULATOR_DEVICE: iPhone 17
     # Default: arm64 simulator + unit tests. Manual all-slice/device opt-ins
     # compile the full Apple graph and unsigned device Release NSE here.
     timeout-minutes: 120
@@ -425,11 +437,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The Xcode 27 image can unmount a simulator runtime shortly after
-      # CoreSimulator first starts (synara-ios/scripts/ci-simulator.sh). Start
-      # it now so that happens during the Rust build, and log what the image has.
-      - name: Settle iOS simulator runtimes
-        run: synara-ios/scripts/ci-simulator.sh settle || echo "::warning::iOS simulator runtimes did not settle; the test step boots and checks its own runtime"
+      # Boot the exact test device before anything expensive, so a runtime
+      # problem on the image fails in the first minutes with diagnostics, not
+      # after the build (synara-ios/scripts/ci-simulator.sh). ci-build.sh checks
+      # it is still booted and mounted right before testing on it.
+      - name: Boot iOS test simulator
+        run: |
+          udid="$(synara-ios/scripts/ci-simulator.sh boot "$IOS_SIMULATOR_RUNTIME" "$IOS_SIMULATOR_DEVICE")"
+          echo "IOS_SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
 
       - name: Install Rust 1.96 and Apple targets
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
@@ -439,10 +454,12 @@ jobs:
           targets: ${{ github.event_name == 'workflow_dispatch' && (inputs.apple_slices == 'all' || inputs.check_ios_device_release) && 'aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin' || 'aarch64-apple-ios-sim' }}
 
       - name: Cache Apple SynaraCore Rust compilation
+        id: rust_cache
         uses: ./.github/actions/setup-rust-cache
         with:
           family: ci-synara-core-apple-simulator-arm64
           save-cache: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || (inputs.apple_slices != 'all' && !inputs.check_ios_device_release)) }}
+          seed-pull-request: "true"
 
       - name: Install XcodeGen
         uses: ./.github/actions/install-xcodegen
@@ -464,30 +481,43 @@ jobs:
           RUN_IOS_TESTS: "1"
           IOS_TEST_SUITE: unit
           IOS_TEST_RETRY_ON_FAILURE: "1"
-          # One fresh, booted iPhone 17 on the iOS 27.2 runtime (the newest the
-          # image lists for Xcode 27.2), serially: parallel testing boots extra
+          # Serially on the one booted device: parallel testing boots extra
           # clones, which timed out on the preview image and add nothing to a
           # suite that runs in seconds.
-          IOS_SIMULATOR_RUNTIME: "27.2"
           IOS_PARALLEL_TESTING: "NO"
+          IOS_ONLY_TESTING: ${{ inputs.ios_only_testing }}
           SYNARA_CORE_APPLE_SLICES: ${{ github.event_name == 'workflow_dispatch' && (inputs.apple_slices == 'all' || inputs.check_ios_device_release) && 'all' || 'simulator-arm64' }}
           CHECK_IOS_DEVICE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.check_ios_device_release && '1' || '0' }}
 
+      # A pull request that found no Rust compiler snapshot for this toolchain
+      # saves its own once it has built, pass or fail, so its next run is warm
+      # (setup-rust-cache seed-pull-request). The Kache daemon is idle here.
+      - name: Seed this pull request's Rust compiler cache
+        if: ${{ !cancelled() && steps.rust_cache.outputs.seed-key != '' }}
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ github.workspace }}/.kache-cache
+          key: ${{ steps.rust_cache.outputs.seed-key }}
+
       # The step name carries the hash of every input this job read
       # (scripts/ios-test-inputs.mjs). A later run of the same pull request with
-      # the same hash skips this job (scripts/reuse-proven-ios-tests.mjs).
+      # the same hash skips this job (scripts/reuse-proven-ios-tests.mjs). A
+      # run limited to chosen tests proves nothing about the rest.
       - name: Record proven iOS inputs ${{ needs.changes.outputs.ios_inputs_hash }}
+        if: inputs.ios_only_testing == ''
         env:
           IOS_INPUTS_HASH: ${{ needs.changes.outputs.ios_inputs_hash }}
         run: node scripts/ios-test-inputs.mjs verify "$IOS_INPUTS_HASH"
 
-      - name: Publish bounded Xcode compiler cache from main
-        if: github.ref == 'refs/heads/main'
+      # Main publishes; a pull request seeds its own when none exists yet.
+      - name: Publish bounded Xcode compiler cache
+        if: ${{ (github.ref == 'refs/heads/main' && success()) || (github.event_name == 'pull_request' && !cancelled()) }}
         uses: ./.github/actions/save-xcode-cache
         with:
           cache-key: ${{ steps.xcode_cache.outputs.cache-key }}
           cache-path: ${{ steps.xcode_cache.outputs.cache-path }}
           cache-hit: ${{ steps.xcode_cache.outputs.cache-hit }}
+          restored-key: ${{ steps.xcode_cache.outputs.restored-key }}
 
       - name: Upload iOS result bundles
         if: always()
@@ -505,16 +535,21 @@ jobs:
     runs-on: xcode-27
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      IOS_SIMULATOR_RUNTIME: "27.2"
+      IOS_SIMULATOR_DEVICE: iPhone 17
     timeout-minutes: 75
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The Xcode 27 image can unmount a simulator runtime shortly after
-      # CoreSimulator first starts (synara-ios/scripts/ci-simulator.sh). Start
-      # it now so that happens during the Rust build, and log what the image has.
-      - name: Settle iOS simulator runtimes
-        run: synara-ios/scripts/ci-simulator.sh settle || echo "::warning::iOS simulator runtimes did not settle; the test step boots and checks its own runtime"
+      # Boot the exact test device before anything expensive, so a runtime
+      # problem on the image fails in the first minutes with diagnostics, not
+      # after the build (synara-ios/scripts/ci-simulator.sh). ci-build.sh checks
+      # it is still booted and mounted right before testing on it.
+      - name: Boot iOS test simulator
+        run: |
+          udid="$(synara-ios/scripts/ci-simulator.sh boot "$IOS_SIMULATOR_RUNTIME" "$IOS_SIMULATOR_DEVICE")"
+          echo "IOS_SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
 
       - name: Install Rust 1.96 and Apple targets
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
@@ -549,7 +584,7 @@ jobs:
           RUN_IOS_TESTS: "1"
           IOS_TEST_SUITE: ui
           IOS_TEST_RETRY_ON_FAILURE: "1"
-          IOS_SIMULATOR_RUNTIME: "27.2"
+          IOS_ONLY_TESTING: ${{ inputs.ios_only_testing }}
           SYNARA_CORE_APPLE_SLICES: simulator-arm64
 
       - name: Upload iOS UI result bundles

@@ -1,26 +1,41 @@
 #!/usr/bin/env bash
-# Simulator setup for the iOS CI test jobs.
+# Simulator setup for the iOS CI test jobs and the simulator smoke workflow.
 #
 #   ci-simulator.sh settle
 #       Start CoreSimulator and wait until every usable iOS runtime is Ready and
 #       its volume is mounted, then print runtimes, device types and devices.
 #   ci-simulator.sh boot <iOS version> <device type name>
-#       Create a fresh device on exactly that runtime, boot it, wait until it has
-#       finished booting, and print its UDID (the only line on stdout).
+#       Settle, pick the runtime of that version that runs that device type,
+#       create a fresh device on it, boot it, wait until it has finished
+#       booting, and print its UDID (the only line on stdout).
+#   ci-simulator.sh check <udid>
+#       Fail unless that device is still booted, its runtime is still mounted
+#       and it answers a command. Run right before xcodebuild.
+#   ci-simulator.sh smoke <udid>
+#       Prove the device works without building anything: run launchctl in it
+#       and launch the built-in Settings app.
+#   ci-simulator.sh remove <udid>
+#       Shut the device down and delete it.
 #   ci-simulator.sh diagnose
 #       Print runtime state and the simdiskimaged/cryptexd log after a failure.
 #
 # Why: on the Xcode 27 runner image, simdiskimaged tidies up duplicate runtime
-# registrations shortly after CoreSimulator first starts, and can unmount the
-# volume a booted simulator runs from (actions/runner-images#14946, #15334;
-# Apple lists it as a known issue in the Xcode 27.3 release notes, 191574717).
-# Settling at the start of the job lets that happen during the Rust build, not
-# under a booted simulator; booting an explicit runtime and waiting for it means
-# a missing or broken runtime fails here with a clear message, not as
-# "runtime path not found" inside xcodebuild.
+# registrations after CoreSimulator starts, and can unmount the volume a booted
+# simulator runs from (actions/runner-images#14946, #15334; Apple lists it as a
+# known issue in the Xcode 27.3 release notes, 191574717). The CI jobs boot
+# their device first, before any build, so a missing or broken runtime fails in
+# the first minutes with this script's diagnostics, and check it again right
+# before testing.
 set -euo pipefail
 
 log() { echo "ci-simulator: $*" >&2; }
+
+# Run a command with a time limit; macOS has no timeout(1).
+with_timeout() {
+  local seconds="$1"
+  shift
+  perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$seconds" "$@"
+}
 
 runtime_report() {
   xcrun simctl runtime list -j | python3 -I -c '
@@ -35,7 +50,7 @@ for e in sorted(ios, key=lambda e: e.get("version", "")):
     usable = not state.startswith("Unusable")
     if usable and not (state == "Ready" and mounted):
         pending += 1
-    version, build, ident = e.get("version"), e.get("build"), e.get("identifier", "")
+    version, build, ident = e.get("version"), e.get("build"), e.get("runtimeIdentifier", "")
     print(f"  iOS {version} ({build}) state={state} mounted={mounted} {ident}", file=sys.stderr)
 if not ios:
     print("  no iOS simulator runtimes registered", file=sys.stderr)
@@ -81,7 +96,7 @@ for r in json.load(sys.stdin)["runtimes"]:
         print(r["identifier"]); break
 ' "$version" "$device_type_name")"
   if [[ -z "$runtime_id" ]]; then
-    log "no available iOS $version simulator runtime for $device_type_name with $(xcodebuild -version | head -1)"
+    log "no available iOS $version simulator runtime runs '$device_type_name' with $(xcodebuild -version | head -1)"
     diagnose
     return 1
   fi
@@ -97,16 +112,70 @@ for d in json.load(sys.stdin)["devicetypes"]:
     return 1
   fi
   local udid
-  udid="$(xcrun simctl create "Synara CI $device_type_name" "$device_type_id" "$runtime_id")"
+  if ! udid="$(xcrun simctl create "Synara CI $device_type_name" "$device_type_id" "$runtime_id")"; then
+    log "could not create '$device_type_name' on $runtime_id"
+    diagnose
+    return 1
+  fi
   log "booting $device_type_name on $runtime_id ($udid)"
   local started=$SECONDS
-  if ! xcrun simctl bootstatus "$udid" -b >&2; then
+  if ! with_timeout "${CI_SIMULATOR_BOOT_SECONDS:-600}" xcrun simctl bootstatus "$udid" -b >&2; then
     log "simulator $udid did not finish booting"
     diagnose
     return 1
   fi
   log "booted in $((SECONDS - started)) s"
   echo "$udid"
+}
+
+check() {
+  local udid="$1" problem runtimes
+  runtimes="$(mktemp "${TMPDIR:-/tmp}/ci-simulator-runtimes.XXXXXX")"
+  xcrun simctl runtime list -j > "$runtimes"
+  problem="$(xcrun simctl list devices -j | python3 -I -c '
+import json, os, sys
+udid, runtimes_path = sys.argv[1], sys.argv[2]
+devices = json.load(sys.stdin)["devices"]
+found = [(runtime, d) for runtime, ds in devices.items() for d in ds if d.get("udid") == udid]
+if not found:
+    print("device " + udid + " no longer exists"); sys.exit()
+runtime, device = found[0]
+state = device.get("state")
+if state != "Booted":
+    print("device " + udid + " is " + str(state) + ", not Booted"); sys.exit()
+with open(runtimes_path) as f:
+    entries = json.load(f).values()
+mounts = [e.get("mountPath") or "" for e in entries if e.get("runtimeIdentifier") == runtime]
+if not any(m and os.path.isdir(m) for m in mounts):
+    print("runtime " + runtime + " of device " + udid + " is no longer mounted (the image unmounted it)")
+' "$udid" "$runtimes")"
+  rm -f "$runtimes"
+  if [[ -z "$problem" ]] && ! with_timeout 60 xcrun simctl spawn "$udid" launchctl print system > /dev/null 2>&1; then
+    problem="device $udid is booted but does not answer simctl spawn"
+  fi
+  if [[ -n "$problem" ]]; then
+    log "the test simulator is not usable: $problem"
+    diagnose
+    return 1
+  fi
+  log "device $udid is still booted and its runtime is mounted"
+}
+
+smoke() {
+  local udid="$1"
+  check "$udid"
+  log "launchctl in the device"
+  with_timeout 60 xcrun simctl spawn "$udid" launchctl print system | head -n 20 >&2 || true
+  log "launching Settings"
+  with_timeout 120 xcrun simctl launch "$udid" com.apple.Preferences >&2
+  sleep 5
+  check "$udid"
+}
+
+remove() {
+  local udid="$1"
+  xcrun simctl shutdown "$udid" 2>/dev/null || true
+  xcrun simctl delete "$udid"
 }
 
 diagnose() {
@@ -119,12 +188,17 @@ diagnose() {
     | grep -iE 'unmount|duplicate|eject|fail|error|prefer' | tail -n 200 >&2 || true
 }
 
+usage="usage: $0 settle | boot <iOS version> <device type name> | check <udid> | smoke <udid> | remove <udid> | diagnose"
 case "${1:-}" in
   settle) settle ;;
   boot)
-    [[ $# -eq 3 ]] || { log "usage: $0 boot <iOS version> <device type name>"; exit 2; }
+    [[ $# -eq 3 ]] || { log "$usage"; exit 2; }
     boot "$2" "$3"
     ;;
+  check | smoke | remove)
+    [[ $# -eq 2 ]] || { log "$usage"; exit 2; }
+    "$1" "$2"
+    ;;
   diagnose) diagnose ;;
-  *) log "usage: $0 settle | boot <iOS version> <device type name> | diagnose"; exit 2 ;;
+  *) log "$usage"; exit 2 ;;
 esac

@@ -30,6 +30,8 @@ function publicationFixture({
   size = 128,
   outside = false,
   symlink = false,
+  event = "push",
+  restored = "",
 } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "synara-xcode-publication-"));
   try {
@@ -66,6 +68,8 @@ function publicationFixture({
         CACHE_PATH: outside ? bin : cache,
         CACHE_KEY: "xcode-compilation-v1-toolchain-2026-W41",
         CACHE_HIT: hit,
+        EVENT_NAME: event,
+        RESTORED_KEY: restored,
       },
     });
     return {
@@ -87,6 +91,15 @@ test("main can publish an exact owned CAS at the aggregate size boundary", () =>
 
 for (const [name, options, reason] of [
   ["branches and tags", { ref: "refs/tags/v2.1.44" }, /only read/],
+  [
+    "pull requests that restored a snapshot",
+    {
+      ref: "refs/pull/1279/merge",
+      event: "pull_request",
+      restored: "xcode-compilation-v1-toolchain-2026-W40",
+    },
+    /only read/,
+  ],
   ["existing weekly snapshots", { hit: "true" }, /already exists/],
   ["empty stores", { size: 0 }, /No compiler objects/],
   ["oversized stores", { size: 524289 }, /exceeds the 512 MiB/],
@@ -98,6 +111,16 @@ for (const [name, options, reason] of [
     assert.match(result.summary, reason);
   });
 }
+
+test("a pull request with no snapshot for its toolchain seeds one for itself", () => {
+  const result = publicationFixture({
+    ref: "refs/pull/1279/merge",
+    event: "pull_request",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.output, /publish=true/);
+  assert.match(result.summary, /scoped to this pull request/);
+});
 
 for (const [name, options] of [
   ["other directories", { outside: true }],

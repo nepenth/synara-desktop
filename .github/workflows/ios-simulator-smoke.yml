@@ -1,0 +1,73 @@
+name: iOS simulator smoke
+
+# Minutes-long check of the runner image's simulators, with no Rust and no
+# xcodebuild: settle the runtimes, boot the device the iOS test jobs use, prove
+# it runs, print diagnostics. Use it for anything about the image, its runtimes
+# or synara-ios/scripts/ci-simulator.sh before paying for a full iOS CI run:
+#   gh workflow run ios-simulator-smoke.yml --ref <branch> -f runtime=27.0
+# A pull request that changes the script or this file runs it on its own.
+on:
+  workflow_dispatch:
+    inputs:
+      xcode:
+        description: Xcode version under /Applications (Xcode_<version>.app)
+        type: string
+        default: "27.2"
+      runtime:
+        description: iOS simulator runtime version
+        type: string
+        default: "27.2"
+      device:
+        description: Simulator device type name
+        type: string
+        default: iPhone 17
+  pull_request:
+    paths:
+      - synara-ios/scripts/ci-simulator.sh
+      - .github/workflows/ios-simulator-smoke.yml
+
+concurrency:
+  group: ios-simulator-smoke-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: iOS simulator smoke
+    runs-on: xcode-27
+    timeout-minutes: 10
+    env:
+      XCODE_VERSION: ${{ inputs.xcode || '27.2' }}
+      IOS_SIMULATOR_RUNTIME: ${{ inputs.runtime || '27.2' }}
+      IOS_SIMULATOR_DEVICE: ${{ inputs.device || 'iPhone 17' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode
+        run: |
+          [[ "$XCODE_VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "Invalid Xcode version: $XCODE_VERSION" >&2; exit 1; }
+          developer_dir="/Applications/Xcode_$XCODE_VERSION.app/Contents/Developer"
+          test -d "$developer_dir" || { echo "Xcode $XCODE_VERSION is not on this image" >&2; ls -d /Applications/Xcode*.app >&2; exit 1; }
+          echo "DEVELOPER_DIR=$developer_dir" >> "$GITHUB_ENV"
+          DEVELOPER_DIR="$developer_dir" xcodebuild -version
+
+      - name: Boot the test device
+        run: |
+          udid="$(synara-ios/scripts/ci-simulator.sh boot "$IOS_SIMULATOR_RUNTIME" "$IOS_SIMULATOR_DEVICE")"
+          echo "IOS_SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
+
+      - name: Prove the device works
+        run: synara-ios/scripts/ci-simulator.sh smoke "$IOS_SIMULATOR_UDID"
+
+      - name: Print simulator diagnostics
+        if: always()
+        run: synara-ios/scripts/ci-simulator.sh diagnose
+
+      - name: Remove the test device
+        if: always() && env.IOS_SIMULATOR_UDID != ''
+        run: synara-ios/scripts/ci-simulator.sh remove "$IOS_SIMULATOR_UDID"

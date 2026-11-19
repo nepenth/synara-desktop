@@ -69,6 +69,33 @@ case "$TEST_SUITE" in
     exit 1
     ;;
 esac
+# IOS_ONLY_TESTING narrows a run to chosen tests, e.g.
+# "SynaraTests/TimelinePolishTests,SynaraUITests/ComposerUITests/testSend".
+# Entries for the other suite's target are ignored, so one list can be passed
+# to both jobs; a list with nothing for this suite fails instead of running all.
+if [[ -n "${IOS_ONLY_TESTING:-}" ]]; then
+  case "$TEST_SUITE" in
+    unit) only_target="SynaraTests" ;;
+    ui) only_target="SynaraUITests" ;;
+    *) only_target="" ;;
+  esac
+  TEST_ONLY_ARGS=()
+  IFS=', ' read -r -a only_entries <<< "$IOS_ONLY_TESTING"
+  for entry in "${only_entries[@]}"; do
+    [[ -n "$entry" ]] || continue
+    if [[ ! "$entry" =~ ^[A-Za-z0-9_]+(/[A-Za-z0-9_]+(/[A-Za-z0-9_]+(\(\))?)?)?$ ]]; then
+      echo "IOS_ONLY_TESTING entry is not Target[/Class[/test]]: $entry" >&2
+      exit 1
+    fi
+    if [[ -z "$only_target" || "${entry%%/*}" == "$only_target" ]]; then
+      TEST_ONLY_ARGS+=("-only-testing:$entry")
+    fi
+  done
+  if [[ "${#TEST_ONLY_ARGS[@]}" -eq 0 ]]; then
+    echo "IOS_ONLY_TESTING has no entry for the $TEST_SUITE suite: $IOS_ONLY_TESTING" >&2
+    exit 1
+  fi
+fi
 
 cd "$(dirname "$0")/.."
 
@@ -270,10 +297,14 @@ xcodebuild \
   "${UNSIGNED_BUILD_ARGS[@]}"
 
 if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
-  # CI names the simulator runtime (IOS_SIMULATOR_RUNTIME, e.g. 27.2): test on
-  # a fresh device on exactly that runtime, booted before xcodebuild starts,
-  # instead of whichever "iPhone 17" xcodebuild resolves by name.
-  if [[ -n "${IOS_SIMULATOR_RUNTIME:-}" ]]; then
+  # CI boots its test device before building (IOS_SIMULATOR_UDID, from
+  # ci-simulator.sh boot) and tests on it once it proves still usable. With
+  # only IOS_SIMULATOR_RUNTIME (e.g. 27.2), a fresh device on exactly that
+  # runtime is booted here. Either way xcodebuild never picks a device by name.
+  if [[ -n "${IOS_SIMULATOR_UDID:-}" ]]; then
+    "$SCRIPT_DIR/ci-simulator.sh" check "$IOS_SIMULATOR_UDID"
+    TEST_DESTINATION="platform=iOS Simulator,id=$IOS_SIMULATOR_UDID"
+  elif [[ -n "${IOS_SIMULATOR_RUNTIME:-}" ]]; then
     simulator_udid="$("$SCRIPT_DIR/ci-simulator.sh" boot "$IOS_SIMULATOR_RUNTIME" "${IOS_SIMULATOR_DEVICE:-iPhone 17}")"
     TEST_DESTINATION="platform=iOS Simulator,id=$simulator_udid"
   fi
@@ -287,7 +318,7 @@ if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
     -parallel-testing-enabled "$PARALLEL_TESTING"
     -maximum-concurrent-test-simulator-destinations "$MAX_TEST_SIMULATORS"
   )
-  if [[ "$TEST_SUITE" != "all" ]]; then
+  if [[ "${#TEST_ONLY_ARGS[@]}" -gt 0 ]]; then
     test_command+=("${TEST_ONLY_ARGS[@]}")
   fi
   # CI opt-in: rerun a failed test once. A pass on retry is still recorded in
@@ -303,7 +334,7 @@ if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
   test_status=0
   "${test_command[@]}" || test_status=$?
   if [[ "$test_status" -ne 0 ]]; then
-    if [[ -n "${IOS_SIMULATOR_RUNTIME:-}" ]]; then
+    if [[ -n "${IOS_SIMULATOR_UDID:-}${IOS_SIMULATOR_RUNTIME:-}" ]]; then
       "$SCRIPT_DIR/ci-simulator.sh" diagnose || true
     fi
     exit "$test_status"

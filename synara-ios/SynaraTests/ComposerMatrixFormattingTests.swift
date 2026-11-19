@@ -56,6 +56,7 @@ final class ComposerMatrixFormattingTests: XCTestCase {
     #if canImport(UIKit)
     @MainActor
     func testHostedComposerSynchronizesStateWithUIKitFocusAndFormattedTyping() async throws {
+        let testStarted = DispatchTime.now().uptimeNanoseconds
         let appeared = expectation(description: "Composer bindings installed in a hosted view")
         var controls: ComposerFocusTestControls?
         let controller = UIHostingController(rootView: ComposerFocusTestHarness { bindings in
@@ -114,8 +115,14 @@ final class ComposerMatrixFormattingTests: XCTestCase {
         let diagnostics = ComposerFocusTestDiagnostics(
             bindings: bindings, textView: textView, window: window, rootView: controller.view
         )
-        defer { diagnostics.stopObserving() }
-        diagnostics.record("hosted-editor-ready")
+        defer {
+            // Kept on success too: the stage times show how close a slow
+            // simulator came to the stage timeout.
+            diagnostics.attach(to: self, name: "hosted-composer-stage-timings")
+            diagnostics.stopObserving()
+        }
+        let setupSeconds = Double(DispatchTime.now().uptimeNanoseconds - testStarted) / 1_000_000_000
+        diagnostics.record("hosted-editor-ready setup=\(String(format: "%.3f", setupSeconds))s")
 
         // A toolbar request must reach UIKit through the real representable update.
         bindings.isFocused.wrappedValue = true
@@ -328,6 +335,13 @@ private final class ComposerFocusTestDiagnostics {
             struct ComposerFocusStageFailed: Error {}
             throw ComposerFocusStageFailed()
         }
+    }
+
+    func attach(to test: XCTestCase, name: String) {
+        let attachment = XCTAttachment(string: records.joined(separator: "\n"))
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        test.add(attachment)
     }
 
     func stopObserving() {

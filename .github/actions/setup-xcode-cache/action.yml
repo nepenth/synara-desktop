@@ -13,6 +13,9 @@ outputs:
   cache-hit:
     description: Whether this week's snapshot already exists
     value: ${{ steps.restore.outputs.cache-hit }}
+  restored-key:
+    description: Key of the snapshot restored, exact or by prefix; empty when none exists for this toolchain
+    value: ${{ steps.restore.outputs.cache-matched-key }}
 runs:
   using: composite
   steps:
