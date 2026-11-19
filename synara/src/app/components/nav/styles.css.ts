@@ -257,6 +257,26 @@ export const NavSectionLabel = style({
   whiteSpace: 'nowrap',
 });
 
+/** A collapsed section's unread, at the toggle's end (the rows' badge column). */
+export const NavSectionBadge = style({
+  display: 'flex',
+  alignItems: 'center',
+  marginLeft: 'auto',
+  flexShrink: 0,
+  paddingRight: config.space.S100,
+});
+
+/** A section with no rows here (an empty folder): one quiet line in the name column. */
+export const NavSectionEmpty = style({
+  display: 'flex',
+  alignItems: 'center',
+  minHeight: toRem(28),
+  margin: 0,
+  // The rows' glyph column (18px) plus its gap, so the text lines up with room names.
+  paddingLeft: `calc(${config.space.S100} * 2 + ${toRem(18)} + ${config.space.S200})`,
+  color: 'var(--synara-content-tertiary, var(--synara-content-secondary))',
+});
+
 /** The rows' 18px glyph column, so the chevron centres over the glyphs. */
 export const NavSectionChevronSlot = style({
   width: toRem(18),

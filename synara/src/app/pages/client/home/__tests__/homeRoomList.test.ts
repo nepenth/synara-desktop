@@ -101,11 +101,14 @@ test('home rooms follow Core order and keep rooms Core did not list last', () =>
 });
 
 test('the renderer does not re-implement room ordering rules', () => {
-  const source = readFileSync(
-    join(process.cwd(), 'src/app/pages/client/home/homeRoomList.ts'),
-    'utf8'
-  );
-  assert.doesNotMatch(source, /lastActivityTs|localeCompare|toLocaleLowerCase/);
+  // Room folders are sections too: their orders come from Core as well.
+  for (const file of [
+    'src/app/pages/client/home/homeRoomList.ts',
+    'src/app/features/room-folders/roomFolderSections.ts',
+  ]) {
+    const source = readFileSync(join(process.cwd(), file), 'utf8');
+    assert.doesNotMatch(source, /lastActivityTs|localeCompare|toLocaleLowerCase|\.sort\(/, file);
+  }
 });
 
 test('desktop and iOS room lists no longer implement a Recent 24h partition', () => {
@@ -147,8 +150,12 @@ test('desktop and iOS room lists no longer implement a Recent 24h partition', ()
   assert.equal(home.includes('<RoomListSortMenu'), true);
   assert.equal(home.includes("value: 'recent' as const"), true);
   assert.equal(home.includes("value: 'name' as const"), true);
-  assert.equal(home.includes('handleFavoriteSort'), true);
-  assert.equal(home.includes('handleRoomsSort'), true);
+  // Sections are a list now: one sort per default section (Favorites, Rooms,
+  // Direct messages), persisted per section; folders follow Rooms and have none.
+  assert.equal(home.includes('onChange={handleSectionSort(kind)}'), true);
+  assert.equal(home.includes('readRoomListSorts(sortStorage)'), true);
+  assert.equal(home.includes('writeRoomListSort(sortStorage, sort, section)'), true);
+  assert.equal(home.includes('<RoomFolderSectionHeader'), true);
   assert.equal(iosView.includes('RoomListSortMenu'), true);
   assert.equal(iosService.includes('synara.roomListSort'), true);
 });
@@ -156,12 +163,14 @@ test('desktop and iOS room lists no longer implement a Recent 24h partition', ()
 test('section headers are full-width 28px rows with 12px semibold caption labels', () => {
   const cwd = process.cwd();
   const home = readFileSync(join(cwd, 'src/app/pages/client/home/Home.tsx'), 'utf8');
+  const homeList = readFileSync(join(cwd, 'src/app/pages/client/home/homeRoomList.ts'), 'utf8');
   const header = readFileSync(join(cwd, 'src/app/components/nav/NavSectionHeader.tsx'), 'utf8');
   const navCss = readFileSync(join(cwd, 'src/app/components/nav/styles.css.ts'), 'utf8');
   assert.match(home, /t\('modernization\.nav\.rooms', 'Rooms'\)/);
   assert.match(home, /t\('modernization\.nav\.favorites', 'Favorites'\)/);
-  // Favorites collapses like every other section.
-  assert.match(home, /FAVORITES_CATEGORY_ID = makeNavCategoryId\('home', 'favorites'\)/);
+  // Favorites collapses like every other section; the ids moved to the section model.
+  assert.match(homeList, /favorites: makeNavCategoryId\('home', 'favorites'\)/);
+  assert.match(homeList, /rooms: makeNavCategoryId\('home', 'room'\)/);
   assert.match(header, /aria-expanded=\{!closed\}/);
   assert.match(navCss, /NavSectionHeader = style\(\{[\s\S]*?minHeight: toRem\(28\)/);
   // Wave 3 caption: 12px semibold, secondary, 0.02em tracking, chevron always shown.

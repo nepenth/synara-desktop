@@ -199,6 +199,8 @@
       "sort_name": "Name",
       "sort_space_order": "Space order",
       "mark_as_read": "Mark as read",
+      "new_folder": "New folder",
+      "folder_no_rooms": "No rooms",
       "add_room": "Add room",
       "home_options": "Home options",
       "create_room": "Create room",

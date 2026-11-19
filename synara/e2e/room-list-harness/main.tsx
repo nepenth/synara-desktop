@@ -11,6 +11,7 @@ import { NotificationsFixture } from './NotificationsFixture';
 import { LiveCallFixture } from './LiveCallFixture';
 import { NavigationUnreadFixture } from './NavigationUnreadFixture';
 import { NavPaneFixture } from './NavPaneFixture';
+import { RoomFoldersFixture } from './RoomFoldersFixture';
 import { RoomGlyphFixture } from './RoomGlyphFixture';
 import { RoomNameFixture } from './RoomNameFixture';
 import { RoomRowsFixture } from './RoomRowsFixture';
@@ -100,7 +101,9 @@ function RoomListFixture() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  new URLSearchParams(window.location.search).has('navPane') ? (
+  new URLSearchParams(window.location.search).has('roomFolders') ? (
+    <RoomFoldersFixture />
+  ) : new URLSearchParams(window.location.search).has('navPane') ? (
     <NavPaneFixture />
   ) : new URLSearchParams(window.location.search).has('navigationUnread') ? (
     <NavigationUnreadFixture />

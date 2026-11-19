@@ -170,6 +170,8 @@ const tests = [
   'src/app/utils/__tests__/nativeRoomReadStateOwner.test.ts',
   'src/app/features/room-nav/__tests__/roomNavItemReadState.test.ts',
   'src/app/pages/client/home/__tests__/homeRoomList.test.ts',
+  'src/app/features/room-folders/__tests__/roomFolderSections.test.ts',
+  'src/app/features/room-folders/__tests__/nativeRoomFolderOwner.test.ts',
   'src/app/components/__tests__/nativeRoomJoinOwner.test.ts',
   'src/app/components/__tests__/nativeRoomCreateOwner.test.ts',
   'src/app/components/__tests__/nativeStateEventOwner.test.ts',

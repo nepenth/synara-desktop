@@ -65,6 +65,7 @@ import { isLinuxDesktopShell } from '../../hooks/useTilingMode';
 import { handleVimListKey, resolveVimListKeys } from '../desktop-keyboard/vimListKeys';
 import * as depthCss from '../../styles/Depth.css';
 import { PersonGlyph, roomGlyphFor } from '../../components/room-glyph';
+import { RoomFolderMenuItem } from '../room-folders/RoomFolderMenuItem';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -216,6 +217,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
               {favoriteError}
             </Text>
           )}
+          <RoomFolderMenuItem roomId={room.roomId} requestClose={requestClose} />
           <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
             {(handleOpen, opened, changing) => (
               <MenuItem

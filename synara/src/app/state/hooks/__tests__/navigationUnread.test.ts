@@ -161,3 +161,45 @@ test('the merged Home scope is rooms plus DMs with one attention count (NAV-12)'
   assert.equal(merged.attention, home.attention + direct.attention);
   assert.deepEqual([...merged.roomIds].sort(), [...home.roomIds, ...direct.roomIds].sort());
 });
+
+test('filing rooms in folders does not change any scope or its unread', () => {
+  const unfiled = [
+    room({ roomId: '!home' }),
+    room({ roomId: '!home-mention' }),
+    room({ roomId: '!child' }),
+    room({ roomId: '!fav', isFavorite: true }),
+    room({ roomId: '!dm', isDirect: true }),
+  ];
+  // The same rooms, now filed (a favorite keeps its folder too).
+  const filed = unfiled.map((r) => (r.isDirect ? r : { ...r, folderId: 'work' }));
+  const rows = attention([
+    { roomId: '!home', total: 4 },
+    { roomId: '!home-mention', total: 5, highlight: 2 },
+    { roomId: '!child', total: 8, highlight: 8 },
+    { roomId: '!fav', total: 1 },
+    { roomId: '!dm', total: 3 },
+  ]);
+  const withFolders: RoomListPresentation = {
+    ...rows,
+    folders: [
+      {
+        id: 'work',
+        name: 'Work',
+        roomIds: ['!home', '!home-mention', '!child'],
+        recentOrder: ['!home', '!home-mention', '!child'],
+        nameOrder: ['!child', '!home', '!home-mention'],
+        unreadHighlight: 10,
+        unreadTotal: 17,
+        unreadRoomIds: ['!child', '!home', '!home-mention'],
+      },
+    ],
+  };
+  const parents = new Map([['!child', new Set(['!space'])]]);
+  for (const scope of ['home', 'direct', 'merged'] as const) {
+    assert.deepEqual(
+      nativeNavigationScope(filed, withFolders, parents, scope),
+      nativeNavigationScope(unfiled, rows, parents, scope),
+      scope
+    );
+  }
+});

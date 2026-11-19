@@ -1,7 +1,7 @@
 # Room folders (design)
 
-Status: **core implemented** (`feat/room-folders-core`). Desktop and iOS UI
-build on the API below.
+Status: **core and desktop UI implemented** (`feat/room-folders-core`,
+`feat/room-folders-desktop`). iOS UI builds on the API below.
 
 User-defined room folders are custom sidebar sections, like Slack's. A user
 files rooms into named folders. Folders sync across the user's own devices
@@ -228,9 +228,57 @@ order, read-only state). Types are generated in
 | Parsed document | 256 KiB |
 | Pending window | 30 s |
 
+## Desktop UI
+
+What a desktop user sees:
+
+- **Sections.** Home lists Favorites, then one section per folder in folder
+  order, then Rooms, then Direct messages. A room in a folder is not in
+  Rooms. Every folder shows on Home, also one with no rooms there, as a single
+  quiet "No rooms" line, so it can be found and managed. A space lists
+  Favorites, then each folder that holds rooms of that space (with only those
+  rooms), then the space's own groups; a folder with none of its rooms is not
+  shown there. A favorite shows in Favorites; it stays in its folder and goes
+  back to it when it stops being a favorite.
+- **Order.** Rooms in a folder follow the Rooms section's sort (Recent
+  activity or Name; in a space, the space's sort). Folders have no sort of
+  their own.
+- **Collapse.** A folder collapses like any section, per device
+  (`makeNavCategoryId('home', 'folder:<id>')`, or the space's id instead of
+  `home`), and keeps its unread and selected rooms visible. Only while it is
+  collapsed its header shows its unread: the red mention count, otherwise the
+  quiet dot.
+- **Managing folders.** The header's ⋮ (on hover or focus) and right-click
+  offer Rename, Move up, Move down and Delete folder. Delete asks first and
+  says the rooms go back to Rooms. Home options (⋮ beside the Home title)
+  has New folder. There is no drag and drop.
+- **Filing a room.** A room's menu has Move to folder: every folder, with a
+  check on the room's current one (favorites too), New folder… (creates the
+  folder with the room in it, one command) and Remove from folder. Direct
+  messages and spaces do not have it.
+- **Naming.** New folder and Rename share one dialog: Enter saves, Escape
+  cancels, and a failed save says why under the field (too many folders,
+  folders too large to save, a name that is empty or over 64 characters).
+- **Read-only.** While another client's newer format is stored
+  (`readOnly`), folders still show but every management action is hidden.
+- **Keyboard.** Previous/next room and previous/next unread walk the sections
+  in display order, folders included.
+- **Unread totals.** Home, space and Direct messages totals do not change
+  when a room moves into or out of a folder.
+
+Code: `synara/src/app/features/room-folders/` (the command owner
+`nativeRoomFolderOwner.ts`, the section model `roomFolderSections.ts`, the
+header, room-menu submenu and dialogs); Home's sections in
+`pages/client/home/homeRoomList.ts`. Every section, Favorites included, is
+(on Home) its own virtual list over the pane's one scroller
+(`features/room-nav/VirtualRoomSection.tsx`), so a folder of hundreds of
+rooms renders only the rows on screen while every section header stays
+mounted. Browser proof: `synara/e2e/room-folders.spec.ts` on the room-list
+harness (`?roomFolders`).
+
 ## Not done here
 
-- Desktop and iOS UI.
+- iOS UI.
 - Room ids the store never learned about (rooms left long ago and forgotten)
   are kept until the user unfiles them; they are hidden from the list.
 - The room-notes projection in `image_packs_live.rs` is the same algorithm
