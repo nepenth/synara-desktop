@@ -147,30 +147,25 @@ boot() {
 }
 
 check() {
-  local udid="$1" problem runtimes started=$SECONDS
-  runtimes="$(mktemp "${TMPDIR:-/tmp}/ci-simulator-runtimes.XXXXXX")"
-  with_timeout 180 xcrun simctl runtime list -j > "$runtimes"
-  log "runtime list took $((SECONDS - started)) s"
-  started=$SECONDS
-  problem="$(with_timeout 180 xcrun simctl list devices -j | python3 -I -c '
+  # Uses `simctl list`, never `simctl runtime list`: right after a boot on the
+  # Xcode 27 image the latter hung for minutes (runs 44626749954, 44638496479).
+  local udid="$1" problem started=$SECONDS
+  problem="$(with_timeout 120 xcrun simctl list -j devices runtimes | python3 -I -c '
 import json, os, sys
-udid, runtimes_path = sys.argv[1], sys.argv[2]
-devices = json.load(sys.stdin)["devices"]
-found = [(runtime, d) for runtime, ds in devices.items() for d in ds if d.get("udid") == udid]
+udid = sys.argv[1]
+data = json.load(sys.stdin)
+found = [(runtime, d) for runtime, ds in data["devices"].items() for d in ds if d.get("udid") == udid]
 if not found:
     print("device " + udid + " no longer exists"); sys.exit()
 runtime, device = found[0]
 state = device.get("state")
 if state != "Booted":
     print("device " + udid + " is " + str(state) + ", not Booted"); sys.exit()
-with open(runtimes_path) as f:
-    entries = json.load(f).values()
-mounts = [e.get("mountPath") or "" for e in entries if e.get("runtimeIdentifier") == runtime]
-if not any(m and os.path.isdir(m) for m in mounts):
+bundles = [r.get("bundlePath") or "" for r in data["runtimes"] if r.get("identifier") == runtime]
+if not any(b and os.path.isdir(b) for b in bundles):
     print("runtime " + runtime + " of device " + udid + " is no longer mounted (the image unmounted it)")
-' "$udid" "$runtimes")"
-  rm -f "$runtimes"
-  log "device list took $((SECONDS - started)) s"
+' "$udid")" || problem="simctl list did not answer for device $udid"
+  log "simctl list took $((SECONDS - started)) s"
   started=$SECONDS
   if [[ -z "$problem" ]] && ! with_timeout 60 xcrun simctl spawn "$udid" launchctl print system > /dev/null 2>&1; then
     problem="device $udid is booted but does not answer simctl spawn"
@@ -180,7 +175,7 @@ if not any(m and os.path.isdir(m) for m in mounts):
     diagnose
     return 1
   fi
-  log "device $udid is still booted, its runtime is mounted and it answered in $((SECONDS - started)) s"
+  log "device $udid is booted, its runtime is mounted and it answered in $((SECONDS - started)) s"
 }
 
 smoke() {
@@ -202,8 +197,8 @@ remove() {
 
 diagnose() {
   log "runtime state"
-  xcrun simctl runtime list >&2 || true
-  xcrun simctl list devices >&2 || true
+  with_timeout 120 xcrun simctl runtime list >&2 || log "simctl runtime list did not answer within 120 s"
+  with_timeout 120 xcrun simctl list devices >&2 || true
   log "simdiskimaged and cryptexd, last 90 minutes"
   /usr/bin/log show --last 90m --style compact \
     --predicate 'process == "simdiskimaged" OR process == "cryptexd"' 2>/dev/null \
