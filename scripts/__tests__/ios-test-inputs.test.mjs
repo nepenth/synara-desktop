@@ -130,6 +130,15 @@ test("hashCommit tracks committed iOS inputs and ignores everything else", () =>
   }
 });
 
+test("files the iOS app bundles from outside synara-ios are hash inputs", () => {
+  const spec = read("synara-ios/project.yml");
+  const outside = [...spec.matchAll(/^\s*- path: \.\.\/([^\s#]+)\s*$/gm)].map(([, target]) => target);
+  assert.deepEqual(outside, ["release-notes"], "project.yml's paths outside synara-ios");
+  for (const target of outside) {
+    assert.ok(covered(`${target}/v3.2.0.json`), `${target} is bundled into the app but not a hash input`);
+  }
+});
+
 test("every input path exists in this repository", () => {
   for (const input of IOS_TEST_INPUT_PATHS) {
     assert.ok(existsSync(path.join(root, input)), `${input} is listed but missing`);
