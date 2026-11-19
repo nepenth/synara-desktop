@@ -163,6 +163,11 @@ extension RoomDirectorySearchDto: Sendable
 extension RoomDirectoryVisibilityDto: Sendable
 extension RoomDirectoryVisibilityWriteDto: Sendable
 extension RoomEncryptionStatus: Sendable
+extension RoomFolderCreateDto: Sendable
+extension RoomFolderDto: Sendable
+extension RoomFolderSectionDto: Sendable
+extension RoomFoldersCommandError: Sendable
+extension RoomFoldersSnapshotDto: Sendable
 extension RoomIdentityWarningDto: Sendable
 extension RoomIdentityWarningError: Sendable
 extension RoomIdentityWarningsDto: Sendable
@@ -201,6 +206,8 @@ extension RoomPowerLevelWriteDto: Sendable
 extension RoomPowerLevelsSnapshotDto: Sendable
 extension RoomProfileCommandError: Sendable
 extension RoomProfileWriteDto: Sendable
+extension RoomSectionInput: Sendable
+extension RoomSectionPlacement: Sendable
 extension RoomUnreadMembership: Sendable
 extension RoomUnreadPresentationDto: Sendable
 extension RtcTransportDto: Sendable
@@ -445,6 +452,12 @@ open class SharedCore: SharedCoreProtocol, @unchecked Sendable
   open func roomDirectoryCancel(sessionGeneration: UInt64, requestId: UInt64) async throws -> RoomDirectorySearchDto
   open func roomDirectoryProtocols() async throws -> RoomDirectoryProtocolsDto
   open func roomDirectorySearch(sessionGeneration: UInt64, requestId: UInt64, serverName: String?, term: String?, roomType: String?, thirdPartyInstanceId: String?, limit: UInt64, since: String?) async throws -> RoomDirectorySearchDto
+  open func roomFoldersCreate(name: String, roomId: String?) async throws -> RoomFolderCreateDto
+  open func roomFoldersDelete(folderId: String) async throws -> RoomFoldersSnapshotDto
+  open func roomFoldersMove(folderId: String, toIndex: UInt32) async throws -> RoomFoldersSnapshotDto
+  open func roomFoldersRename(folderId: String, name: String) async throws -> RoomFoldersSnapshotDto
+  open func roomFoldersSetRoom(roomId: String, folderId: String?) async throws -> RoomFoldersSnapshotDto
+  open func roomFoldersSnapshot() async throws -> RoomFoldersSnapshotDto
   open func roomIdentityWarnings(roomId: String) async throws -> RoomIdentityWarningsDto
   open func roomInvite(roomId: String, userId: String, reason: String?) async throws -> RoomModerationWriteDto
   open func roomJoin(roomIdOrAlias: String, viaServers: [String]?) async throws -> RoomMembershipWriteDto
@@ -891,6 +904,9 @@ public enum RoomEncryptionStatus: Equatable, Hashable
   case encrypted
   case notEncrypted
   case unknown
+public enum RoomFoldersCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
+  case Failed(code: String, description: String)
+  public var errorDescription: String?
 public enum RoomIdentityWarningError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
@@ -940,6 +956,10 @@ public enum RoomPowerLevelCommandError: Swift.Error, Equatable, Hashable, Founda
 public enum RoomProfileCommandError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError
   case Failed(code: String, description: String)
   public var errorDescription: String?
+public enum RoomSectionPlacement: Equatable, Hashable
+  case favorites
+  case folder(folderId: String)
+  case `default`
 public enum RoomUnreadMembership: Equatable, Hashable
   case joined
   case invited
@@ -1156,6 +1176,7 @@ public func orderRoomIds(rooms: [RoomOrderInput], order: RoomListOrder) -> [Stri
 public func planMemberActions(context: MemberActionContext) -> MemberActionPlan
 public func registerFlows(homeserverUrl: String, appVersion: String) async throws -> RegisterFlowsDto
 public func resolveHomeserver(serverNameOrUrl: String, appVersion: String) async throws -> ResolvedHomeserverDto
+public func roomSectionPlacement(input: RoomSectionInput) -> RoomSectionPlacement
 public func roomUnreadPresentation(membership: RoomUnreadMembership, numUnreadMessages: UInt64, numUnreadNotifications: UInt64, numUnreadMentions: UInt64, isMarkedUnread: Bool) -> RoomUnreadPresentationDto
 public func summarizeAppIconBadge(input: AppIconBadgeInput) -> AppIconBadgeSummary
 public func summarizeBadges(input: BadgeSummaryInput) -> BadgeSummary
@@ -1287,6 +1308,12 @@ public protocol SharedCoreProtocol: AnyObject, Sendable
   func roomDirectoryCancel(sessionGeneration: UInt64, requestId: UInt64) async throws -> RoomDirectorySearchDto
   func roomDirectoryProtocols() async throws -> RoomDirectoryProtocolsDto
   func roomDirectorySearch(sessionGeneration: UInt64, requestId: UInt64, serverName: String?, term: String?, roomType: String?, thirdPartyInstanceId: String?, limit: UInt64, since: String?) async throws -> RoomDirectorySearchDto
+  func roomFoldersCreate(name: String, roomId: String?) async throws -> RoomFolderCreateDto
+  func roomFoldersDelete(folderId: String) async throws -> RoomFoldersSnapshotDto
+  func roomFoldersMove(folderId: String, toIndex: UInt32) async throws -> RoomFoldersSnapshotDto
+  func roomFoldersRename(folderId: String, name: String) async throws -> RoomFoldersSnapshotDto
+  func roomFoldersSetRoom(roomId: String, folderId: String?) async throws -> RoomFoldersSnapshotDto
+  func roomFoldersSnapshot() async throws -> RoomFoldersSnapshotDto
   func roomIdentityWarnings(roomId: String) async throws -> RoomIdentityWarningsDto
   func roomInvite(roomId: String, userId: String, reason: String?) async throws -> RoomModerationWriteDto
   func roomJoin(roomIdOrAlias: String, viaServers: [String]?) async throws -> RoomMembershipWriteDto
@@ -1912,6 +1939,31 @@ public struct RoomDirectoryVisibilityWriteDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var requestedVisibility: String
   public init(status: WriteAckDto, roomId: String, sessionGeneration: UInt64, requestedVisibility: String)
+public struct RoomFolderCreateDto: Equatable, Hashable
+  public var folderId: String
+  public var snapshot: RoomFoldersSnapshotDto
+  public init(folderId: String, snapshot: RoomFoldersSnapshotDto)
+public struct RoomFolderDto: Equatable, Hashable
+  public var id: String
+  public var name: String
+  public var roomIds: [String]
+  public init(id: String, name: String, roomIds: [String])
+public struct RoomFolderSectionDto: Equatable, Hashable
+  public var id: String
+  public var name: String
+  public var roomIds: [String]
+  public var recentOrder: [String]
+  public var nameOrder: [String]
+  public var unreadHighlight: UInt32
+  public var unreadTotal: UInt32
+  public var unreadRoomIds: [String]
+  public init(id: String, name: String, roomIds: [String], recentOrder: [String], nameOrder: [String], unreadHighlight: UInt32, unreadTotal: UInt32, unreadRoomIds: [String])
+public struct RoomFoldersSnapshotDto: Equatable, Hashable
+  public var sessionGeneration: UInt64
+  public var version: UInt32
+  public var readOnly: Bool
+  public var folders: [RoomFolderDto]
+  public init(sessionGeneration: UInt64, version: UInt32, readOnly: Bool, folders: [RoomFolderDto])
 public struct RoomIdentityWarningDto: Equatable, Hashable
   public var userId: String
   public var displayName: String?
@@ -1951,6 +2003,7 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var isSpace: Bool
   public var isFavorite: Bool
   public var isLowPriority: Bool
+  public var folderId: String?
   public var isAgentRoom: Bool
   public var isCall: Bool
   public var hasActiveCall: Bool
@@ -1965,14 +2018,15 @@ public struct RoomListRoomDto: Equatable, Hashable
   public var isEncrypted: Bool
   public var encryptionStatus: RoomEncryptionStatus
   public var notificationMode: String?
-  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: RoomMembershipDto, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isLowPriority: Bool, isAgentRoom: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, notificationCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
+  public init(roomId: String, name: String?, canonicalAlias: String?, avatarUrl: String?, membership: RoomMembershipDto, isDirect: Bool, directUserId: String?, isSpace: Bool, isFavorite: Bool, isLowPriority: Bool, folderId: String?, isAgentRoom: Bool, isCall: Bool, hasActiveCall: Bool, activeCallParticipantCount: UInt32, unreadCount: UInt32, highlightCount: UInt32, notificationCount: UInt32, markedUnread: Bool, lastActivityTs: UInt64?, lastMessagePreview: String?, lastMessageIsAgentApproval: Bool, isEncrypted: Bool, encryptionStatus: RoomEncryptionStatus, notificationMode: String?)
 public struct RoomListSnapshotDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public var orderedRoomIds: [String]
   public var rooms: [RoomListRoomDto]
   public var loading: RoomListLoadingDto
   public var spaceParents: [SpaceParentEntryDto]
-  public init(sessionGeneration: UInt64, orderedRoomIds: [String], rooms: [RoomListRoomDto], loading: RoomListLoadingDto, spaceParents: [SpaceParentEntryDto])
+  public var folders: [RoomFolderSectionDto]
+  public init(sessionGeneration: UInt64, orderedRoomIds: [String], rooms: [RoomListRoomDto], loading: RoomListLoadingDto, spaceParents: [SpaceParentEntryDto], folders: [RoomFolderSectionDto])
 public struct RoomListUpdateDto: Equatable, Hashable
   public var sessionGeneration: UInt64
   public init(sessionGeneration: UInt64)
@@ -2076,6 +2130,13 @@ public struct RoomPowerLevelsSnapshotDto: Equatable, Hashable
 public struct RoomProfileWriteDto: Equatable, Hashable
   public var status: WriteAckDto
   public init(status: WriteAckDto)
+public struct RoomSectionInput: Equatable, Hashable
+  public var isJoined: Bool
+  public var isDirect: Bool
+  public var isSpace: Bool
+  public var isFavorite: Bool
+  public var folderId: String?
+  public init(isJoined: Bool, isDirect: Bool, isSpace: Bool, isFavorite: Bool, folderId: String?)
 public struct RoomUnreadPresentationDto: Equatable, Hashable
   public var unreadCount: UInt64
   public var hasHighlight: Bool

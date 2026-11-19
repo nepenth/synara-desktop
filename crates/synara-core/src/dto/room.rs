@@ -115,7 +115,9 @@ pub struct RoomSummary {
     pub is_favorite: bool,
     /// Account-data low-priority (m.tag `m.lowpriority`) projection.
     pub is_low_priority: bool,
-    /// Optional product folder / section label (not a Matrix space id).
+    /// The user room folder (`in.synara.room_folders`) this room is filed
+    /// in. Set by room-list snapshots for joined rooms that are neither DMs
+    /// nor spaces, favorites included; not a Matrix space id.
     pub folder_id: Option<String>,
     pub encryption_status: RoomEncryptionStatus,
     /// True when the room is MSC4362 `StateEncrypted`. The lock still uses

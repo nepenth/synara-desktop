@@ -77,6 +77,10 @@ pub struct RoomListSnapshotDto {
     /// `m.space.parent` events), the same graph Core used for unread rollup.
     /// Saves a separate `space_parents_snapshot` call per refresh.
     pub space_parents: Vec<SpaceParentEntryDto>,
+    /// User room folders in display order, resolved with the section rule:
+    /// a room in a folder's `room_ids` shows there instead of its default
+    /// section; favorites stay in Favorites.
+    pub folders: Vec<RoomFolderSectionDto>,
 }
 
 /// The SDK room-list loading state.
@@ -132,6 +136,10 @@ pub struct RoomListRoomDto {
     pub is_favorite: bool,
     /// Tagged `m.lowpriority`. Core's section orders put these rooms last.
     pub is_low_priority: bool,
+    /// The room folder this room is filed in (`in.synara.room_folders`).
+    /// Only joined rooms that are not DMs or spaces have one; a favorite
+    /// keeps it (see `room_section_placement`).
+    pub folder_id: Option<String>,
     /// A listed agent (Agent Notifications settings) is a member, or the
     /// newest event is an approval prompt or agent workflow.
     pub is_agent_room: bool,
@@ -1453,6 +1461,7 @@ impl SharedCore {
                     is_space: room.is_space,
                     is_favorite: room.is_favorite,
                     is_low_priority: room.is_low_priority,
+                    folder_id: room.folder_id,
                     is_call: room.is_call,
                     has_active_call: room.has_active_call,
                     active_call_participant_count: room.active_call_participant_count,
@@ -1476,6 +1485,12 @@ impl SharedCore {
                     room_id: entry.room_id,
                     parent_ids: entry.parent_ids,
                 })
+                .collect(),
+            folders: snapshot
+                .presentation
+                .folders
+                .into_iter()
+                .map(RoomFolderSectionDto::from)
                 .collect(),
         })
     }

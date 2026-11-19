@@ -2,10 +2,10 @@
 
 #[cfg(test)]
 pub use synara_core::app::room_list::{
-    partition_favorite_rooms, reconstruct, room_matches_scope, select_rooms_by_scope,
-    select_rooms_in_folder, sort_rooms, RoomListBadgeCounts, RoomListDeltaBatch, RoomListDeltaOp,
-    RoomListProjection, RoomListScope, RoomListSnapshot, RoomListSort, RoomSummaryBuilder,
-    MAX_INVITE_AVATAR_HANDLES,
+    partition_favorite_rooms, reconstruct, room_matches_scope, room_section_placement_for,
+    select_rooms_by_scope, sort_rooms, RoomListBadgeCounts, RoomListDeltaBatch, RoomListDeltaOp,
+    RoomListProjection, RoomListScope, RoomListSnapshot, RoomListSort, RoomSectionPlacement,
+    RoomSummaryBuilder, MAX_INVITE_AVATAR_HANDLES,
 };
 
 pub use synara_core::app::room_list::{

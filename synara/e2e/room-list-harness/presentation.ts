@@ -58,5 +58,6 @@ export const presentationFor = (rooms: RoomSummary[]): RoomListPresentation => {
     unread,
     highlightTotal,
     unreadTotal,
+    folders: [],
   };
 };

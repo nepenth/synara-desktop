@@ -152,6 +152,53 @@ impl Core {
         room_notes_move_todo(&self.state, request).await
     }
 
+    /// Typed `matrix_room_folders_snapshot`.
+    pub async fn room_folders_snapshot(
+        &self,
+    ) -> Result<crate::app::account_data::NativeRoomFoldersSnapshot, MatrixIpcError> {
+        room_folders_snapshot(&self.state).await
+    }
+
+    /// Typed `matrix_room_folders_create`.
+    pub async fn room_folders_create(
+        &self,
+        request: MatrixRoomFoldersCreateRequest,
+    ) -> Result<crate::app::account_data::NativeRoomFolderCreateResult, MatrixIpcError> {
+        room_folders_create(&self.state, request).await
+    }
+
+    /// Typed `matrix_room_folders_rename`.
+    pub async fn room_folders_rename(
+        &self,
+        request: MatrixRoomFoldersRenameRequest,
+    ) -> Result<crate::app::account_data::NativeRoomFoldersSnapshot, MatrixIpcError> {
+        room_folders_rename(&self.state, request).await
+    }
+
+    /// Typed `matrix_room_folders_delete`.
+    pub async fn room_folders_delete(
+        &self,
+        request: MatrixRoomFoldersDeleteRequest,
+    ) -> Result<crate::app::account_data::NativeRoomFoldersSnapshot, MatrixIpcError> {
+        room_folders_delete(&self.state, request).await
+    }
+
+    /// Typed `matrix_room_folders_move`.
+    pub async fn room_folders_move(
+        &self,
+        request: MatrixRoomFoldersMoveRequest,
+    ) -> Result<crate::app::account_data::NativeRoomFoldersSnapshot, MatrixIpcError> {
+        room_folders_move(&self.state, request).await
+    }
+
+    /// Typed `matrix_room_folders_set_room`.
+    pub async fn room_folders_set_room(
+        &self,
+        request: MatrixRoomFoldersSetRoomRequest,
+    ) -> Result<crate::app::account_data::NativeRoomFoldersSnapshot, MatrixIpcError> {
+        room_folders_set_room(&self.state, request).await
+    }
+
     /// Typed `matrix_mdirect_snapshot`.
     pub async fn mdirect_snapshot(&self) -> Result<NativeMDirectSnapshot, MatrixIpcError> {
         mdirect_snapshot(&self.state).await
