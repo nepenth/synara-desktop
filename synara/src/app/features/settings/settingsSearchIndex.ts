@@ -400,7 +400,7 @@ export const APP_SETTINGS_SEARCH_INDEX: AppSettingsSearchEntry[] = [
     section: 'Drafts',
     title: 'Sync drafts across devices',
     description:
-      'Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them.',
+      'Unsent messages follow you to your other Synara devices, end-to-end encrypted. It works on every device you have verified.',
     synonyms: ['draft', 'unsent', 'composer', 'sync', 'devices', 'continue'],
   },
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Sync drafts across devices now works on every verified device, without the recovery key. Before, the key that encrypts synced drafts was created only when a device set up recovery or entered the recovery key, so an account whose devices were all verified by emoji or QR code never synced drafts. A verified device now asks your other verified devices for the key and creates it after a few seconds if none has it; devices that each created one settle on the same key. Every device needs this version. The hint under the setting (Settings › Messages) says when a device is not verified, and updates by itself once sync starts.
+
 ## [3.3.0] - 2026-11-19
 
 - Desktop: room folders. Group rooms into your own sections in the room list, such as "Work" or "Side projects". A room's menu has Move to folder, with New folder… and Remove from folder; Home options has New folder. Folders show on Home between Favorites and Rooms, in a space when they hold rooms of that space, and sync to your other devices. A folder's menu (its ⋮, or right-click its title) has Rename, Move up, Move down and Delete folder; deleting a folder puts its rooms back in Rooms. A folder collapses like other sections and then shows its unread on its title. Favorites stay in Favorites and keep their folder. Direct messages and spaces cannot go in a folder. Rooms in a folder follow the Rooms sort.
