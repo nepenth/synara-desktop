@@ -340,3 +340,28 @@ async fn invalid_rooms_and_slots_are_rejected_before_any_io() {
         "drafts-invalid-event-id"
     );
 }
+
+#[tokio::test]
+async fn an_unverified_device_without_the_key_reports_needs_recovery() {
+    let server = MatrixMockServer::new().await;
+    let room = room_id!("!drafts:example.org");
+    let client = joined_client(&server, room).await;
+    let owner = DraftSyncOwner::start(&client, Arc::new(|_| {}), 1).unwrap();
+
+    let status = owner.status().await;
+    assert_eq!(status.key_state, super::NativeDraftKeyState::NeedsRecovery);
+    // It neither asks other devices nor creates a key.
+    assert!(client
+        .state_store()
+        .get_custom_value(DRAFTS_KEY_CACHE_KEY)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(server
+        .server()
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .all(|request| !request.url.path().contains("sendToDevice")));
+}

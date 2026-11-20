@@ -2320,10 +2320,7 @@
     "Not signed in" : {
 
     },
-    "Not syncing yet: asked your other verified devices for the drafts key. If none of them syncs drafts, enter your recovery key in Settings › Security & recovery." : {
-
-    },
-    "Not syncing yet: this device needs your recovery key. Enter it in Settings › Security & recovery." : {
+    "Not syncing yet: this device is not verified. Verify it with another device or your recovery key in Settings › Security & recovery." : {
 
     },
     "Note" : {
@@ -3101,6 +3098,9 @@
     "Set up device verification first so its identity can be protected by secret storage." : {
 
     },
+    "Setting up: asking your other verified devices for the drafts key. If none of them has it, this device creates it in a few seconds." : {
+
+    },
     "Settings" : {
 
     },
@@ -3672,7 +3672,7 @@
     "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly." : {
 
     },
-    "Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them." : {
+    "Unsent messages follow you to your other Synara devices, end-to-end encrypted. It works on every device you have verified." : {
 
     },
     "Unsupported action: %@" : {

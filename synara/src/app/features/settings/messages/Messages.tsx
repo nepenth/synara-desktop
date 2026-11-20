@@ -10,7 +10,11 @@ import { isMacOS } from '../../../utils/user-agent';
 import { SequenceCardStyle } from '../styles.css';
 import { InlineMessage } from '../../../components/inline-message';
 import { isSynaraDesktop } from '../../../utils/desktop';
-import { draftSyncStatus, type DraftKeyState } from '../../room/nativeDraftSync';
+import {
+  draftSyncStatus,
+  subscribeSyncedDrafts,
+  type DraftKeyState,
+} from '../../room/nativeDraftSync';
 import { SettingsPage, SettingsSection } from '../../../components/settings-layout';
 
 function Composer() {
@@ -90,11 +94,23 @@ function DraftSyncKeyHint({ enabled }: { enabled: boolean }) {
       return undefined;
     }
     let live = true;
-    draftSyncStatus().then((status) => {
-      if (live) setKeyState(status?.keyState);
+    let unsubscribe: (() => void) | undefined;
+    const refresh = () => {
+      void draftSyncStatus().then((status) => {
+        if (live) setKeyState(status?.keyState);
+      });
+    };
+    refresh();
+    // Core announces a key that arrived or was created as an update for every room.
+    void subscribeSyncedDrafts((roomId) => {
+      if (roomId === undefined) refresh();
+    }).then((stop) => {
+      if (live) unsubscribe = stop;
+      else stop();
     });
     return () => {
       live = false;
+      unsubscribe?.();
     };
   }, [enabled]);
   if (keyState === 'needsRecovery') {
@@ -102,7 +118,7 @@ function DraftSyncKeyHint({ enabled }: { enabled: boolean }) {
       <InlineMessage tone="info">
         {t(
           'modernization.settings.sync_drafts.needs_recovery',
-          'Not syncing yet: this device needs your recovery key. Enter it under Security & recovery → Recovery.'
+          'Not syncing yet: this device is not verified. Verify it with another device or your recovery key under Security & recovery.'
         )}
       </InlineMessage>
     );
@@ -112,7 +128,7 @@ function DraftSyncKeyHint({ enabled }: { enabled: boolean }) {
       <InlineMessage tone="info">
         {t(
           'modernization.settings.sync_drafts.requesting',
-          'Not syncing yet: asked your other verified devices for the drafts key. If none of them syncs drafts, enter your recovery key under Security & recovery → Recovery.'
+          'Setting up: asking your other verified devices for the drafts key. If none of them has it, this device creates it in a few seconds.'
         )}
       </InlineMessage>
     );
@@ -131,7 +147,7 @@ function Drafts() {
           title={t('modernization.settings.sync_drafts.title', 'Sync drafts across devices')}
           description={t(
             'modernization.settings.sync_drafts.description',
-            'Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them.'
+            'Unsent messages follow you to your other Synara devices, end-to-end encrypted. It works on every device you have verified.'
           )}
           after={<Switch variant="Primary" value={syncDrafts} onChange={setSyncDrafts} />}
         />
