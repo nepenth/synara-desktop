@@ -706,6 +706,7 @@ pub fn run() {
             desktop_rendering_host::desktop_rendering_mode,
             desktop_rendering_host::desktop_set_rendering_mode,
             desktop_rendering_host::desktop_rendering_started,
+            desktop_rendering_host::desktop_rendering_restart,
             desktop_logging::desktop_append_log,
             desktop_logging::desktop_log_path,
             desktop_logging::desktop_record_diagnostic,

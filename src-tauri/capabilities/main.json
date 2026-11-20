@@ -53,6 +53,7 @@
     "allow-desktop-rendering-mode",
     "allow-desktop-set-rendering-mode",
     "allow-desktop-rendering-started",
+    "allow-desktop-rendering-restart",
     "allow-matrix-room-identity-warnings",
     "allow-matrix-account-data-types",
     "allow-matrix-account-data-get",

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-rendering-restart"
+description = "Enables the desktop_rendering_restart command without any pre-configured scope."
+commands.allow = ["desktop_rendering_restart"]
+
+[[permission]]
+identifier = "deny-desktop-rendering-restart"
+description = "Denies the desktop_rendering_restart command without any pre-configured scope."
+commands.deny = ["desktop_rendering_restart"]

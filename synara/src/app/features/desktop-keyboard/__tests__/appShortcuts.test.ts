@@ -287,6 +287,26 @@ test('the help sheet lists every bound shortcut once, by group, in sentence case
   }
 });
 
+test('the message selection keys are listed under Rooms and threads and left to the timeline', () => {
+  for (const [name, platform] of platforms) {
+    const room = appShortcutHelp(platform).find((group) => group.scope === 'room')!;
+    assert.deepEqual(
+      room.items.map((item) => [item.label, item.keys]),
+      [
+        ['Close the thread pane', ['Esc']],
+        ['Select your last message, from an empty message box', ['↑']],
+        ['Edit the selected message, if it is yours', ['E']],
+      ],
+      name
+    );
+  }
+  // Listed only: the dispatcher must not act on a bare Up or E anywhere.
+  assert.ok(appShortcut('select-last-message').external);
+  assert.ok(appShortcut('edit-selected-message').external);
+  assert.equal(appShortcutAction(key('ArrowUp', { altKey: true }), mac), 'previous-room');
+  assert.equal(appShortcutAction(key('e', { metaKey: true }), mac), undefined);
+});
+
 test('page zoom steps stay within the Appearance range', () => {
   assert.equal(nextPageZoom(100, 'zoom-in'), 110);
   assert.equal(nextPageZoom(100, 'zoom-out'), 90);

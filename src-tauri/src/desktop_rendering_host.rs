@@ -437,6 +437,28 @@ pub fn desktop_set_rendering_mode(
     ))
 }
 
+/// Starts Synara again so a newly saved mode applies. Closing the window
+/// leaves the app running in the tray, so "restart" is not something the
+/// window can do by itself. The app exits the way Quit does (drafts are
+/// written, sync stops) and starts once this process has gone.
+#[tauri::command]
+pub fn desktop_rendering_restart(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        match STARTUP.get() {
+            Some(startup) if startup.decision.applies => {
+                relaunch_after_exit(&app, &startup.decision)
+            }
+            _ => Err("The rendering setting is only available on Linux with Wayland.".to_owned()),
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = app;
+        Err("The rendering setting is only available on Linux with Wayland.".to_owned())
+    }
+}
+
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;

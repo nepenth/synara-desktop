@@ -27,6 +27,8 @@ export type AppShortcutAction =
   | 'focus-next-region'
   | 'focus-previous-region'
   | 'close-thread'
+  | 'select-last-message'
+  | 'edit-selected-message'
   | 'toggle-room-list'
   | 'zoom-in'
   | 'zoom-out'
@@ -78,7 +80,9 @@ export type AppShortcut = {
   /**
    * Handled by its own component rather than the dispatcher (listed in the
    * help sheet only). Quit lives on the Linux title strip, which is mounted
-   * on every screen, sign-in included.
+   * on every screen, sign-in included. The message selection keys belong to
+   * the message box and the timeline (`nativeTimelineKeyboardSelection.ts`):
+   * they act only there, and only on an empty box or a selected message.
    */
   external?: boolean;
 };
@@ -198,6 +202,22 @@ export const APP_SHORTCUTS: readonly AppShortcut[] = [
     label: 'Close the thread pane',
     scope: 'room',
     ...everywhere({ keys: ['Escape'] }),
+  },
+  {
+    // Slack's quick edit. Up and Down then move between messages, and Escape
+    // returns to the message box.
+    id: 'select-last-message',
+    label: 'Select your last message, from an empty message box',
+    scope: 'room',
+    external: true,
+    ...everywhere({ keys: ['ArrowUp'] }),
+  },
+  {
+    id: 'edit-selected-message',
+    label: 'Edit the selected message, if it is yours',
+    scope: 'room',
+    external: true,
+    ...everywhere({ keys: ['e'] }),
   },
   // View
   {

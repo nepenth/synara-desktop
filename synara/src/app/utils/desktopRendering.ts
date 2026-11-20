@@ -22,6 +22,7 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from './desktop';
 export const DESKTOP_RENDERING_MODE_COMMAND = 'desktop_rendering_mode';
 export const DESKTOP_SET_RENDERING_MODE_COMMAND = 'desktop_set_rendering_mode';
 export const DESKTOP_RENDERING_STARTED_COMMAND = 'desktop_rendering_started';
+export const DESKTOP_RENDERING_RESTART_COMMAND = 'desktop_rendering_restart';
 
 /**
  * `safe` draws everything on the CPU; `balanced` composites on the graphics
@@ -191,5 +192,25 @@ export const setDesktopRenderingMode = async (
     return status.available ? status : undefined;
   } catch {
     return undefined;
+  }
+};
+
+/**
+ * Quits Synara and starts it again so the saved mode applies; closing the
+ * window would only send the app to the tray. Resolves to `false` when the
+ * shell could not do it (an older shell has no such command), in which case
+ * the app keeps running.
+ */
+export const restartDesktopForRendering = async (): Promise<boolean> => {
+  if (!isSynaraDesktop()) return false;
+  try {
+    const result = await invokeDesktopWithAvailability<unknown>(
+      DESKTOP_RENDERING_RESTART_COMMAND,
+      undefined,
+      { suppressErrorDiagnostic: true }
+    );
+    return result.available;
+  } catch {
+    return false;
   }
 };

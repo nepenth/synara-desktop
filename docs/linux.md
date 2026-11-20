@@ -292,7 +292,7 @@ If that still fails, Synara switches to Off by itself (see "Automatic fallback" 
 
 The `.deb`, the AppImage and `tauri dev` have no wrapper and no such default: until you choose, Synara sets nothing and WebKitGTK draws with the graphics card. The automatic fallback applies to them too.
 
-**Settings → Appearance → Window → Hardware acceleration** changes it; restart Synara afterwards. It has three choices:
+**Settings → Appearance → Window → Hardware acceleration** changes it; the mode applies at the next start. After a change the setting shows **Restart now**, which quits Synara and starts it again. Closing the window is not a restart: Synara keeps running in the tray. It has three choices:
 
 | Choice   | Saved as   | What Synara sets                                                                              | Effect                                                                                                                                                                               |
 | -------- | ---------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
