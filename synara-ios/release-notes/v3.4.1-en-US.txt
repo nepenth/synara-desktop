@@ -1,0 +1,3 @@
+Synara 3.4.1 is the first build for testers outside the team. The app is the same as 3.4.0, which made Sync drafts across devices work on every verified device, without the recovery key.
+
+Please test: sign in to your homeserver, verify this device from another one, and send and read messages in an encrypted room. With two verified devices on this version, turn on Sync drafts across devices (Settings, Messages) on each and check a draft typed on one appears on the other. Send feedback from TestFlight with a screenshot.

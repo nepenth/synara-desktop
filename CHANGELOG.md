@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [3.4.1] - 2026-11-20
+
+- No app changes. The release workflow can now publish the iOS build to external TestFlight groups: a new `ios-testflight-external` job submits the build for Apple's beta review and assigns it to the groups in `SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS`, after the internal gate, without waiting for the review. External groups need `SYNARA_TESTFLIGHT_INTERNAL_ONLY=false`; the upload job fails early otherwise.
+
 ## [3.4.0] - 2026-11-20
 
 - Desktop (Linux): the Hardware acceleration setting has a Restart now button once you change the mode. Closing the window leaves Synara running in the tray, so the new mode did not apply until you quit from the tray icon; the note under the setting now says so.

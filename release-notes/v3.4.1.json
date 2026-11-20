@@ -1,0 +1,7 @@
+{
+  "version": "3.4.1",
+  "headline": "Same app, wider iPhone testing",
+  "items": [
+    { "text": "Nothing changed in the app since 3.4.0. This version exists so the iPhone build can go to testers outside the team.", "platforms": ["desktop", "ios"] }
+  ]
+}
