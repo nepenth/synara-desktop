@@ -4,7 +4,8 @@
 # git diffs.
 #
 # Inputs: EVENT_NAME, BASE_SHA, HEAD_SHA, PR_LABELS, GITHUB_BASE_REF,
-# GITHUB_HEAD_REF, GITHUB_REF_NAME, PACKAGES_INPUT (workflow_dispatch only),
+# GITHUB_HEAD_REF, GITHUB_REF_NAME, PACKAGES_INPUT and IOS_ONLY_TESTING_INPUT
+# (workflow_dispatch only),
 # IOS_PROOF_LOOKUP (set by ci.yml: hash the iOS inputs and look for a proof).
 set -euo pipefail
 
@@ -75,6 +76,19 @@ if [[ "${EVENT_NAME}" == "schedule" ]]; then
   exit 0
 fi
 if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+  # A dispatch naming iOS tests (IOS_ONLY_TESTING_INPUT) reruns just those, in
+  # the simulator job(s) whose target they name, and nothing else.
+  if [[ -n "${IOS_ONLY_TESTING_INPUT:-}" ]]; then
+    IFS=', ' read -r -a only_entries <<< "$IOS_ONLY_TESTING_INPUT"
+    for entry in "${only_entries[@]}"; do
+      case "${entry%%/*}" in
+        SynaraTests) IOS=true ;;
+        SynaraUITests) IOS_UI=true ;;
+      esac
+    done
+    emit
+    exit 0
+  fi
   full
   [[ "${PACKAGES_INPUT:-false}" == "true" ]] && PACKAGES=true
   emit

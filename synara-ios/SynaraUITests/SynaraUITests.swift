@@ -284,15 +284,18 @@ final class SynaraUITests: XCTestCase {
 
         login(app: app)
 
-        // Spaces live in the title menu (review-2 IOSS-2); the item
-        // identifiers are unchanged.
+        // Spaces live in the title menu (review-2 IOSS-2). iOS 27 drops menu
+        // items' identifiers, so the items are found by their visible label
+        // there, as a user picks them.
         XCTAssertTrue(app.buttons["RoomListTitleMenu"].waitForExistence(timeout: 5))
         tap(app.buttons["RoomListTitleMenu"])
-        tap(app.buttons["SpaceFilter-!workspace:matrix.org"])
+        tap(menuButton(in: app, "SpaceFilter-!workspace:matrix.org", labelPrefix: "Workspace"))
         XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
+        // Scoped: a room of the Ops space is no longer listed.
+        XCTAssertTrue(app.buttons["RoomRow-!security:matrix.org"].waitForNonExistence(timeout: 5))
         tap(app.buttons["RoomListTitleMenu"])
-        XCTAssertTrue(app.buttons["SpaceFilter-all"].waitForExistence(timeout: 5))
-        app.buttons["SpaceFilter-all"].tap()
+        tap(menuButton(in: app, "SpaceFilter-all", labeled: "All spaces"))
+        XCTAssertTrue(app.buttons["RoomRow-!security:matrix.org"].waitForExistence(timeout: 5))
     }
 
     func testRoomFoldersShowAsSectionsAndFileARoom() {
@@ -1532,9 +1535,12 @@ final class SynaraUITests: XCTestCase {
 
         tap(app.buttons["WhatsNewDismissButton"])
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: card)
-        waitForExpectations(timeout: 5)
+        waitForExpectations(timeout: 15)
 
-        tap(app.buttons["SettingsTab"], timeout: 10)
+        // By its label, as a user finds it: on the iOS 27.0 simulator the tab
+        // bar drops its items' identifiers after the card closes (27.2 keeps
+        // them); the label and the tab itself are unchanged.
+        tap(app.tabBars.buttons["Settings"], timeout: 10)
         tapSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10)
         let aboutScreen = identifiedElement(in: app, "AboutSettingsScreen")
         if aboutScreen.waitForExistence(timeout: 5) == false {
@@ -1546,7 +1552,9 @@ final class SynaraUITests: XCTestCase {
         whatsNewRow.tap()
         XCTAssertTrue(identifiedElement(in: app, "WhatsNewSettingsScreen").waitForExistence(timeout: 10))
         XCTAssertTrue(identifiedElement(in: app, "WhatsNewItem-0").exists)
-        XCTAssertTrue(app.buttons["WhatsNewSettingsReleaseNotesLink"].exists)
+        // A SwiftUI `Link`: a button on iOS 26 and earlier, a link element
+        // on iOS 27, so it is found by identifier whatever its type.
+        XCTAssertTrue(identifiedElement(in: app, "WhatsNewSettingsReleaseNotesLink").exists)
     }
 
     func testSettingsNavigationDestinationsOpenAndReturn() {
@@ -1693,11 +1701,47 @@ final class SynaraUITests: XCTestCase {
 
         let surface = identifiedElement(in: app, "ComposerInputSurface")
         XCTAssertTrue(surface.waitForExistence(timeout: 5))
+        // On iOS 27.2 the surface's own accessibility frame keeps the height
+        // it had before the field grew, although the surface is drawn at its
+        // full height (checked on a screenshot). The buttons that sit inside
+        // the surface, pinned to its bottom edge, report where it really
+        // ends, so the surface's bounds are its frame joined with theirs.
+        let surfaceBounds: () -> CGRect = {
+            var bounds = surface.frame
+            for name in ["AttachmentButton", "ComposerFormattingToggle"] {
+                let button = app.buttons[name]
+                if button.exists {
+                    bounds = bounds.union(button.frame)
+                }
+            }
+            return bounds
+        }
+        let fits: () -> Bool = {
+            let bounds = surfaceBounds()
+            return field.frame.minY >= bounds.minY - 0.5 && field.frame.maxY <= bounds.maxY + 0.5
+        }
+        let deadline = Date().addingTimeInterval(5)
+        while fits() == false && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
         let fieldFrame = field.frame
-        let surfaceFrame = surface.frame
-        print("COMPOSER_FRAMES field=\(fieldFrame) surface=\(surfaceFrame)")
+        let surfaceFrame = surfaceBounds()
+        print("COMPOSER_FRAMES field=\(fieldFrame) surface=\(surfaceFrame) reported=\(surface.frame)")
+        if fits() == false {
+            // A value assertion captures nothing by itself: keep what the
+            // screen and the accessibility tree looked like.
+            let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            screenshot.name = "composer-long-text-frames-disagree"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            let hierarchy = XCTAttachment(string: "field=\(fieldFrame) surface=\(surfaceFrame)\n\(app.debugDescription)")
+            hierarchy.name = "composer-long-text-hierarchy"
+            hierarchy.lifetime = .keepAlways
+            add(hierarchy)
+        }
         // The text field grows to its cap and then scrolls; it never draws
         // past the rounded input surface (it overflowed both edges before).
+        XCTAssertGreaterThan(app.buttons["AttachmentButton"].frame.height, 0)
         XCTAssertGreaterThanOrEqual(fieldFrame.minY, surfaceFrame.minY - 0.5)
         XCTAssertLessThanOrEqual(fieldFrame.maxY, surfaceFrame.maxY + 0.5)
     }
@@ -3471,6 +3515,23 @@ final class SynaraUITests: XCTestCase {
             return byIdentifier
         }
         return lastButton(in: app, labeled: label)
+    }
+
+    /// A menu item by identifier, or by the start of its label where the OS
+    /// drops menu items' identifiers (iOS 27). For items whose label carries
+    /// a count after the name, such as "Workspace, 10 unread".
+    private func menuButton(in app: XCUIApplication, _ identifier: String, labelPrefix: String) -> XCUIElement {
+        let byIdentifier = app.buttons[identifier]
+        if byIdentifier.waitForExistence(timeout: 2) {
+            return byIdentifier
+        }
+        let matches = app.buttons.matching(NSPredicate(
+            format: "(label == %@ OR label BEGINSWITH %@) AND NOT (identifier BEGINSWITH 'RoomList') AND NOT (identifier BEGINSWITH 'RoomRow')",
+            labelPrefix,
+            labelPrefix + ","
+        ))
+        _ = matches.firstMatch.waitForExistence(timeout: 5)
+        return matches.element(boundBy: max(0, matches.count - 1))
     }
 
     /// A menu item by label, never the list's own header or row with that name.

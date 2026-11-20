@@ -323,9 +323,73 @@ excluded. Inspect `npm run audit:build-cache` and the workflow cache summaries
 before increasing budgets or generations, especially with the current 10 GB
 repository limit. Toolchain changes can temporarily add extra snapshots.
 
-Apple CI jobs select **Xcode 26.6 / 17F113** using
-`DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer`, a version
-available in the [macOS 26 runner image](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md).
+Apple CI jobs and the TestFlight build run on the `xcode-27` runner image
+(macOS 27) and select **Xcode 27.2 / 27B52** using
+`DEVELOPER_DIR=/Applications/Xcode_27.2.app/Contents/Developer`, a version
+listed in the [Xcode 27 runner image](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md),
+so the app is built with the iOS 27 SDK. That image is a public preview on
+GitHub; if a job fails on the runner itself, check the image's announcements
+before the code. The deployment target stays iOS 16.
+
+The simulator test jobs set `IOS_SIMULATOR_RUNTIME=27.2` and
+`IOS_SIMULATOR_DEVICE=iPhone 17`. Their first step after checkout,
+`synara-ios/scripts/ci-simulator.sh prepare`, waits for the runtimes to be
+mounted, picks the 27.2 runtime that runs an iPhone 17 (the image also has an
+iPhone Duo-only 27.2 runtime) and creates a fresh device on it, without booting
+it. After the build, `ci-build.sh` boots it (`ci-simulator.sh ready`), waits for
+`simctl bootstatus`, and tests on its UDID instead of whichever "iPhone 17"
+xcodebuild picks by name. The device is booted only then because on this image
+a booted simulator's first-boot work slows everything beside it: with the device
+booted at job start, the build steps took minutes longer, a script test hit its
+time limit, and shutting the device down again to spare the build hung for
+minutes. There is no extra health check between boot and tests: for minutes
+after a first boot every `simctl` query hung, while xcodebuild waited it out
+and ran the tests. If the tests fail, the step prints the runtime state and the
+`simdiskimaged` log; the smoke workflow runs the full check
+(`ci-simulator.sh check`: booted, runtime mounted, answers `simctl spawn`). The unit suite runs on that one device
+without parallel clones. On this image `simdiskimaged` can unmount a runtime
+after CoreSimulator starts
+([runner-images#14946](https://github.com/actions/runner-images/issues/14946),
+[#15334](https://github.com/actions/runner-images/issues/15334)), which showed
+up as "The iOS 27.2 simulator runtime is not available" and as clones that never
+answered. A failed boot, check or test step prints the runtime state and the
+`simdiskimaged` log. The App Store requirement is the SDK the app is built
+with, not the simulator OS, so if 27.2 stays unreliable on the image,
+`IOS_SIMULATOR_RUNTIME` can drop to 27.0 while the build keeps the iOS 27.2 SDK.
+
+**Iterating on iOS CI quickly.** Each loop below is cheaper than a full run:
+
+- *The image, its runtimes or `ci-simulator.sh`:* the **iOS simulator smoke**
+  workflow (`.github/workflows/ios-simulator-smoke.yml`) boots the test device
+  and launches Settings in it in about three minutes, with no Rust and no
+  xcodebuild. Run it with
+  `gh workflow run ios-simulator-smoke.yml --ref <branch> -f runtime=27.0`
+  (inputs: `xcode`, `runtime`, `device`); a pull request that changes the
+  script or the workflow runs it by itself.
+- *A missing runtime or a runtime/device pair that does not fit* now fails in
+  the real jobs' first minutes, in the "Create iOS test simulator" step, before
+  the Rust and Swift builds. A device that will not boot still shows up only
+  after the build; the smoke workflow is the quick way to test booting.
+- *Cold builds:* compiler caches are keyed by toolchain, so a new Xcode starts
+  with no snapshot and the first run builds everything, about 30 minutes for
+  the Apple Rust slice. A pull request whose `iOS simulator tests` job finds no
+  Rust or Xcode compiler snapshot for its toolchain saves one after building,
+  pass or fail (`seed-pull-request` in `setup-rust-cache`, `save-xcode-cache`).
+  GitHub scopes it to that pull request, so only its own later runs use it and
+  main's snapshots are untouched. The Rust snapshot is about 0.7 to 1.2 GB and
+  the Xcode one is under 512 MiB, inside the repository's 10 GB cache limit,
+  where GitHub evicts the least recently used entries first. Pull requests that
+  find main's snapshot only read it, as before.
+- *One failing test class:* dispatch CI with the `ios_only_testing` input, e.g.
+  `gh workflow run ci.yml --ref <branch> -f ios_only_testing=SynaraTests/TimelinePolishTests`.
+  It runs only the iOS simulator job(s) whose target the list names (comma-separated
+  `Target[/Class[/test]]`), passes `-only-testing` through `ci-build.sh`
+  (`IOS_ONLY_TESTING`), and records no reusable proof for the pull request.
+
+The simulator and compile jobs install XcodeGen 2.46.0 from its GitHub release
+with a pinned SHA-256 (`.github/actions/install-xcodegen`), because Homebrew
+only installs the newest XcodeGen; a version bump is a reviewed change to that
+action.
 The selected version is checked before Swift cache work; the nightly device
 cache seed checks it directly. Apple Rust cache identities include
 `DEVELOPER_DIR`, Xcode build, macOS/iOS/simulator SDK versions and Rust compiler,

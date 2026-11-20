@@ -10,6 +10,17 @@ inputs:
   max-size:
     description: Production compiler store LRU eviction target
     default: 5GiB
+  seed-pull-request:
+    description: >-
+      On a pull request that finds no compiler snapshot at all for this family
+      (a new Xcode or Rust, say), output seed-key so the job can save one after
+      its build, scoped to that pull request, and its next runs start warm.
+      Main's snapshots are untouched.
+    default: "false"
+outputs:
+  seed-key:
+    description: Snapshot key this pull request should save after building; empty when a snapshot exists
+    value: ${{ steps.seed.outputs.key }}
 runs:
   using: composite
   steps:
@@ -27,6 +38,26 @@ runs:
       id: week
       shell: bash
       run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+    - name: Look up compiler snapshots for a seeding pull request
+      id: seed-lookup
+      if: inputs.save-cache != 'true' && inputs.seed-pull-request == 'true' && github.event_name == 'pull_request'
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        lookup-only: true
+        path: ${{ github.workspace }}/.kache-cache
+        key: ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-${{ steps.week.outputs.week }}
+        restore-keys: |
+          ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-
+          ${{ steps.identity.outputs.compiler-prefix }}-
+    - name: Name the pull-request-scoped compiler snapshot
+      id: seed
+      if: steps.seed-lookup.outcome == 'success' && steps.seed-lookup.outputs.cache-matched-key == ''
+      shell: bash
+      env:
+        SEED_KEY: ${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-${{ steps.week.outputs.week }}
+      run: |
+        echo "key=$SEED_KEY" >> "$GITHUB_OUTPUT"
+        echo "No compiler snapshot exists for this family; this pull request will save \`$SEED_KEY\` for its own later runs." >> "$GITHUB_STEP_SUMMARY"
     - name: Restore compiler snapshots for readers
       if: inputs.save-cache != 'true'
       uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5

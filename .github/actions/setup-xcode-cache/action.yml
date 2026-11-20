@@ -13,6 +13,9 @@ outputs:
   cache-hit:
     description: Whether this week's snapshot already exists
     value: ${{ steps.restore.outputs.cache-hit }}
+  restored-key:
+    description: Key of the snapshot restored, exact or by prefix; empty when none exists for this toolchain
+    value: ${{ steps.restore.outputs.cache-matched-key }}
 runs:
   using: composite
   steps:
@@ -20,10 +23,10 @@ runs:
       id: paths
       shell: bash
       run: |
-        expected_xcode=$'Xcode 26.6\nBuild version 17F113'
+        expected_xcode=$'Xcode 27.2\nBuild version 27B52'
         actual_xcode="$(xcodebuild -version)"
         if [[ "$actual_xcode" != "$expected_xcode" ]]; then
-          echo "Expected pinned Xcode 26.6 (17F113); selected toolchain: $actual_xcode" >&2
+          echo "Expected pinned Xcode 27.2 (27B52); selected toolchain: $actual_xcode" >&2
           exit 1
         fi
         export SYNARA_IOS_CACHE_ROOT="$GITHUB_WORKSPACE/.xcode-cache"

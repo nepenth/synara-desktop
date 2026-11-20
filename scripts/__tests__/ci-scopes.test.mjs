@@ -343,6 +343,25 @@ test("package builds and cache seeding run nightly or on request only", () => {
   );
 });
 
+test("a dispatch naming iOS tests runs only the simulator jobs those tests belong to", () => {
+  const unit = scopes(["crates/synara-core/src/core.rs"], {
+    EVENT_NAME: "workflow_dispatch",
+    IOS_ONLY_TESTING_INPUT: "SynaraTests/TimelinePolishTests, SynaraTests/ComposerMatrixFormattingTests",
+  });
+  assert.equal(unit.ios, "true");
+  assert.equal(unit.ios_ui, "false");
+  assert.equal(unit.validate_rust, "false");
+  assert.equal(unit.validate_frontend, "false");
+  assert.equal(unit.synapse, "false");
+  assert.equal(unit.packages, "false");
+  const both = scopes([], {
+    EVENT_NAME: "workflow_dispatch",
+    IOS_ONLY_TESTING_INPUT: "SynaraUITests/ComposerUITests,SynaraTests/TimelinePolishTests",
+  });
+  assert.equal(both.ios, "true");
+  assert.equal(both.ios_ui, "true");
+});
+
 test("a release PR skips iOS simulator tests an earlier run proved on the same inputs", () => {
   const result = scopes(
     ["docs/releases/v2.1.2.md", "synara-ios/Synara/App.swift"],

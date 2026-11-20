@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- iOS: the app is now built with the iOS 27 SDK (Xcode 27.2), in CI and for TestFlight, ahead of Apple's April 2027 requirement. The minimum supported iOS version is unchanged (16.0).
+- iOS: a web address written without `http://` (`example.com`, `www.example.com`) in a plain message opens over `http://` on every iOS version again, as on desktop. iOS 27.2's link detector had switched such links to `https://`.
+
 ## [3.3.0] - 2026-11-19
 
 - Desktop: room folders. Group rooms into your own sections in the room list, such as "Work" or "Side projects". A room's menu has Move to folder, with New folder… and Remove from folder; Home options has New folder. Folders show on Home between Favorites and Rooms, in a space when they hold rooms of that space, and sync to your other devices. A folder's menu (its ⋮, or right-click its title) has Rename, Move up, Move down and Delete folder; deleting a folder puts its rooms back in Rooms. A folder collapses like other sections and then shows its unread on its title. Favorites stay in Favorites and keep their folder. Direct messages and spaces cannot go in a folder. Rooms in a folder follow the Rooms sort.

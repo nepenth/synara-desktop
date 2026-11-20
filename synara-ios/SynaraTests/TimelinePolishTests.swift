@@ -142,6 +142,29 @@ final class TimelinePolishTests: XCTestCase {
         XCTAssertEqual(linkedRuns, ["https://matrix.org/docs/", "example.com", "ada@example.org"])
     }
 
+    func testBareAddressesOpenOverHTTPWhateverSchemeTheDetectorPicks() throws {
+        // iOS 27.2's data detector returns `https://` for a bare domain where
+        // earlier systems (and desktop's linkify) use `http://`.
+        let detectedHTTPS = try XCTUnwrap(URL(string: "https://example.com/a?b=1#c"))
+        XCTAssertEqual(
+            SynaraPlainTextLinks.webURL(written: "example.com/a?b=1#c", detected: detectedHTTPS).absoluteString,
+            "http://example.com/a?b=1#c"
+        )
+        XCTAssertEqual(
+            SynaraPlainTextLinks.webURL(written: "www.example.com", detected: try XCTUnwrap(URL(string: "https://www.example.com"))).absoluteString,
+            "http://www.example.com"
+        )
+        // A scheme the sender wrote is kept.
+        XCTAssertEqual(
+            SynaraPlainTextLinks.webURL(written: "HTTPS://example.com", detected: try XCTUnwrap(URL(string: "https://example.com"))).absoluteString,
+            "https://example.com"
+        )
+        XCTAssertEqual(
+            SynaraPlainTextLinks.links(in: "See www.example.net and https://secure.example.org").map(\.url.absoluteString),
+            ["http://www.example.net", "https://secure.example.org"]
+        )
+    }
+
     func testFilePathsAndFileNamesAreNotLinks() {
         // `README_SUBMISSION.md` once linked to submission.md: `.md` is a real
         // top-level domain and the underscore ends a domain name.

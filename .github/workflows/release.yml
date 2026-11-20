@@ -622,9 +622,9 @@ jobs:
     name: Upload iOS internal TestFlight build
     if: startsWith(github.ref_name, 'v')
     needs: [quality-gate]
-    runs-on: macos-26
+    runs-on: xcode-27
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     # Match exact-tag iOS: UniFFI generate + archive exceed 45m.
     timeout-minutes: 90
     outputs:
