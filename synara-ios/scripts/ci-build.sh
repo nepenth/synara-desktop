@@ -298,8 +298,9 @@ xcodebuild \
 
 if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
   # CI creates its test device before building (IOS_SIMULATOR_UDID, from
-  # ci-simulator.sh prepare) and boots and checks it only now, after the
-  # build: a booted simulator slows the build steps beside it. With
+  # ci-simulator.sh prepare) and boots it only now, after the build: a booted
+  # simulator slows the build steps beside it. A failed test run prints the
+  # runtime state and simdiskimaged log. With
   # only IOS_SIMULATOR_RUNTIME (e.g. 27.2), a fresh device on exactly that
   # runtime is booted here. Either way xcodebuild never picks a device by name.
   if [[ -n "${IOS_SIMULATOR_UDID:-}" ]]; then

@@ -9,9 +9,9 @@
 #       and create a fresh device on it without booting it. Prints its UDID
 #       (the only line on stdout).
 #   ci-simulator.sh ready <udid>
-#       Boot that device, wait until it has finished booting, and check it.
+#       Boot that device and wait until it has finished booting.
 #   ci-simulator.sh boot <iOS version> <device type name>
-#       prepare, then ready; prints the UDID.
+#       prepare, then ready; prints the UDID. The smoke workflow then checks.
 #   ci-simulator.sh check <udid>
 #       Fail unless that device is booted, its runtime is still mounted and it
 #       answers a command.
@@ -136,7 +136,10 @@ ready() {
     return 1
   fi
   log "booted in $((SECONDS - started)) s"
-  check "$udid"
+  # No check here: right after a first boot on the Xcode 27 image, every
+  # simctl query (even simctl list) took minutes (run 44641011484), while
+  # xcodebuild started on the device fine (run 44611032665). If the tests
+  # fail, ci-build.sh prints the diagnostics; smoke runs the full check.
 }
 
 boot() {

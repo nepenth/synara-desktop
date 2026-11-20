@@ -337,12 +337,16 @@ The simulator test jobs set `IOS_SIMULATOR_RUNTIME=27.2` and
 mounted, picks the 27.2 runtime that runs an iPhone 17 (the image also has an
 iPhone Duo-only 27.2 runtime) and creates a fresh device on it, without booting
 it. After the build, `ci-build.sh` boots it (`ci-simulator.sh ready`), waits for
-`simctl bootstatus`, checks its runtime is still mounted and that it answers,
-and tests on its UDID instead of whichever "iPhone 17" xcodebuild picks by
-name. The device is booted only then because on this image a booted
-simulator's first-boot work slows everything beside it: with the device booted
-at job start, the build steps took minutes longer, a script test hit its time
-limit, and shutting the device down again to spare the build hung for minutes. The unit suite runs on that one device
+`simctl bootstatus`, and tests on its UDID instead of whichever "iPhone 17"
+xcodebuild picks by name. The device is booted only then because on this image
+a booted simulator's first-boot work slows everything beside it: with the device
+booted at job start, the build steps took minutes longer, a script test hit its
+time limit, and shutting the device down again to spare the build hung for
+minutes. There is no extra health check between boot and tests: for minutes
+after a first boot every `simctl` query hung, while xcodebuild waited it out
+and ran the tests. If the tests fail, the step prints the runtime state and the
+`simdiskimaged` log; the smoke workflow runs the full check
+(`ci-simulator.sh check`: booted, runtime mounted, answers `simctl spawn`). The unit suite runs on that one device
 without parallel clones. On this image `simdiskimaged` can unmount a runtime
 after CoreSimulator starts
 ([runner-images#14946](https://github.com/actions/runner-images/issues/14946),
