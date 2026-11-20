@@ -211,6 +211,15 @@ import {
 } from './nativeTimelineRedact';
 import { isNativeTextEditable } from './nativeTimelineEdit';
 import {
+  adjacentSelectableRow,
+  focusTimelineComposer,
+  lastOwnMessageTarget,
+  registerTimelineLastOwnMessageFocus,
+  timelineMessageLabel,
+  timelineSelectionKey,
+  type TimelineSelectionRow,
+} from './nativeTimelineKeyboardSelection';
+import {
   nativeTimelineActionErrorMessage,
   nativeTimelineLoadErrorMessage,
   TIMELINE_ACTION_FAILED,
@@ -370,6 +379,19 @@ const rowSenderId = (row: NativeTimelineViewRow | undefined): string | undefined
   if ('senderId' in row) return row.senderId;
   return undefined;
 };
+
+/** How keyboard selection sees a row: whether it takes focus, and whether it is mine. */
+const rowKeyboardSelection = (
+  row: NativeTimelineViewRow,
+  ownUserId: string | undefined
+): TimelineSelectionRow => ({
+  selectable: Boolean(rowEventId(row) && rowCapabilities(row)),
+  ownMessage:
+    (row.kind === 'message' || row.kind === 'sticker' || row.kind === 'poll') &&
+    ownUserId !== undefined &&
+    rowSenderId(row) === ownUserId,
+  sending: nativeTimelineUnsentDelivery(nativeTimelineEchoFields(row))?.status === 'sending',
+});
 
 /**
  * Messages from other people after the read position (the unread divider when
@@ -541,6 +563,8 @@ type NativeTimelineRowProps = {
   editing: boolean;
   /** Open the editor for an event, or close it with `undefined`. */
   onEditingChange: (eventId: string | undefined) => void;
+  /** After an edit opened with E: focus the message box. True when it did. */
+  restoreFocusAfterEdit: () => boolean;
   /** This account's latest loaded reply to this row's question card. */
   ownQuestionReply?: string;
 };
@@ -1232,6 +1256,8 @@ type NativeTimelineRowActionSurfaceProps = {
   onDiscardUnsent?: (transactionId: string) => void;
   onRetryUnsent?: (transactionId: string) => void;
   shield?: NativeTimelineShieldPresentation;
+  /** What a screen reader says when the row takes focus; a message names its sender and text. */
+  label?: string;
 };
 
 const NativeTimelineShieldBadge = ({ shield }: { shield: NativeTimelineShieldPresentation }) => (
@@ -1261,6 +1287,7 @@ const NativeTimelineRowActionSurface = ({
   onDiscardUnsent,
   onRetryUnsent,
   shield,
+  label,
 }: NativeTimelineRowActionSurfaceProps) => {
   const { eventId, capabilities } = actionProps;
   const [hovered, setHovered] = useState(false);
@@ -1274,6 +1301,8 @@ const NativeTimelineRowActionSurface = ({
   const { hoverProps } = useHover({ onHoverChange: setHovered });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setFocusWithin });
   const hasActionMenu = Boolean(eventId && capabilities);
+  // E on the focused row opens the editor (the presenter handles the key).
+  const editableByKey = hasActionMenu && Boolean(capabilities?.edit && actionProps.onEdit);
   const menuOpen = Boolean(menuAnchor);
   const emojiBoardOpen = Boolean(emojiBoardAnchor);
   const actionsActive =
@@ -1370,7 +1399,9 @@ const NativeTimelineRowActionSurface = ({
       {...(hasActionMenu ? focusWithinProps : {})}
       tabIndex={hasActionMenu ? 0 : undefined}
       role={hasActionMenu ? 'group' : undefined}
-      aria-label={hasActionMenu ? 'Message actions' : undefined}
+      aria-label={hasActionMenu ? (label ?? 'Message actions') : undefined}
+      aria-keyshortcuts={editableByKey ? 'E' : undefined}
+      data-native-timeline-editable={editableByKey ? 'true' : undefined}
       className={htmlCss.MessageActionSurface}
     >
       {showActionRail && (
@@ -2309,6 +2340,7 @@ const NativeTimelineRowImpl = ({
   onOpenMediaViewer,
   editing,
   onEditingChange,
+  restoreFocusAfterEdit,
   ownQuestionReply,
 }: NativeTimelineRowProps) => {
   const [declinePending, setDeclinePending] = useState(false);
@@ -2568,6 +2600,7 @@ const NativeTimelineRowImpl = ({
             onOpenThread,
             onEdit: editableInPlace ? () => onEditingChange(eventId) : undefined,
           }}
+          label={timelineMessageLabel(displayNameForRow(row), row.body)}
           onReaction={runReaction}
           unsent={unsentDelivery}
           shield={shield}
@@ -2654,6 +2687,7 @@ const NativeTimelineRowImpl = ({
                       formattedBody={row.formattedBody}
                       messageType={row.messageType}
                       onClose={() => onEditingChange(undefined)}
+                      restoreFocus={restoreFocusAfterEdit}
                     />
                   ) : (
                     <div className={htmlCss.MessageBody}>
@@ -3151,6 +3185,18 @@ export function NativeTimelinePresenter({
   // Kept here, not in the row, so an edit survives the row scrolling away.
   const [editingEventId, setEditingEventId] = useState<string>();
   useEffect(() => setEditingEventId(undefined), [roomId, threadRootId]);
+  // An edit opened with E ends in the message box (Slack's quick edit); one
+  // opened from the row's menu or rail returns focus to the message.
+  const editReturnsToComposerRef = useRef(false);
+  const changeEditing = useCallback((editEventId: string | undefined) => {
+    if (editEventId !== undefined) editReturnsToComposerRef.current = false;
+    setEditingEventId(editEventId);
+  }, []);
+  const restoreFocusAfterEdit = useCallback(() => {
+    if (!editReturnsToComposerRef.current) return false;
+    editReturnsToComposerRef.current = false;
+    return focusTimelineComposer(roomId, threadRootId);
+  }, [roomId, threadRootId]);
   const showActionError = useCallback(
     (message: string) => setNotice({ tone: 'error', message }),
     []
@@ -4164,6 +4210,103 @@ export function NativeTimelinePresenter({
     pinParkedHistory(index, saved.anchor.offsetPx, saved.anchor.eventId);
   }, [totalSize, roomId, rows, virtualizer, pinParkedHistory, stickToLiveTail, readyState]);
 
+  // Keyboard selection: a row's surface takes real focus, so the focus ring,
+  // the action rail and the screen reader all follow it. A row outside the
+  // rendered window is scrolled to first and focused once it is in the DOM.
+  const focusRowSurface = useCallback(
+    (index: number, framesLeft = 12) => {
+      const rowElement = scrollRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`);
+      const surface = rowElement?.querySelector<HTMLElement>('[data-native-timeline-row-surface]');
+      if (surface) {
+        surface.focus();
+        return;
+      }
+      if (rowElement || framesLeft <= 0) return;
+      if (framesLeft === 12)
+        virtualizer.scrollToIndex(index, { align: 'center', behavior: 'auto' });
+      window.requestAnimationFrame(() => focusRowSurface(index, framesLeft - 1));
+    },
+    [virtualizer]
+  );
+  // Up from this timeline's empty message box.
+  const focusLastOwnMessage = useCallback((): boolean => {
+    const target = lastOwnMessageTarget(rows.map((row) => rowKeyboardSelection(row, ownUserId)));
+    if (target.kind !== 'row') return false;
+    focusRowSurface(target.index);
+    return true;
+  }, [focusRowSurface, ownUserId, rows]);
+  const focusLastOwnMessageRef = useRef(focusLastOwnMessage);
+  useLayoutEffect(() => {
+    focusLastOwnMessageRef.current = focusLastOwnMessage;
+  }, [focusLastOwnMessage]);
+  useLayoutEffect(
+    () =>
+      registerTimelineLastOwnMessageFocus(roomId, threadRootId, () =>
+        focusLastOwnMessageRef.current()
+      ),
+    [roomId, threadRootId]
+  );
+  // Keys on a selected message. Only the row surface itself counts: keys in
+  // its buttons, links, menus and the in-place editor keep their own meaning.
+  const onSelectionKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const { target } = event;
+      if (
+        !(target instanceof HTMLElement) ||
+        !target.hasAttribute('data-native-timeline-row-surface') ||
+        event.nativeEvent.isComposing
+      ) {
+        return;
+      }
+      const action = timelineSelectionKey(event);
+      if (!action) return;
+      const key = target
+        .closest('[data-native-timeline-row-key]')
+        ?.getAttribute('data-native-timeline-row-key');
+      const index = key ? rowIndexByKeyRef.current.get(key) : undefined;
+      const row = index === undefined ? undefined : rows[index];
+      if (index === undefined || !row) return;
+      // A handled key stops here: Escape must not also close the thread pane,
+      // and a letter must not also start typing in the room's message box.
+      const handled = () => {
+        event.preventDefault();
+        event.stopPropagation();
+      };
+      if (action === 'composer') {
+        if (focusTimelineComposer(roomId, threadRootId)) handled();
+        return;
+      }
+      if (action === 'edit') {
+        const selectedEventId = rowEventId(row);
+        if (
+          !selectedEventId ||
+          target.dataset.nativeTimelineEditable !== 'true' ||
+          !rowKeyboardSelection(row, ownUserId).ownMessage
+        ) {
+          return;
+        }
+        handled();
+        changeEditing(selectedEventId);
+        editReturnsToComposerRef.current = true;
+        return;
+      }
+      const next = adjacentSelectableRow(
+        rows.map((candidate) => rowKeyboardSelection(candidate, ownUserId)),
+        index,
+        action
+      );
+      if (next !== undefined) {
+        handled();
+        focusRowSurface(next);
+        return;
+      }
+      // Below the newest message is the message box. Above the oldest loaded
+      // one the key scrolls as usual, which loads older messages.
+      if (action === 'next' && focusTimelineComposer(roomId, threadRootId)) handled();
+    },
+    [changeEditing, focusRowSurface, ownUserId, roomId, rows, threadRootId]
+  );
+
   const onFocusEvent = useCallback(
     (targetEventId: string) => {
       const index = findAnchorIndex(rows, { itemId: targetEventId, eventId: targetEventId });
@@ -4646,6 +4789,9 @@ export function NativeTimelinePresenter({
               ) : null}
               <div
                 style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}
+                // Keys bubble here from the focused message; the box itself is not a control.
+                role="presentation"
+                onKeyDown={onSelectionKeyDown}
               >
                 {virtualizer.getVirtualItems().map((virtualItem) => {
                   const row = rows[virtualItem.index];
@@ -4700,7 +4846,8 @@ export function NativeTimelinePresenter({
                         onOpenMarkdownPreview={setFilePreview}
                         onOpenMediaViewer={setMediaViewer}
                         editing={editingEventId !== undefined && rowEventId(row) === editingEventId}
-                        onEditingChange={setEditingEventId}
+                        onEditingChange={changeEditing}
+                        restoreFocusAfterEdit={restoreFocusAfterEdit}
                         ownQuestionReply={
                           ownQuestionReplies && row.kind === 'message' && row.agentQuestion
                             ? ownQuestionReplies.get(rowEventId(row) ?? '')

@@ -39,6 +39,7 @@ import {
 import FocusTrap from '../../components/FocusTrap';
 
 import { requestRoomLatestAfterSend } from './nativeTimelineNavigation';
+import { useComposerTimelineSelection } from './useComposerTimelineSelection';
 import * as depthCss from '../../styles/Depth.css';
 import {
   EditorChangeHandler,
@@ -1469,8 +1470,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       }
     };
 
+    // Up in an empty box selects my last message in this room or thread.
+    const arrowUpToTimeline = useComposerTimelineSelection(editor, roomId, threadRootEventId);
+
     const handleKeyDown: KeyboardEventHandler = useCallback(
       (evt) => {
+        if (arrowUpToTimeline(evt, Boolean(autocompleteQuery))) return;
         if (
           (isKeyHotkey('mod+enter', evt) || (!enterForNewline && isKeyHotkey('enter', evt))) &&
           !isComposing(evt)
@@ -1513,6 +1518,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         }
       },
       [
+        arrowUpToTimeline,
         submit,
         clearReplyDraft,
         enterForNewline,

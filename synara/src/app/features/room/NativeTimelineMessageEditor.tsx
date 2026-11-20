@@ -63,6 +63,12 @@ type NativeTimelineMessageEditorProps = {
   messageType?: string;
   /** Leave edit mode: after a save, or when the user cancels. */
   onClose: () => void;
+  /**
+   * Where focus goes once the editor is gone. Returns true when it placed
+   * focus itself (an edit opened with E goes back to the message box);
+   * otherwise focus returns to the message.
+   */
+  restoreFocus?: () => boolean;
 };
 
 type MessageEditorBodyProps = NativeTimelineMessageEditorProps & {
@@ -101,6 +107,7 @@ function MessageEditorBody({
   formattedBody,
   messageType,
   onClose,
+  restoreFocus,
   editor,
   restore,
 }: MessageEditorBodyProps) {
@@ -152,8 +159,9 @@ function MessageEditorBody({
     // Focus goes back to the message, not to the page, when the editor goes.
     const surface = rootRef.current?.closest<HTMLElement>('[data-native-timeline-row-surface]');
     onClose();
+    if (restoreFocus?.()) return;
     if (surface) window.requestAnimationFrame(() => surface.focus({ preventScroll: true }));
-  }, [eventId, onClose, roomId]);
+  }, [eventId, onClose, restoreFocus, roomId]);
 
   const save = useCallback(async () => {
     if (savingRef.current) return;

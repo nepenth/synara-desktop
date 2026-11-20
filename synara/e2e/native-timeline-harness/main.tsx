@@ -12,6 +12,10 @@ import { DesktopAppShortcuts } from '../../src/app/features/desktop-keyboard/Des
 import { normalizeThreadDisplay } from '../../src/app/utils/threadDisplay';
 import { setNativeIdentity } from '../../src/app/state/nativeIdentity';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
+import { ComposerSafetyNet } from '../../src/app/features/room/ComposerSafetyNet';
+import { RoomComposer } from '../../src/app/features/room/RoomComposer';
+import { useComposerTimelineSelection } from '../../src/app/features/room/useComposerTimelineSelection';
+import type { Editor } from 'slate';
 import {
   applyNativeTimelineViewDelta,
   type NativeTimelinePosition,
@@ -1348,6 +1352,35 @@ const threadDisplay = normalizeThreadDisplay(params.get('threadDisplay'));
 // (viewport matrix), instead of the fixed 700px room.
 const fluid = params.has('fluid');
 
+/**
+ * `?composer`: a message box under the room and in the thread pane, with the
+ * key handling RoomInput gives it for its timeline (Up in an empty box). It
+ * sends nothing. Specs reach the Slate editors through `synaraComposerEditor`
+ * and `synaraThreadComposerEditor`.
+ */
+function HarnessComposerBody({ editor, threadRootId }: { editor: Editor; threadRootId?: string }) {
+  Object.assign(
+    window,
+    threadRootId ? { synaraThreadComposerEditor: editor } : { synaraComposerEditor: editor }
+  );
+  const arrowUpToTimeline = useComposerTimelineSelection(editor, room, threadRootId);
+  return (
+    <RoomComposer
+      editor={editor}
+      placeholder={threadRootId ? 'Reply in thread' : 'Message room'}
+      onKeyDown={(evt) => {
+        arrowUpToTimeline(evt, false);
+      }}
+    />
+  );
+}
+const harnessComposer = (threadRootId?: string) =>
+  params.has('composer') ? (
+    <ComposerSafetyNet surface={threadRootId ? 'thread' : 'room'}>
+      {({ editor }) => <HarnessComposerBody editor={editor} threadRootId={threadRootId} />}
+    </ComposerSafetyNet>
+  ) : undefined;
+
 function App() {
   const [mounted, setMounted] = useState(true);
   const [focusedEventId, setFocusedEventId] = useState<string>();
@@ -1394,6 +1427,7 @@ function App() {
               threadPaneRootEventId={paneRoot}
             />
           )}
+          {mounted && harnessComposer()}
         </div>
         {paneRoot && (
           <div style={{ height: polish ? 640 : 480, display: 'flex' }}>
@@ -1405,6 +1439,7 @@ function App() {
               availableWidth={fluid ? window.innerWidth : 1600}
               onWidthChange={setPaneWidth}
               onClose={() => setPaneRoot(undefined)}
+              composer={harnessComposer(paneRoot)}
             />
           </div>
         )}

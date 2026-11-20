@@ -138,6 +138,7 @@ const tests = [
   'src/app/features/room/__tests__/composerSendError.test.ts',
   'src/app/features/room/__tests__/composerWiringSourceGuard.test.ts',
   'src/app/features/room/__tests__/nativeTimelineNavigation.test.ts',
+  'src/app/features/room/__tests__/nativeTimelineKeyboardSelection.test.ts',
   'src/app/utils/__tests__/keyboard.test.ts',
   'src/app/features/room/__tests__/nativeSendStickerOwner.test.ts',
   'src/app/features/room/__tests__/nativeSendGifOwner.test.ts',

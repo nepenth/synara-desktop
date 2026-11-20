@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Desktop (Linux): the Hardware acceleration setting has a Restart now button once you change the mode. Closing the window leaves Synara running in the tray, so the new mode did not apply until you quit from the tray icon; the note under the setting now says so.
+- Desktop: quick edit from the keyboard, as in Slack. With the message box empty, press Up to select your last message in that room; press E to edit it in place. Saving or cancelling the edit puts you back in the message box. While a message is selected, Up and Down move between messages, and Escape (or Down from the newest message) returns to the message box. E edits only your own text messages. A thread pane's message box selects your last reply in that thread. With a draft in the box, Up moves the caret as before. If your newest message is still being sent, Up waits for it rather than selecting an older one. A message that has focus is now announced to screen readers by its sender and text instead of "Message actions". Both keys are in the keyboard shortcut list (Cmd/Ctrl+/).
 
 ## [3.3.0] - 2026-11-19
 

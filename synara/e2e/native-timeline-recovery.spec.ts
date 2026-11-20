@@ -91,7 +91,7 @@ test('the message menu is a menu of menu items with a toolbar trigger', async ({
 test('keyboard focus on rail buttons is visible', async ({ page }) => {
   await page.goto(harness('scenario=live&polish=1'));
   const row = page.locator('[data-native-timeline-event-id="$4"]');
-  await row.locator('[role="group"][aria-label="Message actions"]').focus();
+  await row.locator('[role="group"][data-native-timeline-row-surface]').focus();
   await page.keyboard.press('Tab');
   const focused = row.getByRole('button', { name: 'Add reaction' });
   await expect(focused).toBeFocused();
