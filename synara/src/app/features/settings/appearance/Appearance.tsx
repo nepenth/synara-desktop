@@ -80,6 +80,7 @@ import {
   getDesktopRenderingStatus,
   hardwareAccelerationFallbackNote,
   hardwareAccelerationView,
+  restartDesktopForRendering,
   setDesktopRenderingMode,
 } from '../../../utils/desktopRendering';
 import {
@@ -1174,6 +1175,7 @@ const HARDWARE_ACCELERATION_LABELS: Record<DesktopRenderingMode, string> = {
 function HardwareAccelerationTile() {
   const [status, setStatus] = useState(DESKTOP_RENDERING_UNAVAILABLE);
   const [saveFailed, setSaveFailed] = useState(false);
+  const [restart, setRestart] = useState<'idle' | 'starting' | 'failed'>('idle');
 
   useEffect(() => {
     let cancelled = false;
@@ -1191,6 +1193,7 @@ function HardwareAccelerationTile() {
   const handleChange = (mode: DesktopRenderingMode) => {
     const previous = status;
     setSaveFailed(false);
+    setRestart('idle');
     // Choosing a mode also clears a fallback, so the next start tries it.
     setStatus({ ...status, saved: mode, fallback: null });
     void setDesktopRenderingMode(mode).then((next) => {
@@ -1208,9 +1211,21 @@ function HardwareAccelerationTile() {
     note = 'Synara could not save this setting.';
   } else if (view.fallback) {
     note = hardwareAccelerationFallbackNote(view.fallback);
+  } else if (restart === 'failed') {
+    note = 'Synara could not restart itself. Quit it from the tray icon, then open it again.';
   } else if (view.restartNeeded) {
-    note = 'Restart Synara to apply.';
+    note =
+      'Restart Synara to apply. Closing the window is not enough: Synara keeps running in the tray.';
   }
+  const canRestart = view.restartNeeded && !view.locked && !saveFailed;
+
+  const handleRestart = () => {
+    setRestart('starting');
+    void restartDesktopForRendering().then((started) => {
+      // On success the app is on its way out; nothing more to show.
+      if (!started) setRestart('failed');
+    });
+  };
 
   return (
     <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
@@ -1231,6 +1246,22 @@ function HardwareAccelerationTile() {
           <Text size="T200" role="status">
             {note}
           </Text>
+        )}
+        {canRestart && (
+          <Box>
+            <Button
+              size="300"
+              variant="Secondary"
+              fill="None"
+              radii="300"
+              outlined
+              onClick={handleRestart}
+              disabled={restart === 'starting'}
+              data-testid="hardware-acceleration-restart"
+            >
+              <Text size="B300">{restart === 'starting' ? 'Restarting…' : 'Restart now'}</Text>
+            </Button>
+          </Box>
         )}
       </SettingTile>
     </SequenceCard>

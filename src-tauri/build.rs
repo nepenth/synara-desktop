@@ -40,6 +40,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_rendering_mode",
     "desktop_set_rendering_mode",
     "desktop_rendering_started",
+    "desktop_rendering_restart",
     "desktop_append_log",
     "desktop_log_path",
     "desktop_record_diagnostic",

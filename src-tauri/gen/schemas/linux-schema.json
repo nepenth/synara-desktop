@@ -495,6 +495,12 @@
           "markdownDescription": "Enables the desktop_rendering_mode command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_rendering_restart command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-rendering-restart",
+          "markdownDescription": "Enables the desktop_rendering_restart command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_rendering_started command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-rendering-started",
@@ -2205,6 +2211,12 @@
           "markdownDescription": "Denies the desktop_rendering_mode command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_rendering_restart command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-rendering-restart",
+          "markdownDescription": "Denies the desktop_rendering_restart command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_rendering_started command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-rendering-started",
@@ -3801,6 +3813,12 @@
           "markdownDescription": "Enables the write_image command without any pre-configured scope."
         },
         {
+          "description": "Enables the write_secret command without any pre-configured scope.",
+          "type": "string",
+          "const": "clipboard-manager:allow-write-secret",
+          "markdownDescription": "Enables the write_secret command without any pre-configured scope."
+        },
+        {
           "description": "Enables the write_text command without any pre-configured scope.",
           "type": "string",
           "const": "clipboard-manager:allow-write-text",
@@ -3835,6 +3853,12 @@
           "type": "string",
           "const": "clipboard-manager:deny-write-image",
           "markdownDescription": "Denies the write_image command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the write_secret command without any pre-configured scope.",
+          "type": "string",
+          "const": "clipboard-manager:deny-write-secret",
+          "markdownDescription": "Denies the write_secret command without any pre-configured scope."
         },
         {
           "description": "Denies the write_text command without any pre-configured scope.",
