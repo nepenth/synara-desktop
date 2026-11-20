@@ -142,18 +142,27 @@ test('Up keeps moving the caret while there is a draft', async ({ page }) => {
   await expect(room(page).locator('[data-native-timeline-row-surface]:focus')).toHaveCount(0);
 
   // Emptied again, Up selects the message.
-  // (Up put the caret at the start of the line, so select the draft to delete it.)
-  await page.keyboard.press('ControlOrMeta+a');
-  await page.keyboard.press('Backspace');
-  await page.waitForFunction(
-    () =>
-      !/"text":"[^"]/.test(
-        JSON.stringify(
-          (window as unknown as { synaraComposerEditor: { children: unknown[] } })
-            .synaraComposerEditor.children
+  // (Where Up leaves the caret differs by platform, and so do the select-all
+  // and end-of-line keys in WebKit, so delete in both directions from wherever
+  // the caret is, a key at a time: WebKit drops deletes sent faster than Slate
+  // reads the DOM.)
+  const draftIsEmpty = () =>
+    page.evaluate(
+      () =>
+        !/"text":"[^"]/.test(
+          JSON.stringify(
+            (window as unknown as { synaraComposerEditor: { children: unknown[] } })
+              .synaraComposerEditor.children
+          )
         )
-      )
-  );
+    );
+  await expect(async () => {
+    if (!(await draftIsEmpty())) {
+      await page.keyboard.press('Backspace');
+      await page.keyboard.press('Delete');
+    }
+    expect(await draftIsEmpty()).toBe(true);
+  }).toPass({ intervals: [100], timeout: 10_000 });
   await page.keyboard.press('ArrowUp');
   await expect(surface(room(page), '$60')).toBeFocused();
 });
