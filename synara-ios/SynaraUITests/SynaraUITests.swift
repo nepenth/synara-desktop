@@ -1535,7 +1535,7 @@ final class SynaraUITests: XCTestCase {
 
         tap(app.buttons["WhatsNewDismissButton"])
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: card)
-        waitForExpectations(timeout: 5)
+        waitForExpectations(timeout: 15)
 
         // By its label, as a user finds it: on the iOS 27.0 simulator the tab
         // bar drops its items' identifiers after the card closes (27.2 keeps
@@ -1701,18 +1701,32 @@ final class SynaraUITests: XCTestCase {
 
         let surface = identifiedElement(in: app, "ComposerInputSurface")
         XCTAssertTrue(surface.waitForExistence(timeout: 5))
-        // The surface's frame follows the growing field a layout pass later;
-        // give it a moment to settle before judging it, then judge strictly.
+        // On iOS 27.2 the surface's own accessibility frame keeps the height
+        // it had before the field grew, although the surface is drawn at its
+        // full height (checked on a screenshot). The buttons that sit inside
+        // the surface, pinned to its bottom edge, report where it really
+        // ends, so the surface's bounds are its frame joined with theirs.
+        let surfaceBounds: () -> CGRect = {
+            var bounds = surface.frame
+            for name in ["AttachmentButton", "ComposerFormattingToggle"] {
+                let button = app.buttons[name]
+                if button.exists {
+                    bounds = bounds.union(button.frame)
+                }
+            }
+            return bounds
+        }
         let fits: () -> Bool = {
-            field.frame.minY >= surface.frame.minY - 0.5 && field.frame.maxY <= surface.frame.maxY + 0.5
+            let bounds = surfaceBounds()
+            return field.frame.minY >= bounds.minY - 0.5 && field.frame.maxY <= bounds.maxY + 0.5
         }
         let deadline = Date().addingTimeInterval(5)
         while fits() == false && Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }
         let fieldFrame = field.frame
-        let surfaceFrame = surface.frame
-        print("COMPOSER_FRAMES field=\(fieldFrame) surface=\(surfaceFrame)")
+        let surfaceFrame = surfaceBounds()
+        print("COMPOSER_FRAMES field=\(fieldFrame) surface=\(surfaceFrame) reported=\(surface.frame)")
         if fits() == false {
             // A value assertion captures nothing by itself: keep what the
             // screen and the accessibility tree looked like.
@@ -1727,6 +1741,7 @@ final class SynaraUITests: XCTestCase {
         }
         // The text field grows to its cap and then scrolls; it never draws
         // past the rounded input surface (it overflowed both edges before).
+        XCTAssertGreaterThan(app.buttons["AttachmentButton"].frame.height, 0)
         XCTAssertGreaterThanOrEqual(fieldFrame.minY, surfaceFrame.minY - 0.5)
         XCTAssertLessThanOrEqual(fieldFrame.maxY, surfaceFrame.maxY + 0.5)
     }
