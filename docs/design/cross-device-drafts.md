@@ -106,16 +106,36 @@ available), so "no draft" is written as an encrypted tombstone.
 
 ## Key: creation, delivery, lifecycle
 
-The drafts key is a random 32-byte secret stored in secret storage (SSSS)
-under a custom name, `in.synara.drafts.v1`, using the SDK's public
-`SecretStore::{get_secret, put_secret}` (matrix-sdk 0.19.1). Each device also
-caches it locally as a custom value in its own store. The SQLite store is
-already passphrase-encrypted, the same protection the Olm keys have.
+The drafts key is a random 32-byte secret that the user's verified devices
+share. Each device caches it locally as a custom value in its own store. The
+SQLite store is already passphrase-encrypted, the same protection the Olm
+keys have. A copy is kept in secret storage (SSSS) under a custom name,
+`in.synara.drafts.v1`, using the SDK's public
+`SecretStore::{get_secret, put_secret}` (matrix-sdk 0.19.1).
 
-**Creation:** whenever Synara holds an open secret store (bootstrap, unlock
-with the recovery key or passphrase, or reset in
-`app/secret_storage/live.rs`), it reads `in.synara.drafts.v1`. If the secret
-is missing, Synara generates a key, `put`s it, reads it back, and caches it.
+**Creation (revised in 3.3.1):** draft sync needs a verified device, not the
+recovery key. A cross-signing-verified device that has no key asks the user's
+other verified devices for it (see "Peer sharing" below). If there are none,
+or none answers within 10 seconds, it creates the key itself. Until 3.3.1 the
+key was created only when a device opened secret storage, so an account whose
+devices were all verified by emoji or QR code never got one and draft sync
+stayed off without saying why.
+
+**One key (convergence):** two devices can each create a key, for example
+when both are offline from each other. Every place that sees two keys keeps
+the same one: the higher *generation* wins, then the lower `key_id`. A
+device that holds a key announces it once per session and whenever it
+changes. A peer whose key wins answers with it; a peer whose key loses asks
+back and gets the winner. Drafts sealed under the losing key read as absent
+and are replaced by the next write (each device still has its own local
+draft).
+
+**Secret storage:** whenever Synara holds an open secret store (bootstrap,
+unlock with the recovery key or passphrase, or reset in
+`app/secret_storage/live.rs`), it merges `in.synara.drafts.v1` with the
+cached key by the same rule and writes the winner back when the store holds
+another key or none. A new device that signs in with the recovery key and
+has no peer online therefore starts with the stored key.
 
 **Rotation:** none during normal use. Drafts are short-lived, and the key
 shares the trust domain of the recovery key that already protects all message
@@ -126,12 +146,20 @@ only its own `KNOWN_SECRETS`, so a custom secret would be lost. Synara's reset
 flow therefore re-`put`s the cached drafts key into the new store, so draft
 sync keeps working across a reset. A **full identity reset**
 (cross-signing reset, which suggests a compromise) generates a new drafts key
-on purpose. Drafts under the old `key_id` become unreadable. They're treated
-as absent and overwritten on the next write.
+on purpose. The resetting device forgets its key and raises its generation
+floor to one above the key it held. It never adopts a key below the floor,
+and the key it creates next has the higher generation, so it replaces the
+old key on the other devices once they are verified again. Drafts under the
+old `key_id` become unreadable. They're treated as absent and overwritten on
+the next write. Generation 0 keys keep the original stored forms (32 cache
+bytes, plain base64 in secret storage); a higher generation is appended
+(4 more cache bytes, `<base64>.<generation>` in secret storage).
 
 **Device without the key:** it neither reads nor writes synced drafts. It
 keeps using its local drafts exactly as today. It never overwrites remote
-drafts, because it can't merge with data it can't read.
+drafts, because it can't merge with data it can't read. A verified device is
+in this state for at most the 10-second wait; an unverified device stays in
+it until it is verified (`keyState: needsRecovery`).
 
 ### Decision: devices that never type the recovery key (B + A chosen)
 
@@ -164,6 +192,33 @@ Options:
   backup is reset. It isn't viable without patching the SDK.
 
 Recommendation: **B + A** in Phase 1.
+
+**Revised in 3.3.1:** B alone could not start, because it only copies a key
+and nothing created one without the recovery key. Verified devices now create
+it (see "Creation" above), which makes A unnecessary: the recovery key is
+only one of the ways to verify a device.
+
+### Peer sharing (wire format)
+
+Both events are Olm-encrypted to-device events between the user's own
+devices. Each side checks that the other is the same account, on a device
+cross-signing vouches for.
+
+- `in.synara.drafts.key.request`:
+  `{ request_id, requesting_device_id, key_id?, generation? }`. `key_id` and
+  `generation` describe the key the sender already holds and are absent when
+  it holds none. A receiver without a key ignores it. A receiver whose key
+  wins (or any key, when the sender has none) answers with a share. A
+  receiver whose key loses sends its own request, at most once a minute.
+- `in.synara.drafts.key.share`: `{ request_id, key, generation? }`. It is
+  believed only as an answer to a request this device sent. The receiver
+  adopts the key when it wins over its own and is not below its generation
+  floor. If its own key wins instead, it sends a request so the peer learns
+  that.
+
+Synara 2.9.1 to 3.3.0 answers requests and never sends one while it holds a
+key, so such a device keeps its key even when a newer device's key wins.
+Devices settle once they all run 3.3.1 or later.
 
 ## Sync and merge
 
@@ -228,7 +283,7 @@ attach order. Typed Core methods (`core/drafts.rs`) back both shells:
 
 | Desktop command / UniFFI method | Purpose |
 | --- | --- |
-| `matrix_drafts_status` / `draftsStatus()` | `{ enabled, keyState: ready \| requesting \| needsRecovery \| disabled }`; asks peers when the key is missing |
+| `matrix_drafts_status` / `draftsStatus()` | `{ enabled, keyState: ready \| requesting \| needsRecovery \| disabled }`; asks peers when the key is missing and creates it when nobody has one. `needsRecovery` means the device is not verified |
 | `matrix_drafts_set_enabled` / `draftsSetEnabled` | the setting |
 | `matrix_drafts_save` / `draftsSave` | queue (or `flush`) a slot; returns its stamp |
 | `matrix_drafts_clear` / `draftsClear` | tombstone a slot now (send or erase) |
@@ -300,9 +355,10 @@ What shipped:
   nonces, padding, wrong key/room/user, tampering, version), normalization,
   merge, Lamport stamps, tombstone pruning, the size cap and every decision
   branch.
-- Key: created or read whenever Synara opens secret storage (bootstrap,
-  unlock, recovery-key reset), forgotten on identity reset. Peer sharing
-  (option B) runs over Olm to-device events. It answers only the user's own
+- Key: created by a verified device that finds no peer holding one, merged
+  with secret storage whenever Synara opens it (bootstrap, unlock,
+  recovery-key reset), forgotten on identity reset. Peer sharing runs over
+  Olm to-device events. It answers only the user's own
   cross-signing-verified devices, and only adopts an answer to a request this
   device sent. `experimental-send-custom-to-device` was already enabled
   through `experimental-widgets`.
@@ -327,7 +383,9 @@ Left out of Phase 1, on purpose:
   Markdown off is escaped. iOS syncs its draft with picked mentions resolved to the same
   links. A Markdown draft from iOS is rendered by Core on a desktop with Markdown off.
   Desktop-to-desktop keeps the full Slate value.
-- No UI yet for `keyState` ("enter your recovery key to sync drafts"), and
-  no "Delete synced drafts" button. The Core commands exist for both.
+- No "Delete synced drafts" button. The Core command exists. Both shells
+  show a hint for `keyState` under the setting.
 - No Synapse two-client live proof yet. The Core owner is covered by unit
-  tests, and its I/O path by the shell builds only.
+  tests, and its I/O path by the shell builds only. The peer exchange is
+  tested through its decision functions (`key_tests.rs`), not over two real
+  Olm sessions.

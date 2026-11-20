@@ -1792,7 +1792,7 @@ private struct MessagesSettingsView: View {
                 Text("Drafts")
             } footer: {
                 VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                    Text("Unsent messages follow you to your other Synara devices, end-to-end encrypted. Devices need your recovery key or another verified device to read them.")
+                    Text("Unsent messages follow you to your other Synara devices, end-to-end encrypted. It works on every device you have verified.")
                     if syncDrafts, let hint = DraftSyncKeyHint.text(for: draftKeyState) {
                         Text(hint)
                             .foregroundStyle(SynaraColor.primaryText)
@@ -1806,6 +1806,11 @@ private struct MessagesSettingsView: View {
         .accessibilityIdentifier(SettingsPage.messages.screenIdentifier)
         .task(id: syncDrafts) {
             draftKeyState = syncDrafts ? await environment.draftSync.keyState() : nil
+            guard syncDrafts else { return }
+            // An update for every room is how the core says the key arrived or was created.
+            for await changedRoomID in environment.draftSync.updates() where changedRoomID == nil {
+                draftKeyState = await environment.draftSync.keyState()
+            }
         }
         .onAppear {
             syncDrafts = environment.settings.bool(for: DraftSyncSettings.syncDraftsKey)
@@ -3257,9 +3262,9 @@ enum DraftSyncKeyHint {
     static func text(for state: DraftSyncKeyState?) -> String? {
         switch state {
         case .needsRecovery:
-            return String(localized: "Not syncing yet: this device needs your recovery key. Enter it in Settings › Security & recovery.")
+            return String(localized: "Not syncing yet: this device is not verified. Verify it with another device or your recovery key in Settings › Security & recovery.")
         case .requesting:
-            return String(localized: "Not syncing yet: asked your other verified devices for the drafts key. If none of them syncs drafts, enter your recovery key in Settings › Security & recovery.")
+            return String(localized: "Setting up: asking your other verified devices for the drafts key. If none of them has it, this device creates it in a few seconds.")
         case .ready, .disabled, .none:
             return nil
         }

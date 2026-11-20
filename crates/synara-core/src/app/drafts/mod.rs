@@ -21,8 +21,8 @@ pub use codec::{
     DRAFTS_KEY_BYTES,
 };
 pub use key::{
-    DRAFTS_KEY_CACHE_KEY, DRAFTS_KEY_REQUEST_EVENT_TYPE, DRAFTS_KEY_SHARE_EVENT_TYPE,
-    DRAFTS_SECRET_NAME,
+    DRAFTS_KEY_CACHE_KEY, DRAFTS_KEY_FLOOR_CACHE_KEY, DRAFTS_KEY_REQUEST_EVENT_TYPE,
+    DRAFTS_KEY_SHARE_EVENT_TYPE, DRAFTS_SECRET_NAME,
 };
 pub(crate) use live::{on_identity_reset, on_secret_store_open};
 pub use live::{

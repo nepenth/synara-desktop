@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::{to_raw_value, RawValue as RawJsonValue};
 use tokio::sync::Mutex as AsyncMutex;
 
-use super::key::{self, PeerShareState};
+use super::key::{self, PeerEventOutcome, PeerRequest, PeerShareState};
 use super::{
     cap_payload, decide_remote, merge_payloads, next_updated_at, open_envelope, parse_envelope,
     prune_tombstones, seal_payload, validate_slot_key, DraftDecision, DraftsKey, LocalDraftState,
@@ -38,6 +38,9 @@ const SAVE_DEBOUNCE: Duration = Duration::from_millis(1_000);
 /// Longest a continuously edited draft waits before it is written anyway.
 const SAVE_MAX_DELAY: Duration = Duration::from_millis(5_000);
 const PEER_REQUEST_INTERVAL: Duration = Duration::from_secs(60);
+/// How long a verified device without the key waits for a peer to share one
+/// before it creates the key itself.
+const KEY_CREATE_GRACE: Duration = Duration::from_secs(10);
 const MAX_MARKDOWN_BYTES: usize = 256 * 1024;
 const MAX_SLATE_BYTES: usize = 512 * 1024;
 
@@ -59,9 +62,11 @@ fn drafts_type() -> RoomAccountDataEventType {
 pub enum NativeDraftKeyState {
     /// Drafts sync on this device.
     Ready,
-    /// Asked the user's other verified devices; waiting for an answer.
+    /// Asked the user's other verified devices. Without an answer this device
+    /// creates the key itself after a short wait.
     Requesting,
-    /// No key and no device to ask: the recovery key unlocks draft sync.
+    /// This device is not verified yet, so it can neither receive nor create
+    /// the key. Verifying it (another device, or the recovery key) fixes it.
     NeedsRecovery,
     /// The setting is off on this device.
     Disabled,
@@ -198,7 +203,7 @@ struct Inner {
     /// One sealed read-modify-write at a time.
     write_lock: AsyncMutex<()>,
     peers: PeerShareState,
-    last_peer_request: Mutex<Option<Instant>>,
+    create_scheduled: AtomicBool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -258,7 +263,7 @@ impl DraftSyncOwner {
             next_generation: AtomicU64::new(0),
             write_lock: AsyncMutex::new(()),
             peers: PeerShareState::default(),
-            last_peer_request: Mutex::new(None),
+            create_scheduled: AtomicBool::new(false),
         });
 
         let account_inner = Arc::clone(&inner);
@@ -284,7 +289,27 @@ impl DraftSyncOwner {
                     }
                     // A received key bumps the key epoch; its watcher emits
                     // the wakeup.
-                    key::handle_to_device(&inner.client, &inner.peers, &raw, info.as_ref()).await;
+                    let outcome =
+                        key::handle_to_device(&inner.client, &inner.peers, &raw, info.as_ref())
+                            .await;
+                    // A peer's key wins: ask for it. Ours wins: make sure the
+                    // peer was told, so it asks.
+                    let repeat_after = match outcome {
+                        PeerEventOutcome::AskBackFor(wanted) => inner
+                            .peers
+                            .begin_ask_back(&wanted, PEER_REQUEST_INTERVAL)
+                            .then_some(Duration::ZERO),
+                        PeerEventOutcome::Announce => Some(PEER_REQUEST_INTERVAL),
+                        _ => None,
+                    };
+                    if let Some(repeat_after) = repeat_after {
+                        let _ = key::request_from_peers(
+                            &inner.client,
+                            &inner.peers,
+                            Some(repeat_after),
+                        )
+                        .await;
+                    }
                 }
             },
         );
@@ -300,6 +325,9 @@ impl DraftSyncOwner {
                         session_generation: epoch_inner.session_generation,
                         room_id: None,
                     });
+                    // A new key: tell the other devices, so the ones that
+                    // hold another settle on one with us.
+                    epoch_inner.announce_key().await;
                 }
             })
         });
@@ -328,12 +356,8 @@ impl DraftSyncOwner {
         let enabled = inner.enabled.load(Ordering::Relaxed);
         let key_state = if !enabled {
             NativeDraftKeyState::Disabled
-        } else if key::load_cached_key(&inner.client).await.is_some() {
-            NativeDraftKeyState::Ready
-        } else if inner.request_key_from_peers().await {
-            NativeDraftKeyState::Requesting
         } else {
-            NativeDraftKeyState::NeedsRecovery
+            inner.key_state().await
         };
         NativeDraftSyncStatus {
             session_generation: inner.session_generation,
@@ -527,22 +551,62 @@ impl Inner {
         stamp
     }
 
-    async fn request_key_from_peers(&self) -> bool {
-        {
-            let mut last = lock(&self.last_peer_request);
-            if last.is_some_and(|at| at.elapsed() < PEER_REQUEST_INTERVAL) {
-                return true;
+    /// Where this device stands with the key, moving it forward on the way:
+    /// a keyless verified device asks its peers, and creates the key when
+    /// there is nobody to ask or nobody answers within [`KEY_CREATE_GRACE`].
+    async fn key_state(self: &Arc<Self>) -> NativeDraftKeyState {
+        if key::load_cached_key(&self.client).await.is_some() {
+            // Once per session and key, off the caller's path.
+            let inner = Arc::clone(self);
+            tokio::spawn(async move { inner.announce_key().await });
+            return NativeDraftKeyState::Ready;
+        }
+        if !key::own_device_verified(&self.client).await {
+            return NativeDraftKeyState::NeedsRecovery;
+        }
+        let asked =
+            key::request_from_peers(&self.client, &self.peers, Some(PEER_REQUEST_INTERVAL)).await;
+        match asked {
+            Ok(PeerRequest::NoPeers) => {
+                if key::create_key_if_verified(&self.client).await.is_some() {
+                    NativeDraftKeyState::Ready
+                } else {
+                    NativeDraftKeyState::Requesting
+                }
             }
-            *last = Some(Instant::now());
+            Ok(PeerRequest::Sent(1..) | PeerRequest::Throttled) => {
+                self.create_key_after_grace();
+                NativeDraftKeyState::Requesting
+            }
+            // Nobody could be asked (offline): the next status call retries.
+            Ok(PeerRequest::Sent(0)) | Err(_) => NativeDraftKeyState::Requesting,
         }
-        let asked = key::request_from_peers(&self.client, &self.peers)
-            .await
-            .unwrap_or(0);
-        if asked == 0 {
-            // Nobody to ask: allow an immediate retry once a device appears.
-            *lock(&self.last_peer_request) = None;
+    }
+
+    /// Tell peers which key this device holds, when that changed since the
+    /// last time it told them.
+    async fn announce_key(&self) {
+        if !self.enabled.load(Ordering::Relaxed)
+            || key::load_cached_key(&self.client).await.is_none()
+        {
+            return;
         }
-        asked > 0
+        let _ = key::request_from_peers(&self.client, &self.peers, None).await;
+    }
+
+    fn create_key_after_grace(self: &Arc<Self>) {
+        if self.create_scheduled.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let inner = Arc::clone(self);
+        tokio::spawn(async move {
+            tokio::time::sleep(KEY_CREATE_GRACE).await;
+            if inner.enabled.load(Ordering::Relaxed) {
+                // A key a peer shared meanwhile is kept as it is.
+                let _ = key::create_key_if_verified(&inner.client).await;
+            }
+            inner.create_scheduled.store(false, Ordering::Relaxed);
+        });
     }
 
     fn decode(&self, room: &RoomId, key: &DraftsKey, content: &str) -> Option<SynaraDraftsPayload> {

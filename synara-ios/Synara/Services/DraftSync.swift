@@ -52,7 +52,7 @@ enum DraftSyncKeyState: Equatable {
     case ready
     /// Asked the user's other verified devices for the key.
     case requesting
-    /// Only the recovery key can unlock draft sync here.
+    /// This device is not verified, so it can neither receive nor create the key.
     case needsRecovery
     case disabled
 }
