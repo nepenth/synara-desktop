@@ -619,7 +619,7 @@ jobs:
           if-no-files-found: error
 
   ios-testflight-upload:
-    name: Upload iOS internal TestFlight build
+    name: Upload iOS TestFlight build
     if: startsWith(github.ref_name, 'v')
     needs: [quality-gate]
     runs-on: macos-26
@@ -687,6 +687,8 @@ jobs:
           SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           SYNARA_PUSH_GATEWAY_URL: ${{ vars.SYNARA_PUSH_GATEWAY_URL }}
           SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS }}
+          SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS }}
+          SYNARA_TESTFLIGHT_INTERNAL_ONLY: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}
           SYNARA_KLIPY_API_KEY: ${{ secrets.SYNARA_KLIPY_API_KEY }}
         run: |
           missing=()
@@ -709,6 +711,13 @@ jobs:
           if (( ${#missing[@]} > 0 )); then
             printf 'Missing required TestFlight release configuration:\n' >&2
             printf ' - %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
+          # An internal-only build can never be added to an external group,
+          # so catch the mismatch before spending a build number on it.
+          if [[ -n "$SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS" && "$SYNARA_TESTFLIGHT_INTERNAL_ONLY" != "false" ]]; then
+            echo "SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS is set, so SYNARA_TESTFLIGHT_INTERNAL_ONLY must be 'false'." >&2
             exit 1
           fi
 
@@ -936,6 +945,7 @@ jobs:
           SYNARA_IOS_MARKETING_VERSION: ${{ needs.ios-testflight-upload.outputs.marketing_version }}
           SYNARA_IOS_BUILD_NUMBER: ${{ needs.ios-testflight-upload.outputs.build_number }}
           SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS }}
+          SYNARA_TESTFLIGHT_INTERNAL_ONLY: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}
           SYNARA_TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS: "2400"
           SYNARA_TESTFLIGHT_POLL_INTERVAL_SECONDS: "15"
           SYNARA_TESTFLIGHT_WHATS_NEW_PATH: synara-ios/release-notes/${{ github.ref_name }}-en-US.txt
@@ -955,6 +965,68 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-testflight-processing-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/synara-ios-testflight-diagnostics
+          if-no-files-found: warn
+          retention-days: 30
+
+  ios-testflight-external:
+    name: Submit TestFlight build to external groups
+    # Separate from the internal gate so a beta-review problem (missing Test
+    # Information, a rejected build) can be fixed in App Store Connect and this
+    # job re-run alone. It does not wait for Apple's review.
+    if: startsWith(github.ref_name, 'v') && vars.SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS != ''
+    needs: [ios-testflight-upload, ios-testflight]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    environment:
+      name: testflight
+      url: https://appstoreconnect.apple.com/apps
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Prepare App Store Connect API key
+        shell: bash
+        env:
+          SYNARA_ASC_KEY_BASE64: ${{ secrets.SYNARA_ASC_KEY_BASE64 }}
+          SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
+        run: |
+          api_key_path="$RUNNER_TEMP/AuthKey_${SYNARA_ASC_KEY_ID}.p8"
+          printf '%s' "$SYNARA_ASC_KEY_BASE64" | /usr/bin/base64 --decode > "$api_key_path"
+          chmod 600 "$api_key_path"
+          echo "SYNARA_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+
+      - name: Submit for beta review and assign external groups
+        env:
+          SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
+          SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
+          SYNARA_IOS_MARKETING_VERSION: ${{ needs.ios-testflight-upload.outputs.marketing_version }}
+          SYNARA_IOS_BUILD_NUMBER: ${{ needs.ios-testflight-upload.outputs.build_number }}
+          SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS }}
+          SYNARA_IOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/synara-ios-testflight-diagnostics
+        run: node synara-ios/scripts/promote-testflight-external.mjs
+
+      - name: Clean App Store Connect API key
+        if: always()
+        run: |
+          if [[ -n "${SYNARA_ASC_KEY_PATH:-}" ]]; then
+            rm -f -- "$SYNARA_ASC_KEY_PATH"
+          fi
+
+      - name: Upload external TestFlight diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-testflight-external-${{ github.run_attempt }}
           path: ${{ runner.temp }}/synara-ios-testflight-diagnostics
           if-no-files-found: warn
           retention-days: 30

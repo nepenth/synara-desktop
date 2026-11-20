@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   promote:
-    name: Verify and promote an uploaded internal TestFlight build
+    name: Verify and promote an uploaded TestFlight build
     runs-on: ubuntu-22.04
     timeout-minutes: 50
     environment:
@@ -91,12 +91,24 @@ jobs:
           SYNARA_IOS_MARKETING_VERSION: ${{ env.SYNARA_RECOVERY_VERSION }}
           SYNARA_IOS_BUILD_NUMBER: ${{ inputs.build_number }}
           SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS }}
+          SYNARA_TESTFLIGHT_INTERNAL_ONLY: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}
           SYNARA_TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS: "2400"
           SYNARA_TESTFLIGHT_POLL_INTERVAL_SECONDS: "15"
           SYNARA_TESTFLIGHT_WHATS_NEW_PATH: ${{ env.SYNARA_RECOVERY_NOTES_PATH }}
           SYNARA_TESTFLIGHT_WHATS_NEW_LOCALE: en-US
           SYNARA_IOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/synara-ios-testflight-diagnostics
         run: node synara-ios/scripts/promote-testflight-internal.mjs
+
+      - name: Submit for beta review and assign external groups
+        if: vars.SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS != ''
+        env:
+          SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
+          SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
+          SYNARA_IOS_MARKETING_VERSION: ${{ env.SYNARA_RECOVERY_VERSION }}
+          SYNARA_IOS_BUILD_NUMBER: ${{ inputs.build_number }}
+          SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS }}
+          SYNARA_IOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/synara-ios-testflight-diagnostics
+        run: node synara-ios/scripts/promote-testflight-external.mjs
 
       - name: Clean App Store Connect API key
         if: always()

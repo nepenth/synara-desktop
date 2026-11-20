@@ -605,7 +605,9 @@ authorization.
 
 Set the repository variable `SYNARA_TESTFLIGHT_INTERNAL_ONLY` to `true` or
 `false` to control internal-only TestFlight distribution for subsequent tag
-pushes. It defaults to `true`; there is no manual-dispatch override.
+pushes. It defaults to `true`; there is no manual-dispatch override. It must be
+`false` when `SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS` names external tester
+groups; see `synara-ios/docs/testflight-upload.md`.
 
 Do not configure the `production-release` environment with required status checks
 from ordinary CI workflows that do not run on tag refs: those checks cannot

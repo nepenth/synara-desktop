@@ -143,6 +143,32 @@ not require a relationship mutation; the gate explicitly adds and verifies any
 missing manual internal-group relationship. It writes a redacted Apple-state
 snapshot to `SYNARA_IOS_DIAGNOSTICS_DIR`.
 
+### External groups
+
+External testers need a build that was not uploaded as internal-only, and Apple
+must approve it in Beta App Review. Upload with
+`SYNARA_TESTFLIGHT_INTERNAL_ONLY=false`, pass the same value to the internal
+gate above, then run:
+
+```sh
+SYNARA_ASC_KEY_PATH="/secure/path/AuthKey_KEYID.p8" \
+SYNARA_ASC_KEY_ID="KEYID" \
+SYNARA_ASC_ISSUER_ID="issuer-uuid" \
+SYNARA_IOS_MARKETING_VERSION="X.Y.Z" \
+SYNARA_IOS_BUILD_NUMBER="X.Y.Z" \
+SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS="group-uuid" \
+node synara-ios/scripts/promote-testflight-external.mjs
+```
+
+It turns on tester notification, submits the build for beta review, and assigns
+it to every configured external group. It succeeds once Apple has the build in
+review or has approved it; it does not wait for the review. Testers get the
+build when Apple approves it. Apple refuses the submission until the app's
+TestFlight Test Information is filled in on App Store Connect: beta app
+description, feedback email, review contact, and sign-in details for the
+reviewer. A build that was uploaded internal-only can never be moved to an
+external group; it needs a new build number.
+
 The upload script also records the archive and export logs and copies Xcode's
 `.xcdistributionlogs` bundle when available. Keep these diagnostics for both
 successful and failed uploads; never store the API private key in them.
@@ -168,9 +194,16 @@ The job also consumes the repository secrets `APPLE_TEAM_ID` and
 `SYNARA_KLIPY_API_KEY` (shared with the desktop builds) and repository
 variables `SYNARA_PUSH_GATEWAY_URL` and
 `SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS` (a comma-delimited list of App Store
-Connect internal beta-group IDs). Internal-only upload remains the default;
-external TestFlight still requires an explicit release decision and configured
-external tester groups.
+Connect internal beta-group IDs). Internal-only upload remains the default.
+
+To also publish to external groups, set `SYNARA_TESTFLIGHT_INTERNAL_ONLY` to
+`false` and `SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS` to a comma-delimited list of
+external beta-group IDs. The `ios-testflight-external` job then submits each
+release build for beta review and assigns it to those groups after the internal
+gate passes. The job is skipped when the variable is empty, and the upload job
+fails early if external groups are set while internal-only is still on. If
+Apple refuses the submission, fix the cause in App Store Connect and re-run
+only that job.
 
 The final GitHub Release is not created unless iOS, macOS, both Linux builds,
 notarization, updater metadata, and artifact verification all succeed. The iOS

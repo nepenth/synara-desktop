@@ -6,6 +6,7 @@ import {
   AppStoreConnectClient,
   AppStoreConnectError,
   createAppStoreConnectToken,
+  submitToExternalTestFlightGroups,
   upsertBetaBuildLocalization,
   waitForInternalTestFlightAvailability,
 } from "../../synara-ios/scripts/promote-testflight-internal.mjs";
@@ -524,4 +525,219 @@ test("rejects a configured external beta group before attempting promotion", asy
     /is not internal/
   );
   assert.deepEqual(client.posts, []);
+});
+
+test("accepts a build that is open to external testing when internal-only is off", async () => {
+  const client = createFixtureClient({
+    uploadState: "COMPLETE",
+    buildStates: [
+      {
+        processingState: "VALID",
+        uploadState: "COMPLETE",
+        internalState: "IN_BETA_TESTING",
+        assigned: true,
+      },
+    ],
+  });
+  const original = client.request.bind(client);
+  client.request = async (resourcePath, options) => {
+    const document = await original(resourcePath, options);
+    if (resourcePath === "/v1/builds/build-1") {
+      document.data.attributes.buildAudienceType = "APP_STORE_ELIGIBLE";
+    }
+    return document;
+  };
+  await assert.rejects(
+    waitForInternalTestFlightAvailability(waitOptions(client)),
+    /not restricted to internal testing/
+  );
+  const snapshot = await waitForInternalTestFlightAvailability(
+    waitOptions(client, { internalOnly: false })
+  );
+  assert.equal(snapshot.internalBuildState, "IN_BETA_TESTING");
+});
+
+test("rejects an internal-only build when internal-only is off", async () => {
+  const client = createFixtureClient({
+    uploadState: "COMPLETE",
+    buildStates: [
+      {
+        processingState: "VALID",
+        uploadState: "COMPLETE",
+        internalState: "IN_BETA_TESTING",
+        assigned: true,
+      },
+    ],
+  });
+  await assert.rejects(
+    waitForInternalTestFlightAvailability(
+      waitOptions(client, { internalOnly: false })
+    ),
+    /can never reach external testers/
+  );
+});
+
+const externalGroup = {
+  type: "betaGroups",
+  id: "group-2",
+  attributes: { name: "Friends", isInternalGroup: false },
+};
+
+function createExternalFixtureClient({
+  group = externalGroup,
+  audience = "APP_STORE_ELIGIBLE",
+  externalStates,
+  autoNotifyEnabled = false,
+  submissionError,
+}) {
+  let buildRequest = 0;
+  let assigned = false;
+  const calls = [];
+  return {
+    calls,
+    async request(resourcePath, options = {}) {
+      if (resourcePath === "/v1/apps") return appDocument;
+      if (resourcePath === "/v1/apps/app-1/betaGroups") {
+        return { data: [internalGroup, group] };
+      }
+      if (resourcePath === "/v1/preReleaseVersions") return preReleaseDocument;
+      if (resourcePath === "/v1/builds/build-1") {
+        const externalState =
+          externalStates[Math.min(buildRequest, externalStates.length - 1)];
+        buildRequest += 1;
+        const document = buildDocument({
+          processingState: "VALID",
+          uploadState: "COMPLETE",
+          internalState: "IN_BETA_TESTING",
+        });
+        document.data.attributes.buildAudienceType = audience;
+        document.data.relationships.betaGroups.data = assigned
+          ? [{ type: "betaGroups", id: "group-2" }]
+          : [];
+        if (assigned) document.included.push(externalGroup);
+        Object.assign(
+          document.included.find(
+            (resource) => resource.type === "buildBetaDetails"
+          ).attributes,
+          { externalBuildState: externalState, autoNotifyEnabled }
+        );
+        return document;
+      }
+      calls.push(`${options.method} ${resourcePath}`);
+      if (resourcePath === "/v1/buildBetaDetails/build-1") return {};
+      if (resourcePath === "/v1/betaAppReviewSubmissions") {
+        if (submissionError) throw submissionError;
+        return {};
+      }
+      if (resourcePath === "/v1/betaGroups/group-2/relationships/builds") {
+        assigned = true;
+        return {};
+      }
+      throw new Error(`Unexpected fixture request: ${resourcePath}`);
+    },
+  };
+}
+
+const externalOptions = (client, overrides = {}) => {
+  const { internalGroupIds, ...options } = waitOptions(client, overrides);
+  return {
+    ...options,
+    externalGroupIds: ["group-2"],
+    timeoutMilliseconds: 5000,
+  };
+};
+
+test("submits for beta review, then assigns the external group, without waiting for the review", async () => {
+  const client = createExternalFixtureClient({
+    externalStates: [
+      "PROCESSING",
+      "READY_FOR_BETA_SUBMISSION",
+      "WAITING_FOR_BETA_REVIEW",
+    ],
+  });
+  const snapshot = await submitToExternalTestFlightGroups(
+    externalOptions(client)
+  );
+  assert.deepEqual(client.calls, [
+    "PATCH /v1/buildBetaDetails/build-1",
+    "POST /v1/betaAppReviewSubmissions",
+    "POST /v1/betaGroups/group-2/relationships/builds",
+  ]);
+  assert.equal(snapshot.externalBuildState, "WAITING_FOR_BETA_REVIEW");
+  assert.deepEqual(snapshot.assignedGroups, [
+    { id: "group-2", name: "Friends" },
+  ]);
+});
+
+test("only assigns the group when Apple already has the build in review", async () => {
+  const client = createExternalFixtureClient({
+    externalStates: ["BETA_APPROVED"],
+    autoNotifyEnabled: true,
+  });
+  await submitToExternalTestFlightGroups(externalOptions(client));
+  assert.deepEqual(client.calls, [
+    "POST /v1/betaGroups/group-2/relationships/builds",
+  ]);
+});
+
+test("refuses to send an internal-only build to external testers", async () => {
+  const client = createExternalFixtureClient({
+    audience: "INTERNAL_ONLY",
+    externalStates: ["NOT_APPLICABLE"],
+  });
+  await assert.rejects(
+    submitToExternalTestFlightGroups(externalOptions(client)),
+    /internal testing only/
+  );
+  assert.deepEqual(client.calls, []);
+});
+
+test("rejects a configured internal group as an external target", async () => {
+  const client = createExternalFixtureClient({
+    externalStates: ["READY_FOR_BETA_SUBMISSION"],
+  });
+  await assert.rejects(
+    submitToExternalTestFlightGroups({
+      ...externalOptions(client),
+      externalGroupIds: ["group-1"],
+    }),
+    /is not external/
+  );
+  assert.deepEqual(client.calls, []);
+});
+
+test("explains a refused beta review submission and fails on a rejected build", async () => {
+  const refused = createExternalFixtureClient({
+    externalStates: ["READY_FOR_BETA_SUBMISSION"],
+    submissionError: new AppStoreConnectError("Missing beta app description.", {
+      status: 422,
+    }),
+  });
+  await assert.rejects(
+    submitToExternalTestFlightGroups(externalOptions(refused)),
+    /Apple refused the beta review submission: Missing beta app description\. Check the app's TestFlight Test Information/
+  );
+
+  const rejected = createExternalFixtureClient({
+    externalStates: ["BETA_REJECTED"],
+  });
+  await assert.rejects(
+    submitToExternalTestFlightGroups(externalOptions(rejected)),
+    /BETA_REJECTED/
+  );
+});
+
+test("times out when Apple never moves the build into review", async () => {
+  const client = createExternalFixtureClient({
+    externalStates: ["READY_FOR_BETA_SUBMISSION"],
+  });
+  await assert.rejects(
+    submitToExternalTestFlightGroups(externalOptions(client)),
+    /Timed out waiting.*READY_FOR_BETA_SUBMISSION/
+  );
+  assert.equal(
+    client.calls.filter((call) => call.includes("betaAppReviewSubmissions"))
+      .length,
+    1
+  );
 });

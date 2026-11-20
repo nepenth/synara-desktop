@@ -14,6 +14,22 @@ const TERMINAL_INTERNAL_STATES = new Set([
   "PROCESSING_EXCEPTION",
 ]);
 
+// External states where Apple has the build in review or already released it
+// to external testers. BETA_APPROVED still needs a group to reach anyone.
+const SUBMITTED_EXTERNAL_STATES = new Set([
+  "WAITING_FOR_BETA_REVIEW",
+  "IN_BETA_REVIEW",
+  "BETA_APPROVED",
+  "READY_FOR_BETA_TESTING",
+  "IN_BETA_TESTING",
+]);
+const TERMINAL_EXTERNAL_STATES = new Set([
+  "BETA_REJECTED",
+  "EXPIRED",
+  "MISSING_EXPORT_COMPLIANCE",
+  "PROCESSING_EXCEPTION",
+]);
+
 const sleep = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -212,11 +228,15 @@ const simplifyBuild = (build) =>
       }
     : undefined;
 
-async function writeSnapshot(diagnosticsDirectory, snapshot) {
+async function writeSnapshot(
+  diagnosticsDirectory,
+  snapshot,
+  fileName = "app-store-connect-state.json"
+) {
   if (!diagnosticsDirectory) return;
   await mkdir(diagnosticsDirectory, { recursive: true });
   await writeFile(
-    path.join(diagnosticsDirectory, "app-store-connect-state.json"),
+    path.join(diagnosticsDirectory, fileName),
     `${JSON.stringify(snapshot, null, 2)}\n`,
     "utf8"
   );
@@ -236,7 +256,7 @@ async function resolveApp(client, bundleId) {
   return document.data[0];
 }
 
-async function resolveInternalGroups(client, appId, configuredGroupIds) {
+async function resolveGroups(client, appId, configuredGroupIds, { internal }) {
   const document = await client.request(`/v1/apps/${appId}/betaGroups`, {
     query: { limit: 200 },
   });
@@ -250,9 +270,11 @@ async function resolveInternalGroups(client, appId, configuredGroupIds) {
         `Configured TestFlight beta group ${groupId} does not belong to app ${appId}.`
       );
     }
-    if (group.attributes?.isInternalGroup !== true) {
+    if ((group.attributes?.isInternalGroup === true) !== internal) {
       throw new Error(
-        `Configured TestFlight beta group ${groupId} is not internal.`
+        `Configured TestFlight beta group ${groupId} is not ${
+          internal ? "internal" : "external"
+        }.`
       );
     }
     return group;
@@ -440,6 +462,7 @@ export async function waitForInternalTestFlightAvailability({
   marketingVersion,
   buildNumber,
   internalGroupIds,
+  internalOnly = true,
   whatsNew,
   whatsNewLocale = "en-US",
   diagnosticsDirectory,
@@ -450,7 +473,9 @@ export async function waitForInternalTestFlightAvailability({
   logger = console,
 }) {
   const app = await resolveApp(client, bundleId);
-  const groups = await resolveInternalGroups(client, app.id, internalGroupIds);
+  const groups = await resolveGroups(client, app.id, internalGroupIds, {
+    internal: true,
+  });
   const deadline = now() + timeoutMilliseconds;
   let lastDescription;
   let promotionAttempted = false;
@@ -535,9 +560,16 @@ export async function waitForInternalTestFlightAvailability({
       if (exactBuild.build.attributes?.expired === true) {
         throw new Error("Apple marked the uploaded build expired.");
       }
-      if (exactBuild.build.attributes?.buildAudienceType !== "INTERNAL_ONLY") {
+      const internalOnlyBuild =
+        exactBuild.build.attributes?.buildAudienceType === "INTERNAL_ONLY";
+      if (internalOnly && !internalOnlyBuild) {
         throw new Error(
           "The uploaded build is not restricted to internal testing."
+        );
+      }
+      if (!internalOnly && internalOnlyBuild) {
+        throw new Error(
+          "The uploaded build is restricted to internal testing, so it can never reach external testers."
         );
       }
       if (exactBuild.build.attributes?.usesNonExemptEncryption !== false) {
@@ -566,29 +598,11 @@ export async function waitForInternalTestFlightAvailability({
         (group) => !assignedGroupIds.has(group.id)
       );
       if (missingGroups.length > 0 && !promotionAttempted) {
-        for (const group of missingGroups) {
-          try {
-            await client.request(
-              `/v1/betaGroups/${group.id}/relationships/builds`,
-              {
-                method: "POST",
-                body: { data: [{ type: "builds", id: exactBuild.build.id }] },
-              }
-            );
-            logger.log(
-              `Assigned build ${exactBuild.build.id} to ${group.attributes?.name}.`
-            );
-          } catch (error) {
-            if (
-              !(error instanceof AppStoreConnectError && error.status === 409)
-            ) {
-              throw error;
-            }
-            logger.log(
-              `Assignment for build ${exactBuild.build.id} raced with another update; rechecking ${group.attributes?.name}.`
-            );
-          }
-        }
+        await assignBuildToGroups(client, {
+          buildId: exactBuild.build.id,
+          groups: missingGroups,
+          logger,
+        });
         promotionAttempted = true;
       }
 
@@ -623,27 +637,220 @@ export async function waitForInternalTestFlightAvailability({
   );
 }
 
-export async function main(environment = process.env) {
+async function assignBuildToGroups(client, { buildId, groups, logger }) {
+  for (const group of groups) {
+    try {
+      await client.request(`/v1/betaGroups/${group.id}/relationships/builds`, {
+        method: "POST",
+        body: { data: [{ type: "builds", id: buildId }] },
+      });
+      logger.log(`Assigned build ${buildId} to ${group.attributes?.name}.`);
+    } catch (error) {
+      if (!(error instanceof AppStoreConnectError && error.status === 409)) {
+        throw error;
+      }
+      logger.log(
+        `Assignment for build ${buildId} raced with another update; rechecking ${group.attributes?.name}.`
+      );
+    }
+  }
+}
+
+/**
+ * Submits an already processed build for Apple's beta review and assigns it to
+ * the external groups. It returns once Apple has the build in review (or has
+ * already approved it); it does not wait for the review itself, which can take
+ * a day. Testers in the groups get the build when Apple approves it.
+ */
+export async function submitToExternalTestFlightGroups({
+  client,
+  bundleId,
+  marketingVersion,
+  buildNumber,
+  externalGroupIds,
+  diagnosticsDirectory,
+  timeoutMilliseconds = 600_000,
+  pollIntervalMilliseconds = 15_000,
+  now = () => Date.now(),
+  sleepImplementation = sleep,
+  logger = console,
+}) {
+  const app = await resolveApp(client, bundleId);
+  const groups = await resolveGroups(client, app.id, externalGroupIds, {
+    internal: false,
+  });
+  const deadline = now() + timeoutMilliseconds;
+  let lastState;
+  let submissionAttempted = false;
+  let assignmentAttempted = false;
+  let notifyEnabled = false;
+
+  while (now() <= deadline) {
+    const exactBuild = await findExactBuild(client, {
+      appId: app.id,
+      marketingVersion,
+      buildNumber,
+    });
+    if (!exactBuild) {
+      throw new Error(
+        `Synara ${marketingVersion} (${buildNumber}) was not found in App Store Connect.`
+      );
+    }
+    const { build, betaDetail } = exactBuild;
+    const externalState = betaDetail?.attributes?.externalBuildState;
+    if (externalState !== lastState) {
+      logger.log(
+        `TestFlight ${marketingVersion} (${buildNumber}): external=${
+          externalState ?? "NOT_FOUND"
+        }`
+      );
+      lastState = externalState;
+    }
+
+    const assignedGroupIds = new Set(
+      exactBuild.betaGroups.map((group) => group.id)
+    );
+    const snapshot = {
+      queriedAt: new Date(now()).toISOString(),
+      expected: { bundleId, marketingVersion, buildNumber },
+      app: { id: app.id, name: app.attributes?.name },
+      targetGroups: groups.map((group) => ({
+        id: group.id,
+        name: group.attributes?.name,
+        isInternalGroup: group.attributes?.isInternalGroup,
+      })),
+      build: simplifyBuild(build),
+      externalBuildState: externalState,
+      assignedGroups: exactBuild.betaGroups.map((group) => ({
+        id: group.id,
+        name: group.attributes?.name,
+      })),
+    };
+    await writeSnapshot(
+      diagnosticsDirectory,
+      snapshot,
+      "app-store-connect-external-state.json"
+    );
+
+    if (build.attributes?.processingState !== "VALID") {
+      throw new Error(
+        `The build is ${build.attributes?.processingState}, not VALID; run the internal gate first.`
+      );
+    }
+    if (build.attributes?.expired === true) {
+      throw new Error("Apple marked the uploaded build expired.");
+    }
+    if (build.attributes?.buildAudienceType === "INTERNAL_ONLY") {
+      throw new Error(
+        "The build was uploaded for internal testing only, so it can never reach external testers. Upload a new build with SYNARA_TESTFLIGHT_INTERNAL_ONLY=false."
+      );
+    }
+    if (TERMINAL_EXTERNAL_STATES.has(externalState)) {
+      throw new Error(`Apple marked the external beta build ${externalState}.`);
+    }
+
+    if (betaDetail && !notifyEnabled) {
+      if (betaDetail.attributes?.autoNotifyEnabled !== true) {
+        await client.request(`/v1/buildBetaDetails/${betaDetail.id}`, {
+          method: "PATCH",
+          body: {
+            data: {
+              type: "buildBetaDetails",
+              id: betaDetail.id,
+              attributes: { autoNotifyEnabled: true },
+            },
+          },
+        });
+      }
+      notifyEnabled = true;
+    }
+
+    if (externalState === "READY_FOR_BETA_SUBMISSION" && !submissionAttempted) {
+      submissionAttempted = true;
+      try {
+        await client.request("/v1/betaAppReviewSubmissions", {
+          method: "POST",
+          body: {
+            data: {
+              type: "betaAppReviewSubmissions",
+              relationships: {
+                build: { data: { type: "builds", id: build.id } },
+              },
+            },
+          },
+        });
+        logger.log(`Submitted build ${build.id} for beta review.`);
+      } catch (error) {
+        if (!(error instanceof AppStoreConnectError && error.status === 409)) {
+          throw new Error(
+            `Apple refused the beta review submission: ${error.message} Check the app's TestFlight Test Information in App Store Connect (beta description, feedback email, review contact, sign-in details).`,
+            { cause: error }
+          );
+        }
+        logger.log(
+          `Beta review submission for build ${build.id} raced with another update; rechecking.`
+        );
+      }
+    } else if (SUBMITTED_EXTERNAL_STATES.has(externalState)) {
+      const missingGroups = groups.filter(
+        (group) => !assignedGroupIds.has(group.id)
+      );
+      if (missingGroups.length === 0) {
+        logger.log(
+          `Synara ${marketingVersion} (${buildNumber}) is ${externalState} for ${groups
+            .map((group) => group.attributes?.name)
+            .join(", ")}.`
+        );
+        return snapshot;
+      }
+      if (!assignmentAttempted) {
+        assignmentAttempted = true;
+        await assignBuildToGroups(client, {
+          buildId: build.id,
+          groups: missingGroups,
+          logger,
+        });
+        continue;
+      }
+    }
+
+    await sleepImplementation(pollIntervalMilliseconds);
+  }
+
+  throw new Error(
+    `Timed out waiting for Synara ${marketingVersion} (${buildNumber}) to reach beta review; last external state was ${
+      lastState ?? "NOT_FOUND"
+    }.`
+  );
+}
+
+const parseGroupIds = (name, value) => {
+  const groupIds = [
+    ...new Set(
+      requireValue(name, value)
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    ),
+  ];
+  if (groupIds.length === 0) throw new Error(`${name} must not be empty.`);
+  return groupIds;
+};
+
+const parseBoolean = (name, value, fallback) => {
+  const normalized = value || String(fallback);
+  if (normalized !== "true" && normalized !== "false") {
+    throw new Error(`${name} must be 'true' or 'false'.`);
+  }
+  return normalized === "true";
+};
+
+async function createClientFromEnvironment(environment) {
   const privateKeyPath = requireValue(
     "SYNARA_ASC_KEY_PATH",
     environment.SYNARA_ASC_KEY_PATH
   );
-  const groupIds = [
-    ...new Set(
-      requireValue(
-        "SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS",
-        environment.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS
-      )
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean)
-    ),
-  ];
-  if (groupIds.length === 0) {
-    throw new Error("SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS must not be empty.");
-  }
-
-  const client = new AppStoreConnectClient({
+  return new AppStoreConnectClient({
     issuerId: requireValue(
       "SYNARA_ASC_ISSUER_ID",
       environment.SYNARA_ASC_ISSUER_ID
@@ -651,21 +858,64 @@ export async function main(environment = process.env) {
     keyId: requireValue("SYNARA_ASC_KEY_ID", environment.SYNARA_ASC_KEY_ID),
     privateKey: await readFile(privateKeyPath, "utf8"),
   });
+}
+
+const releaseIdentityFromEnvironment = (environment) => ({
+  bundleId: environment.SYNARA_IOS_BUNDLE_ID ?? "com.whylandcreative.synara",
+  marketingVersion: requireValue(
+    "SYNARA_IOS_MARKETING_VERSION",
+    environment.SYNARA_IOS_MARKETING_VERSION
+  ),
+  buildNumber: requireValue(
+    "SYNARA_IOS_BUILD_NUMBER",
+    environment.SYNARA_IOS_BUILD_NUMBER
+  ),
+});
+
+export async function mainExternal(environment = process.env) {
+  const externalGroupIds = parseGroupIds(
+    "SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS",
+    environment.SYNARA_TESTFLIGHT_EXTERNAL_GROUP_IDS
+  );
+  return submitToExternalTestFlightGroups({
+    client: await createClientFromEnvironment(environment),
+    ...releaseIdentityFromEnvironment(environment),
+    externalGroupIds,
+    diagnosticsDirectory: environment.SYNARA_IOS_DIAGNOSTICS_DIR,
+    timeoutMilliseconds:
+      parsePositiveNumber(
+        "SYNARA_TESTFLIGHT_EXTERNAL_TIMEOUT_SECONDS",
+        environment.SYNARA_TESTFLIGHT_EXTERNAL_TIMEOUT_SECONDS,
+        600
+      ) * 1000,
+    pollIntervalMilliseconds:
+      parsePositiveNumber(
+        "SYNARA_TESTFLIGHT_POLL_INTERVAL_SECONDS",
+        environment.SYNARA_TESTFLIGHT_POLL_INTERVAL_SECONDS,
+        15
+      ) * 1000,
+  });
+}
+
+export async function main(environment = process.env) {
+  const groupIds = parseGroupIds(
+    "SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS",
+    environment.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS
+  );
+  const internalOnly = parseBoolean(
+    "SYNARA_TESTFLIGHT_INTERNAL_ONLY",
+    environment.SYNARA_TESTFLIGHT_INTERNAL_ONLY,
+    true
+  );
+  const client = await createClientFromEnvironment(environment);
   const whatsNew = environment.SYNARA_TESTFLIGHT_WHATS_NEW_PATH
     ? await readFile(environment.SYNARA_TESTFLIGHT_WHATS_NEW_PATH, "utf8")
     : undefined;
   return waitForInternalTestFlightAvailability({
     client,
-    bundleId: environment.SYNARA_IOS_BUNDLE_ID ?? "com.whylandcreative.synara",
-    marketingVersion: requireValue(
-      "SYNARA_IOS_MARKETING_VERSION",
-      environment.SYNARA_IOS_MARKETING_VERSION
-    ),
-    buildNumber: requireValue(
-      "SYNARA_IOS_BUILD_NUMBER",
-      environment.SYNARA_IOS_BUILD_NUMBER
-    ),
+    ...releaseIdentityFromEnvironment(environment),
     internalGroupIds: groupIds,
+    internalOnly,
     whatsNew,
     whatsNewLocale: environment.SYNARA_TESTFLIGHT_WHATS_NEW_LOCALE ?? "en-US",
     diagnosticsDirectory: environment.SYNARA_IOS_DIAGNOSTICS_DIR,
