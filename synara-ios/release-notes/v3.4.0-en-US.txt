@@ -1,0 +1,3 @@
+Synara 3.4.0 makes Sync drafts across devices work on every verified device, without the recovery key. A verified device asks your other verified devices for the drafts key and creates it after a few seconds if none has it.
+
+Please test: with two verified devices both on 3.4.0, turn on Sync drafts across devices (Settings, Messages) on each, type a draft in a room on one and check it appears on the other. Check the hint under the setting on a device that is not verified.

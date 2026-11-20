@@ -1,0 +1,9 @@
+{
+  "version": "3.4.0",
+  "headline": "Edit your last message from the keyboard",
+  "items": [
+    { "text": "With the message box empty, press Up to select your last message, then E to edit it.", "platforms": ["desktop"] },
+    { "text": "Sync drafts across devices now works on every verified device, without the recovery key. Every device needs this version.", "platforms": ["desktop", "ios"] },
+    { "text": "Linux: the Hardware acceleration setting has a Restart now button. Closing the window never restarted Synara, because it stays in the tray.", "platforms": ["desktop"] }
+  ]
+}
