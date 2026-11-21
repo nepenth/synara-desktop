@@ -263,8 +263,10 @@ final class ComposerDraftSync: ObservableObject {
         }
     }
 
-    /// Compare with the synced draft. Returns text to put in the composer
-    /// when the remote draft applies silently.
+    /// Compare with the synced draft. Returns the remote draft when it
+    /// applies silently. The caller shows it and then calls `confirmApplied`;
+    /// until then the draft counts as not taken, so a caller that had to drop
+    /// it (the composer changed meanwhile) gets it again on the next resolve.
     func resolve(currentText: String, isFocused: Bool, fetchFresh: Bool) async -> RemoteDraft? {
         guard roomID.isEmpty == false else { return nil }
         let typing = dirty && (isFocused || Date().timeIntervalSince(lastTypedAt) < Self.activeTypingInterval)
@@ -282,9 +284,13 @@ final class ComposerDraftSync: ObservableObject {
             return nil
         case let .apply(remote):
             prompt = nil
-            markApplied(remote)
             return remote
         }
+    }
+
+    /// The remote draft from `resolve` is now in the composer.
+    func confirmApplied(_ remote: RemoteDraft) {
+        markApplied(remote)
     }
 
     /// The user chose the other device's draft. Returns it to show.

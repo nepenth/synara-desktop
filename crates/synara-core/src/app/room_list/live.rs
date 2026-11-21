@@ -72,8 +72,10 @@ pub const ROOM_LIST_SAFETY_PULSE: Duration = Duration::from_secs(30);
 /// Rooms at the top of the SDK room list (latest event, then recency) that
 /// get a full sliding-sync room subscription (timeline limit 20 plus extra
 /// state), so the rows a user sees first have full previews and client-side
-/// unread counts. Every other room relies on the list's
-/// `ROOM_LIST_TIMELINE_LIMIT` window; the open room is subscribed separately.
+/// unread counts. Every other room starts from the list's
+/// `ROOM_LIST_TIMELINE_LIMIT` window, which the SDK's background
+/// back-pagination extends when it holds nothing to preview or not the read
+/// receipt; the open room is subscribed separately.
 /// Subscribing every joined room made the first sync heavier, grew every
 /// long-poll body, and restarted the request at each growth step.
 pub const ROOM_LIST_RECENT_SUBSCRIPTIONS: usize = 20;
@@ -2004,7 +2006,7 @@ mod room_list_cost_tests {
 
     /// A fresh login on a busy account: each room's window holds only a
     /// reaction (nothing to preview, no read-receipt target) and is limited,
-    /// which is what made the SDK back-paginate every room. Bump stamps rise
+    /// so the SDK back-paginates every room. Bump stamps rise
     /// with the index, so the SDK lists the highest index first.
     fn many_rooms_response() -> serde_json::Value {
         let mut rooms = serde_json::Map::new();
@@ -2130,7 +2132,7 @@ mod room_list_cost_tests {
     }
 
     #[tokio::test]
-    async fn login_on_many_rooms_sends_no_messages_and_subscribes_only_recent_rooms() {
+    async fn login_on_many_rooms_bounds_history_requests_and_subscribes_only_recent_rooms() {
         let server = MatrixMockServer::new().await;
         let client = server
             .client_builder()
@@ -2187,14 +2189,14 @@ mod room_list_cost_tests {
         // Room for any background backfill to have started.
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
+        // The SDK looks for a previewable event and for the read receipt in
+        // each room: at most two background requests a room on this server,
+        // whose history is empty.
         let messages = messages_requests(&server).await;
         assert!(
-            !messages.iter().any(|path| path.contains(INVITE)),
-            "an invited room must never be back-paginated (the server answers 403)"
-        );
-        assert!(
-            messages.is_empty(),
-            "a login sync must not back-paginate rooms, saw {messages:?}"
+            messages.len() <= 2 * (JOINED + 1),
+            "background back-pagination at sign-in stays bounded, saw {} requests",
+            messages.len()
         );
 
         let bodies = sliding_sync_bodies(&server).await;
@@ -2264,8 +2266,14 @@ mod room_list_cost_tests {
         owner.stop().await.expect("sync stops");
     }
 
+    /// A catch-up whose window holds only edits of a message outside it: an
+    /// agent streaming its reply while the app was suspended. Nothing in the
+    /// window can be a preview. With automatic back-pagination off the row
+    /// kept its old message, time and place until the room was opened.
     #[tokio::test]
-    async fn invited_rooms_are_never_back_paginated() {
+    async fn a_catch_up_of_only_edits_updates_the_preview() {
+        use matrix_sdk::ruma::events::room::message::RoomMessageEventContentWithoutRelation;
+
         let server = MatrixMockServer::new().await;
         let client = server
             .client_builder()
@@ -2273,30 +2281,101 @@ mod room_list_cost_tests {
             .build()
             .await;
         client.event_cache().subscribe().unwrap();
+        let room_id = room_id!("!b5-agent:example.org");
+        // Mounted before the catch-all in `mount_homeserver`: the page before
+        // the window holds the message the edits belong to.
+        Mock::given(method("GET"))
+            .and(path_regex(r"/rooms/!b5-agent:example\.org/messages$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "start": "prev-agent",
+                "chunk": [{
+                    "type": "m.room.message",
+                    "event_id": "$reply",
+                    "room_id": room_id,
+                    "sender": "@bob:example.org",
+                    "origin_server_ts": 2_000,
+                    "content": { "msgtype": "m.text", "body": "Steer queued into current run" }
+                }]
+            })))
+            .with_priority(1)
+            .mount(server.server())
+            .await;
         mount_homeserver(&server).await;
-        let invite = room_id!("!b5-only-invite:example.org");
+
+        let f = EventFactory::new()
+            .room(room_id)
+            .sender(user_id!("@bob:example.org"));
         server
             .sync_room(
                 &client,
-                matrix_sdk_test::InvitedRoomBuilder::new(invite).add_state_event(
-                    EventFactory::new()
-                        .room(invite)
-                        .sender(user_id!("@eve:example.org"))
-                        .member(user_id!("@example:localhost"))
-                        .membership(
-                            matrix_sdk::ruma::events::room::member::MembershipState::Invite,
-                        ),
+                JoinedRoomBuilder::new(room_id).add_timeline_event(
+                    f.text_msg("Password stays as-is")
+                        .event_id(event_id!("$old"))
+                        .server_ts(1_000),
                 ),
             )
             .await;
         client
             .latest_events()
             .await
-            .listen_to_room(invite)
+            .listen_to_room(room_id)
             .await
-            .expect("listen to the invite's latest event");
+            .expect("listen to the latest event");
+        let room = client.get_room(room_id).expect("room");
+        let settings = client.notification_settings().await;
+        let row = || async { project_room(&room, &settings, &ServerHighlights::default()).await };
+        let wait_for_activity = |ts: u64| {
+            let row = &row;
+            async move {
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    while row().await.last_activity_ts != Some(ts) {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                })
+                .await
+                .unwrap_or_else(|_| panic!("the row never reached activity {ts}"));
+            }
+        };
+        wait_for_activity(1_000).await;
+
+        let mut catch_up = JoinedRoomBuilder::new(room_id)
+            .set_timeline_limited()
+            .set_timeline_prev_batch("prev-agent");
+        for step in 0..ROOM_LIST_TIMELINE_LIMIT as u64 {
+            let edit_id = matrix_sdk::ruma::OwnedEventId::try_from(format!("$edit-{step}"))
+                .expect("event id");
+            catch_up = catch_up.add_timeline_event(
+                f.text_msg(format!("* streamed {step}"))
+                    .edit(
+                        event_id!("$reply"),
+                        RoomMessageEventContentWithoutRelation::text_plain(format!(
+                            "streamed {step}"
+                        )),
+                    )
+                    .event_id(&edit_id)
+                    .server_ts(2_001 + step),
+            );
+        }
+        server.sync_room(&client, catch_up).await;
+
+        // The SDK loads the page before the window; with the original
+        // message loaded, its newest edit is the latest event.
+        wait_for_activity(2_000 + ROOM_LIST_TIMELINE_LIMIT as u64).await;
+        let fresh = row().await;
+        assert!(
+            fresh
+                .last_message_preview
+                .as_deref()
+                .is_some_and(|preview| !preview.contains("Password stays")),
+            "the preview follows the newer message, got {:?}",
+            fresh.last_message_preview
+        );
         tokio::time::sleep(Duration::from_millis(500)).await;
-        assert!(messages_requests(&server).await.is_empty());
+        let requests = messages_requests(&server).await.len();
+        assert!(
+            (1..=3).contains(&requests),
+            "one bounded history read finds the edited message, saw {requests}"
+        );
     }
 
     #[tokio::test]

@@ -1,0 +1,9 @@
+{
+  "version": "3.4.1",
+  "headline": "Fixes for the room list, message box and synced drafts",
+  "items": [
+    { "text": "macOS: typing two hyphens no longer leaves an extra dash or stops typing. Smart dashes and text replacements now apply cleanly.", "platforms": ["desktop"] },
+    { "text": "After time in the background, the room list no longer shows an old last message for an active room, such as one with an agent replying.", "platforms": ["desktop", "ios"] },
+    { "text": "A draft written on another device now also appears when you come back to a room or to the app, not only when you open the room.", "platforms": ["ios"] }
+  ]
+}

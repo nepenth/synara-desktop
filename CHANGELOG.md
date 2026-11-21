@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## [3.4.1] - 2026-11-21
+
+- Desktop (macOS): with "Use smart quotes and dashes" on, typing two hyphens and then a letter or a space left the hyphens in the message box with an extra dash after them ("--—"), and typing stopped until you clicked in the message box. WebKit applies the replacement while it inserts the next typed character, when the page was one character ahead of the editor's own text, and the editor inserted the dash at the page's caret instead of over the hyphens. The message box now applies the replacement itself and keeps the caret. This also covers smart quotes, macOS text replacements, autocorrect and a picked spelling suggestion, in the thread pane and when editing a message in place.
+- Room list (iOS and desktop): a room could keep an old last message, time and place in the list while it was active, until you opened it. It happened when the app caught up after being suspended or offline and the newest events of a room were all edits, reactions or deletions; an agent that streams its reply by editing one message does this on every catch-up. Nothing among those events can be a preview, and the Matrix SDK's background loading of older events, which exists for this case, had been off since 2.3.0 to save requests at sign-in. It is on again. It also fixes rooms that showed no last message at all, and unread counts made on the device (encrypted rooms), which stopped at the 5 newest events of a room that was not among the 20 most recent.
+- Sign-in and a start with an empty cache now load some history in the background, three rooms at a time: about one request per room, more for a room where you are many messages behind, and up to 21 for a room with no read position. A pending invite costs one request the server refuses. The room list does not wait for this.
+- iOS: a draft written on another device could stay hidden until you left the room and opened it again. The room now also checks for a newer draft when you return to a room that was kept open, when the app comes back to the foreground, and when you finish editing a message. A synced draft that could not be shown because you were typing at that moment is offered again; before, it was counted as taken.
+- Dependencies: TanStack Query 5.108, html-react-parser 6.1.10, i18next 27.1.5, i18next-browser-languagedetector 8.3.1 and typescript-eslint 8.73. `emojibase` stays at 17 and `@tanstack/react-virtual` at 3.14.14.
+
 ## [3.4.0] - 2026-11-20
 
 - Desktop (Linux): the Hardware acceleration setting has a Restart now button once you change the mode. Closing the window leaves Synara running in the tray, so the new mode did not apply until you quit from the tray icon; the note under the setting now says so.

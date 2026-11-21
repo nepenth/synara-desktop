@@ -249,6 +249,7 @@ const tests = [
   'src/app/components/editor/__tests__/formatting.test.ts',
   'src/app/components/editor/__tests__/linkEdge.test.ts',
   'src/app/components/editor/__tests__/focusAfterRender.test.ts',
+  'src/app/components/editor/__tests__/replacementText.test.ts',
   'src/app/pages/auth/login/__tests__/nativeLoginFlows.test.ts',
   'src/app/pages/auth/reset-password/__tests__/nativePasswordReset.test.ts',
   'src/app/pages/auth/register/__tests__/nativeRegister.test.ts',

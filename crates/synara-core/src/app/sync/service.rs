@@ -60,10 +60,11 @@ const TERMINATED_RESTART_MAX: Duration = Duration::from_secs(60);
 const SESSION_CHANGE_PROBE_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Events per room in the room-list sliding-sync window (the SDK default is
-/// one). Automatic back-pagination is off (`apply_event_cache_policy`), so
-/// this window is what the SDK has for a room's latest-event preview and its
-/// client-side unread count until the room is subscribed or opened. One event
-/// was often a reaction, edit or state event with nothing to preview.
+/// one). This window is what the SDK starts from for a room's latest-event
+/// preview and its client-side unread count. When it holds nothing to preview
+/// or not the read receipt, the SDK's background back-pagination loads older
+/// events (`apply_event_cache_policy`); a wider window makes that rarer. One
+/// event was often a reaction, edit or state event with nothing to preview.
 pub const ROOM_LIST_TIMELINE_LIMIT: u32 = 5;
 
 /// Heartbeat thresholds; production uses the constants above.
