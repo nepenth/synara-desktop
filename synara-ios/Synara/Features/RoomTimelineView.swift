@@ -7886,6 +7886,15 @@ private struct TimelineRow: View {
         }
     }
 
+    /// The sender's member sheet (Send message, Ignore, moderation), the one
+    /// a mention of them opens. Nil where no room screen supplies it.
+    @Environment(\.synaraOpenUserProfile) private var openUserProfile
+
+    private func openSenderProfile() {
+        guard item.senderID.isEmpty == false else { return }
+        openUserProfile?(item.senderID)
+    }
+
     @ViewBuilder
     private var messageRow: some View {
         let row = HStack(alignment: .top, spacing: rowHorizontalSpacing) {
@@ -7895,17 +7904,27 @@ private struct TimelineRow: View {
                         .frame(width: groupedLeadingGutter, height: 1)
                 }
             } else {
+                // A touch target only: the name beside it is the control
+                // VoiceOver reaches, and it opens the same profile.
                 TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: avatarSize)
+                    .contentShape(Rectangle())
+                    .onTapGesture { openSenderProfile() }
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 if isGroupedWithPrevious == false {
                     HStack(alignment: .center, spacing: SynaraSpacing.small) {
                         HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
-                            Text(senderDisplayName)
-                                .font(SynaraTypography.messageSender)
-                                .foregroundStyle(SynaraColor.headingText)
-                                .lineLimit(1)
+                            Button(action: openSenderProfile) {
+                                Text(senderDisplayName)
+                                    .font(SynaraTypography.messageSender)
+                                    .foregroundStyle(SynaraColor.headingText)
+                                    .lineLimit(1)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(openUserProfile == nil)
+                            .accessibilityHint(Text("Shows this person's profile and actions"))
+                            .accessibilityIdentifier("TimelineSenderName-\(item.id)")
                             Text(timeText)
                                 .font(SynaraTypography.messageTime)
                                 .foregroundStyle(SynaraColor.secondaryText)

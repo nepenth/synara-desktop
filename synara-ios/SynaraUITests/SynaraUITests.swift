@@ -717,6 +717,29 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["RoomMemberBanButton"].exists)
     }
 
+    func testTappingAMessageSenderOpensTheirSheetAndSendMessageOpensTheDirectMessage() {
+        let app = launchRoomApp()
+
+        let senderNames = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'TimelineSenderName-' AND label == 'Mina'")
+        )
+        XCTAssertTrue(senderNames.firstMatch.waitForExistence(timeout: 8))
+        tap(senderNames.firstMatch)
+
+        XCTAssertTrue(app.collectionViews["RoomMemberActionsScreen"].waitForExistence(timeout: 5))
+        let sendMessage = app.buttons["RoomMemberSendMessageButton"]
+        XCTAssertTrue(sendMessage.waitForExistence(timeout: 5))
+        tap(sendMessage)
+
+        // The existing direct message with Mina opens; no new room is made.
+        // Sender names are buttons, so the only "Mina" text is the header
+        // of her room.
+        XCTAssertTrue(app.staticTexts["Mina"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.collectionViews["RoomMemberActionsScreen"].exists)
+        XCTAssertFalse(app.staticTexts["Project"].exists)
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
+    }
+
     func testRoomDetailsProfileEditMockFlow() {
         let app = launchRoomApp()
 

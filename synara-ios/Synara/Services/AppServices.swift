@@ -1065,6 +1065,8 @@ struct RoomMemberSummary: Equatable, Identifiable {
             RoomMemberSummary(userID: "@alice:matrix.org", displayName: "Alice", membership: .join, powerLevel: 100),
             RoomMemberSummary(userID: "@bob:matrix.org", displayName: "Bob", membership: .join, powerLevel: 0),
             RoomMemberSummary(userID: "@carol:matrix.org", displayName: "Carol", membership: .leave, powerLevel: 0),
+            // A sender in the mock timeline, so tapping her name there finds her.
+            RoomMemberSummary(userID: "@mina:matrix.org", displayName: "Mina", membership: .join, powerLevel: 0),
         ]
     }
 }

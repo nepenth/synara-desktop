@@ -47,6 +47,17 @@ struct RoomMemberActionPlan: Equatable {
     }
 }
 
+/// Finds the direct message a "Send message" action should open.
+enum DirectMessageLookup {
+    /// The joined direct room with `userID`, the most recently active one
+    /// when there are several. Desktop picks the same room.
+    static func existingRoom(with userID: String, in rooms: [RoomSummary]) -> RoomSummary? {
+        rooms
+            .filter { $0.membership == .joined && $0.directUserId == userID }
+            .max { $0.lastActivityAt < $1.lastActivityAt }
+    }
+}
+
 struct RoomMemberActionsView: View {
     let roomID: String
     let member: RoomMemberSummary
@@ -65,6 +76,38 @@ struct RoomMemberActionsView: View {
 
     private var plan: RoomMemberActionPlan {
         RoomMemberActionPlan.plan(member: member, ownUserID: ownUserID, powerLevels: powerLevels)
+    }
+
+    /// Opens the direct message with this member: the one that exists, or a
+    /// new one. Creating one each time left several rooms with one person.
+    private func openDirectMessage() {
+        guard isLoading == false else { return }
+        isLoading = true
+        let userID = member.userID
+        let title = member.displayName ?? userID
+        Task {
+            defer { isLoading = false }
+            var roomID: String?
+            if case let .loaded(rooms) = await environment.roomList.loadRooms() {
+                roomID = DirectMessageLookup.existingRoom(with: userID, in: rooms)?.id
+            }
+            if roomID == nil {
+                do {
+                    roomID = try await environment.roomManagement.createDirectMessage(
+                        DirectMessageCreateRequest(userID: userID, isEncrypted: true)
+                    ).roomID
+                } catch let error as RoomManagementError {
+                    message = error.localizedDescription
+                    return
+                } catch {
+                    message = RoomManagementError.failed.localizedDescription
+                    return
+                }
+            }
+            guard let roomID else { return }
+            dismiss()
+            environment.router.route(to: .room(id: roomID, title: title))
+        }
     }
 
     init(
@@ -109,21 +152,9 @@ struct RoomMemberActionsView: View {
 
                 Section("Actions") {
                     if plan.canMessage {
-                        Button("Send message") {
-                            Task {
-                                do {
-                                    _ = try await environment.roomManagement.createDirectMessage(
-                                        DirectMessageCreateRequest(userID: member.userID, isEncrypted: true)
-                                    )
-                                    message = String(localized: "Direct message created.")
-                                } catch let error as RoomManagementError {
-                                    message = error.localizedDescription
-                                } catch {
-                                    message = RoomManagementError.failed.localizedDescription
-                                }
-                            }
-                        }
-                        .accessibilityIdentifier("RoomMemberSendMessageButton")
+                        Button("Send message", action: openDirectMessage)
+                            .disabled(isLoading)
+                            .accessibilityIdentifier("RoomMemberSendMessageButton")
                     }
                     Button("Copy user ID") {
                         UIPasteboard.general.string = member.userID
