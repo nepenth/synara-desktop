@@ -26,6 +26,7 @@ import { CustomElement } from './slate';
 import * as css from './Editor.css';
 import { toggleKeyboardShortcut } from './keyboard';
 import { withComposer } from './composerEditor';
+import { handleReplacementText } from './replacementText';
 import { enableDesktopSpellcheck } from '../../utils/desktop';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 
@@ -115,6 +116,11 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
       [editor, isComposing, onKeyDown]
     );
 
+    const handleDOMBeforeInput = useCallback(
+      (evt: InputEvent) => handleReplacementText(editor, evt),
+      [editor]
+    );
+
     const renderPlaceholder = useCallback(
       ({ attributes, children }: RenderPlaceholderProps) => (
         // Slate inlines `opacity: 0.333` (2.2:1); the class sets an AA colour instead.
@@ -171,6 +177,7 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
                   onFocus={() => {
                     if (spellCheck) void enableDesktopSpellcheck();
                   }}
+                  onDOMBeforeInput={handleDOMBeforeInput}
                   onKeyDown={handleKeydown}
                   onKeyUp={onKeyUp}
                   onPaste={onPaste}
