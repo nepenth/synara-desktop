@@ -5,15 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { SettingTile } from '../../components/setting-tile';
 import { SequenceCard } from '../../components/sequence-card';
 import { isUserId } from '../../utils/matrix';
-import { addRoomIdToMDirect } from '../room/nativeMDirect';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
-import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
-import { createRoomWithNativeOwner } from '../../components/nativeRoomCreateOwner';
 import { useAlive } from '../../hooks/useAlive';
 import { getDirectRoomPath } from '../../pages/pathUtils';
 import { useSetting } from '../../state/hooks/settings';
-import { settingsAtom, getSharedSettings } from '../../state/settings';
-import { pushEncryptedStateEventsSetting } from '../settings/encryptedStateEvents';
+import { settingsAtom } from '../../state/settings';
+import { createDirectChat } from './directChat';
 import { composerErrorMessage } from '../room/composerSendError';
 
 type CreateChatProps = {
@@ -33,25 +30,10 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
     Error | MatrixError,
     [string, boolean, boolean]
   >(
-    useCallback(async (userId, encrypted, encryptState) => {
-      await pushEncryptedStateEventsSetting(getSharedSettings().encryptedStateEvents);
-      const roomId = await createRoomWithNativeOwner(
-        {
-          isDirect: true,
-          invite: [userId],
-          visibility: 'private',
-          preset: 'trusted_private_chat',
-          encryption: encrypted,
-          encryptStateEvents: encrypted && encryptState,
-        },
-        isSynaraDesktop(),
-        (command, args) => invokeDesktopWithAvailability(command, args)
-      );
-
-      await addRoomIdToMDirect(roomId, userId);
-
-      return roomId;
-    }, [])
+    useCallback(
+      (userId, encrypted, encryptState) => createDirectChat(userId, encrypted, encryptState),
+      []
+    )
   );
   const loading = createState.status === AsyncStatus.Loading;
   const error = createState.status === AsyncStatus.Error ? createState.error : undefined;

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Desktop: click a message's sender, the name or the avatar, to open that person's profile, with Message, Mention, Copy user ID, Ignore and the moderation actions. It is the popover the member list and mentions already open. Message opens your direct message with them, or the new-chat form with them filled in when there is none.
+- Desktop: click a message's sender, the name or the avatar, to open that person's profile, with Message, Mention, Copy user ID, Ignore and the moderation actions. It is the popover the member list and mentions already open. Message opens your direct message with them and creates it (encrypted) when there is none; it no longer sends you to the new-chat form to press Create. A second click while the chat is being created does not make a second one.
 - iOS: tap a message's sender, the name or the avatar, to open the member sheet that mentions and the member list open. Send message there now opens your existing direct message with that person and takes you to it; it used to create a new direct message every time and stay on the sheet.
 
 ## [3.4.1] - 2026-11-21
