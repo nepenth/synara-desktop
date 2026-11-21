@@ -489,6 +489,45 @@ export const SenderName = style({
   fontWeight: 700,
 });
 
+/**
+ * The sender's name as a control that opens their profile. It keeps the
+ * name's own type; only the pointer, a hover underline and the focus ring
+ * say it can be clicked.
+ */
+export const SenderButton = style({
+  appearance: 'none',
+  margin: 0,
+  padding: 0,
+  border: 'none',
+  borderRadius: config.radii.R300,
+  background: 'none',
+  color: 'inherit',
+  font: 'inherit',
+  textAlign: 'start',
+  cursor: 'pointer',
+  minWidth: 0,
+  selectors: {
+    '&:hover': { textDecoration: 'underline' },
+    '&:focus-visible': {
+      outline: `${config.borderWidth.B500} solid ${color.Primary.Main}`,
+      outlineOffset: config.borderWidth.B300,
+    },
+  },
+});
+
+/** The sender's avatar as a pointer target for the same profile. */
+export const SenderAvatarButton = style({
+  appearance: 'none',
+  display: 'block',
+  margin: 0,
+  padding: 0,
+  border: 'none',
+  borderRadius: config.radii.R400,
+  background: 'none',
+  lineHeight: 0,
+  cursor: 'pointer',
+});
+
 export const Metadata = style({
   color: 'var(--synara-content-secondary)',
 });

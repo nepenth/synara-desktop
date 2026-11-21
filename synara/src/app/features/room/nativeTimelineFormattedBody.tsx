@@ -48,6 +48,10 @@ const NativePermalinkContext = createContext<NativePermalinkHandler | undefined>
  */
 export const NativePermalinkProvider = NativePermalinkContext.Provider;
 
+/** The in-app permalink handler, if this timeline has one. */
+export const useNativePermalink = (): NativePermalinkHandler | undefined =>
+  useContext(NativePermalinkContext);
+
 const nodeText = (node: ChildNode): string => {
   if (isText(node)) return node.data;
   if (isTag(node)) return node.children.map(nodeText).join('');

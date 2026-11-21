@@ -6,6 +6,7 @@ import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
 import { darkTheme } from '../../src/colors.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
+import { NativePermalinkProvider } from '../../src/app/features/room/nativeTimelineFormattedBody';
 import { ThreadSidePanel } from '../../src/app/features/room/ThreadSidePanel';
 import { MemoryRouter } from 'react-router-dom';
 import { DesktopAppShortcuts } from '../../src/app/features/desktop-keyboard/DesktopAppShortcuts';
@@ -1393,6 +1394,7 @@ function App() {
       <MemoryRouter>
         <DesktopAppShortcuts />
       </MemoryRouter>
+      <output data-testid="opened-profile" />
       <button onClick={() => setMounted((value) => !value)}>Toggle room</button>
       <button onClick={() => setFocusedEventId('$30')}>Focus middle</button>
       <button onClick={() => setFocusedEventId('$t3')}>Focus thread reply</button>
@@ -1412,20 +1414,29 @@ function App() {
           }}
         >
           {mounted && (
-            <NativeTimelinePresenter
-              roomId={room}
-              eventId={focusedEventId}
-              threadDisplay={threadDisplay}
-              onOpenThreadPane={
-                threadDisplay === 'full'
-                  ? undefined
-                  : (rootEventId, _latestEventId, focusEventId) => {
-                      setPaneRoot(rootEventId);
-                      setPaneFocus(focusEventId);
-                    }
-              }
-              threadPaneRootEventId={paneRoot}
-            />
+            // As in a room: user links and message senders open a profile.
+            // The harness records which one instead of showing the popover.
+            <NativePermalinkProvider
+              value={(target) => {
+                const output = document.querySelector('[data-testid="opened-profile"]');
+                if (output) output.textContent = JSON.stringify(target);
+              }}
+            >
+              <NativeTimelinePresenter
+                roomId={room}
+                eventId={focusedEventId}
+                threadDisplay={threadDisplay}
+                onOpenThreadPane={
+                  threadDisplay === 'full'
+                    ? undefined
+                    : (rootEventId, _latestEventId, focusEventId) => {
+                        setPaneRoot(rootEventId);
+                        setPaneFocus(focusEventId);
+                      }
+                }
+                threadPaneRootEventId={paneRoot}
+              />
+            </NativePermalinkProvider>
           )}
           {mounted && harnessComposer()}
         </div>
