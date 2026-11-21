@@ -32,7 +32,6 @@ mod folders;
 mod invite_avatars;
 mod invites;
 mod last_message;
-mod latest_backfill;
 mod live;
 mod presentation;
 mod projection;

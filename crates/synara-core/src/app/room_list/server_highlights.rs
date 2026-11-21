@@ -1,9 +1,10 @@
 //! Mention badges from the homeserver's highlight notifications.
 //!
 //! Synapse's simplified sliding sync sends `highlight_count: 0` for every
-//! room, and the SDK's client-side mention count only covers the events the
-//! room-list window delivered (automatic back-pagination is off). A mention
-//! older than that window had no badge after a fresh login. One bounded read
+//! room, and the SDK's client-side mention count only covers the events it
+//! has loaded (the room-list window, plus what background back-pagination
+//! loads up to the read receipt). A mention older than that had no badge
+//! after a fresh login. One bounded read
 //! of `GET /notifications?only=highlight` ([`HIGHLIGHT_PAGE_LIMIT`] per page,
 //! at most [`HIGHLIGHT_MAX_PAGES`] pages) fills the gap. It runs once the
 //! first room-list response has settled, and again after a resume or a

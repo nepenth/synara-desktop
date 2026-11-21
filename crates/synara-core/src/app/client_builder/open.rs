@@ -120,16 +120,24 @@ pub async fn build_auth_probe_client(
 /// Event-cache policy shared by every product client (and by tests that
 /// build their client through `MatrixMockServer`).
 ///
-/// Automatic back-pagination stays off, the SDK default. When on, the SDK
-/// back-paginates every room in a sliding-sync response that has no
-/// displayable latest event (unbounded, invites included, which the server
-/// rejects with 403) and every room whose read receipt is not loaded (up to
-/// 20 pages). At login that was about two `/messages` per room. Previews and
-/// client-side unread counts come instead from the room-list timeline window
-/// (`ROOM_LIST_TIMELINE_LIMIT`) and the recent-room subscriptions; the
-/// timeline still paginates when a room is opened or scrolled.
+/// Automatic back-pagination is on. The SDK computes a room's latest event
+/// and its client-side unread counts from the events its event cache holds,
+/// and relies on this background queue (three rooms at a time) to load older
+/// events when they are not enough: no previewable event among them, or the
+/// user's read receipt pointing at an event that is not loaded.
+///
+/// It was off from 2.3.0 to 3.4.0 to save requests at sign-in. With it off a
+/// room whose newest events were all edits, reactions or redactions kept its
+/// old preview and place in the list (or had none), and device-side unread
+/// counts stopped at the room-list window (`ROOM_LIST_TIMELINE_LIMIT`).
+///
+/// Cost, measured against a mock homeserver with 30 rooms: one `/messages`
+/// per room at sign-in; one more per 30 events between the window and the
+/// read receipt; up to 21 for a room with no read receipt of ours (the SDK's
+/// cap); none for a later catch-up whose window has a previewable event and
+/// the receipt already known. An invite costs a request the server refuses.
 pub fn apply_event_cache_policy(builder: matrix_sdk::ClientBuilder) -> matrix_sdk::ClientBuilder {
-    builder.with_enable_automatic_back_pagination(false)
+    builder.with_enable_automatic_back_pagination(true)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -759,11 +767,11 @@ mod privacy_tests {
     }
 
     #[test]
-    fn product_builder_keeps_automatic_back_pagination_off() {
+    fn product_builder_turns_automatic_back_pagination_on() {
         let source = include_str!("open.rs");
         assert!(source.contains("builder = apply_event_cache_policy(builder);"));
-        assert!(source.contains("with_enable_automatic_back_pagination(false)"));
-        assert!(!source.contains(concat!("with_enable_automatic_back_pagination(", "true)")));
+        assert!(source.contains("with_enable_automatic_back_pagination(true)"));
+        assert!(!source.contains(concat!("with_enable_automatic_back_pagination(", "false)")));
         assert!(!source.contains(&format!("{}{}", "experimental", "-")));
     }
 }

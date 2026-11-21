@@ -36,7 +36,6 @@ use crate::app::room_list::last_message::{
     last_message_event_is_agent_approval_str, last_message_event_is_agent_workflow,
     last_message_preview_for_user, ENCRYPTED_MESSAGE_PREVIEW,
 };
-use crate::app::room_list::latest_backfill::spawn_latest_event_backfill;
 use crate::app::room_list::presentation::{room_list_presentation, RoomListPresentation};
 use crate::app::room_list::server_highlights::{
     fetch_server_highlights, own_read_up_to_ts, run_highlight_refresh, unread_highlight_count,
@@ -73,8 +72,10 @@ pub const ROOM_LIST_SAFETY_PULSE: Duration = Duration::from_secs(30);
 /// Rooms at the top of the SDK room list (latest event, then recency) that
 /// get a full sliding-sync room subscription (timeline limit 20 plus extra
 /// state), so the rows a user sees first have full previews and client-side
-/// unread counts. Every other room relies on the list's
-/// `ROOM_LIST_TIMELINE_LIMIT` window; the open room is subscribed separately.
+/// unread counts. Every other room starts from the list's
+/// `ROOM_LIST_TIMELINE_LIMIT` window, which the SDK's background
+/// back-pagination extends when it holds nothing to preview or not the read
+/// receipt; the open room is subscribed separately.
 /// Subscribing every joined room made the first sync heavier, grew every
 /// long-poll body, and restarted the request at each growth step.
 pub const ROOM_LIST_RECENT_SUBSCRIPTIONS: usize = 20;
@@ -95,9 +96,6 @@ pub struct NativeRoomListOwner {
     task: SupervisedTask,
     /// Keeps the server highlight notifications behind mention badges fresh.
     _highlights_task: SupervisedTask,
-    /// Loads older events for a room whose preview fell behind its newest
-    /// events (see `latest_backfill`).
-    _backfill_task: SupervisedTask,
     client: Client,
     handlers: Vec<EventHandlerHandle>,
     /// The sync owner's snapshot cache; this owner marks what changed and
@@ -181,7 +179,6 @@ impl NativeRoomListOwner {
             }),
         ];
         let highlights_task = spawn_highlight_refresh(owner, &client, wake.clone());
-        let backfill_task = spawn_latest_event_backfill(&client);
         // Shared across restarts: the handlers above keep the senders.
         let wakes = Arc::new(tokio::sync::Mutex::new(wakes));
         let mut first_room_updates = Some(client.subscribe_to_all_room_updates());
@@ -246,7 +243,6 @@ impl NativeRoomListOwner {
         Self {
             task,
             _highlights_task: highlights_task,
-            _backfill_task: backfill_task,
             client,
             handlers,
             cache,
@@ -2010,7 +2006,7 @@ mod room_list_cost_tests {
 
     /// A fresh login on a busy account: each room's window holds only a
     /// reaction (nothing to preview, no read-receipt target) and is limited,
-    /// which is what made the SDK back-paginate every room. Bump stamps rise
+    /// so the SDK back-paginates every room. Bump stamps rise
     /// with the index, so the SDK lists the highest index first.
     fn many_rooms_response() -> serde_json::Value {
         let mut rooms = serde_json::Map::new();
@@ -2136,7 +2132,7 @@ mod room_list_cost_tests {
     }
 
     #[tokio::test]
-    async fn login_on_many_rooms_sends_no_messages_and_subscribes_only_recent_rooms() {
+    async fn login_on_many_rooms_bounds_history_requests_and_subscribes_only_recent_rooms() {
         let server = MatrixMockServer::new().await;
         let client = server
             .client_builder()
@@ -2193,14 +2189,14 @@ mod room_list_cost_tests {
         // Room for any background backfill to have started.
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
+        // The SDK looks for a previewable event and for the read receipt in
+        // each room: at most two background requests a room on this server,
+        // whose history is empty.
         let messages = messages_requests(&server).await;
         assert!(
-            !messages.iter().any(|path| path.contains(INVITE)),
-            "an invited room must never be back-paginated (the server answers 403)"
-        );
-        assert!(
-            messages.is_empty(),
-            "a login sync must not back-paginate rooms, saw {messages:?}"
+            messages.len() <= 2 * (JOINED + 1),
+            "background back-pagination at sign-in stays bounded, saw {} requests",
+            messages.len()
         );
 
         let bodies = sliding_sync_bodies(&server).await;
@@ -2270,49 +2266,12 @@ mod room_list_cost_tests {
         owner.stop().await.expect("sync stops");
     }
 
-    #[tokio::test]
-    async fn invited_rooms_are_never_back_paginated() {
-        let server = MatrixMockServer::new().await;
-        let client = server
-            .client_builder()
-            .on_builder(apply_event_cache_policy)
-            .build()
-            .await;
-        client.event_cache().subscribe().unwrap();
-        mount_homeserver(&server).await;
-        let invite = room_id!("!b5-only-invite:example.org");
-        server
-            .sync_room(
-                &client,
-                matrix_sdk_test::InvitedRoomBuilder::new(invite).add_state_event(
-                    EventFactory::new()
-                        .room(invite)
-                        .sender(user_id!("@eve:example.org"))
-                        .member(user_id!("@example:localhost"))
-                        .membership(
-                            matrix_sdk::ruma::events::room::member::MembershipState::Invite,
-                        ),
-                ),
-            )
-            .await;
-        client
-            .latest_events()
-            .await
-            .listen_to_room(invite)
-            .await
-            .expect("listen to the invite's latest event");
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        assert!(messages_requests(&server).await.is_empty());
-    }
-
     /// A catch-up whose window holds only edits of a message outside it: an
-    /// agent streaming its reply while the app was suspended. The SDK finds
-    /// nothing to preview there and keeps the old latest event.
+    /// agent streaming its reply while the app was suspended. Nothing in the
+    /// window can be a preview. With automatic back-pagination off the row
+    /// kept its old message, time and place until the room was opened.
     #[tokio::test]
-    async fn a_catch_up_of_only_edits_backfills_the_preview() {
-        use crate::app::room_list::latest_backfill::{
-            backfill_stale_preview, stale_preview_marker, BACKFILL_MAX_BATCHES,
-        };
+    async fn a_catch_up_of_only_edits_updates_the_preview() {
         use matrix_sdk::ruma::events::room::message::RoomMessageEventContentWithoutRelation;
 
         let server = MatrixMockServer::new().await;
@@ -2378,7 +2337,6 @@ mod room_list_cost_tests {
             }
         };
         wait_for_activity(1_000).await;
-        assert_eq!(stale_preview_marker(&room).await, None);
 
         let mut catch_up = JoinedRoomBuilder::new(room_id)
             .set_timeline_limited()
@@ -2399,21 +2357,9 @@ mod room_list_cost_tests {
             );
         }
         server.sync_room(&client, catch_up).await;
-        tokio::time::sleep(Duration::from_millis(600)).await;
 
-        // The bug: the room is active and the row still shows the old message.
-        let stale = row().await;
-        assert_eq!(stale.last_activity_ts, Some(1_000));
-        assert!(stale_preview_marker(&room).await.is_some());
-        assert!(
-            messages_requests(&server).await.is_empty(),
-            "the SDK's own backfill stays off"
-        );
-
-        let mut attempted = HashMap::new();
-        let batches = backfill_stale_preview(&client, room_id, &mut attempted).await;
-        assert!((1..=BACKFILL_MAX_BATCHES).contains(&batches));
-        // With the original loaded, its newest edit is the latest event.
+        // The SDK loads the page before the window; with the original
+        // message loaded, its newest edit is the latest event.
         wait_for_activity(2_000 + ROOM_LIST_TIMELINE_LIMIT as u64).await;
         let fresh = row().await;
         assert!(
@@ -2424,14 +2370,12 @@ mod room_list_cost_tests {
             "the preview follows the newer message, got {:?}",
             fresh.last_message_preview
         );
-        assert_eq!(stale_preview_marker(&room).await, None);
-
-        // Nothing newer arrived: no further requests.
-        assert_eq!(
-            backfill_stale_preview(&client, room_id, &mut attempted).await,
-            0
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let requests = messages_requests(&server).await.len();
+        assert!(
+            (1..=3).contains(&requests),
+            "one bounded history read finds the edited message, saw {requests}"
         );
-        assert!(messages_requests(&server).await.len() <= BACKFILL_MAX_BATCHES);
     }
 
     #[tokio::test]
