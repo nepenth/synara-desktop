@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [3.4.1] - 2026-11-21
+
+- Desktop (macOS): with "Use smart quotes and dashes" on, typing two hyphens and then a letter or a space left the hyphens in the message box with an extra dash after them ("--—"), and typing stopped until you clicked in the message box. WebKit applies the replacement while it inserts the next typed character, when the page was one character ahead of the editor's own text, and the editor inserted the dash at the page's caret instead of over the hyphens. The message box now applies the replacement itself and keeps the caret. This also covers smart quotes, macOS text replacements, autocorrect and a picked spelling suggestion, in the thread pane and when editing a message in place.
+- iOS: a draft written on another device could stay hidden until you left the room and opened it again. The room now also checks for a newer draft when you return to a room that was kept open, when the app comes back to the foreground, and when you finish editing a message. A synced draft that could not be shown because you were typing at that moment is offered again; before, it was counted as taken.
+- Dependencies: TanStack Query 5.108, html-react-parser 6.1.10, i18next 27.1.5, i18next-browser-languagedetector 8.3.1 and typescript-eslint 8.73. `emojibase` stays at 17 and `@tanstack/react-virtual` at 3.14.14.
+
 ## [3.4.0] - 2026-11-20
 
 - Desktop (Linux): the Hardware acceleration setting has a Restart now button once you change the mode. Closing the window leaves Synara running in the tray, so the new mode did not apply until you quit from the tray icon; the note under the setting now says so.

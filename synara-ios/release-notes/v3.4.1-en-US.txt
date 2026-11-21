@@ -1,0 +1,3 @@
+Synara 3.4.1 makes the app check for a draft written on another device in more situations: when you return to a room that was kept open, when the app comes back to the foreground, and when you finish editing a message. Before, a synced draft could stay hidden until you left the room and opened it again.
+
+Please test: with two verified devices on 3.4.0 or later and Sync drafts across devices on (Settings, Messages), open a room on the phone, send the app to the background, type a draft in that room on the other device, then return to the phone and check the draft appears.
