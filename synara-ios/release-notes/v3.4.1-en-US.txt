@@ -1,3 +1,5 @@
-Synara 3.4.1 makes the app check for a draft written on another device in more situations: when you return to a room that was kept open, when the app comes back to the foreground, and when you finish editing a message. Before, a synced draft could stay hidden until you left the room and opened it again.
+Synara 3.4.1 fixes the Rooms list showing an old last message and time for a room that is active, most often a room where an agent is replying, until you opened the room.
 
-Please test: with two verified devices on 3.4.0 or later and Sync drafts across devices on (Settings, Messages), open a room on the phone, send the app to the background, type a draft in that room on the other device, then return to the phone and check the draft appears.
+It also makes the app check for a draft written on another device in more situations: when you return to a room that was kept open, when the app comes back to the foreground, and when you finish editing a message. Before, a synced draft could stay hidden until you left the room and opened it again.
+
+Please test: with two verified devices on 3.4.0 or later and Sync drafts across devices on (Settings, Messages), open a room on the phone, send the app to the background, type a draft in that room on the other device, then return to the phone and check the draft appears. Also: leave the app in the background while an agent replies in a room, return to the Rooms list and check that room shows the new message and moves to the top.

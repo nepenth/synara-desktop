@@ -36,6 +36,7 @@ use crate::app::room_list::last_message::{
     last_message_event_is_agent_approval_str, last_message_event_is_agent_workflow,
     last_message_preview_for_user, ENCRYPTED_MESSAGE_PREVIEW,
 };
+use crate::app::room_list::latest_backfill::spawn_latest_event_backfill;
 use crate::app::room_list::presentation::{room_list_presentation, RoomListPresentation};
 use crate::app::room_list::server_highlights::{
     fetch_server_highlights, own_read_up_to_ts, run_highlight_refresh, unread_highlight_count,
@@ -94,6 +95,9 @@ pub struct NativeRoomListOwner {
     task: SupervisedTask,
     /// Keeps the server highlight notifications behind mention badges fresh.
     _highlights_task: SupervisedTask,
+    /// Loads older events for a room whose preview fell behind its newest
+    /// events (see `latest_backfill`).
+    _backfill_task: SupervisedTask,
     client: Client,
     handlers: Vec<EventHandlerHandle>,
     /// The sync owner's snapshot cache; this owner marks what changed and
@@ -177,6 +181,7 @@ impl NativeRoomListOwner {
             }),
         ];
         let highlights_task = spawn_highlight_refresh(owner, &client, wake.clone());
+        let backfill_task = spawn_latest_event_backfill(&client);
         // Shared across restarts: the handlers above keep the senders.
         let wakes = Arc::new(tokio::sync::Mutex::new(wakes));
         let mut first_room_updates = Some(client.subscribe_to_all_room_updates());
@@ -241,6 +246,7 @@ impl NativeRoomListOwner {
         Self {
             task,
             _highlights_task: highlights_task,
+            _backfill_task: backfill_task,
             client,
             handlers,
             cache,
@@ -2297,6 +2303,135 @@ mod room_list_cost_tests {
             .expect("listen to the invite's latest event");
         tokio::time::sleep(Duration::from_millis(500)).await;
         assert!(messages_requests(&server).await.is_empty());
+    }
+
+    /// A catch-up whose window holds only edits of a message outside it: an
+    /// agent streaming its reply while the app was suspended. The SDK finds
+    /// nothing to preview there and keeps the old latest event.
+    #[tokio::test]
+    async fn a_catch_up_of_only_edits_backfills_the_preview() {
+        use crate::app::room_list::latest_backfill::{
+            backfill_stale_preview, stale_preview_marker, BACKFILL_MAX_BATCHES,
+        };
+        use matrix_sdk::ruma::events::room::message::RoomMessageEventContentWithoutRelation;
+
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(apply_event_cache_policy)
+            .build()
+            .await;
+        client.event_cache().subscribe().unwrap();
+        let room_id = room_id!("!b5-agent:example.org");
+        // Mounted before the catch-all in `mount_homeserver`: the page before
+        // the window holds the message the edits belong to.
+        Mock::given(method("GET"))
+            .and(path_regex(r"/rooms/!b5-agent:example\.org/messages$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "start": "prev-agent",
+                "chunk": [{
+                    "type": "m.room.message",
+                    "event_id": "$reply",
+                    "room_id": room_id,
+                    "sender": "@bob:example.org",
+                    "origin_server_ts": 2_000,
+                    "content": { "msgtype": "m.text", "body": "Steer queued into current run" }
+                }]
+            })))
+            .with_priority(1)
+            .mount(server.server())
+            .await;
+        mount_homeserver(&server).await;
+
+        let f = EventFactory::new()
+            .room(room_id)
+            .sender(user_id!("@bob:example.org"));
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id).add_timeline_event(
+                    f.text_msg("Password stays as-is")
+                        .event_id(event_id!("$old"))
+                        .server_ts(1_000),
+                ),
+            )
+            .await;
+        client
+            .latest_events()
+            .await
+            .listen_to_room(room_id)
+            .await
+            .expect("listen to the latest event");
+        let room = client.get_room(room_id).expect("room");
+        let settings = client.notification_settings().await;
+        let row = || async { project_room(&room, &settings, &ServerHighlights::default()).await };
+        let wait_for_activity = |ts: u64| {
+            let row = &row;
+            async move {
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    while row().await.last_activity_ts != Some(ts) {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                })
+                .await
+                .unwrap_or_else(|_| panic!("the row never reached activity {ts}"));
+            }
+        };
+        wait_for_activity(1_000).await;
+        assert_eq!(stale_preview_marker(&room).await, None);
+
+        let mut catch_up = JoinedRoomBuilder::new(room_id)
+            .set_timeline_limited()
+            .set_timeline_prev_batch("prev-agent");
+        for step in 0..ROOM_LIST_TIMELINE_LIMIT as u64 {
+            let edit_id = matrix_sdk::ruma::OwnedEventId::try_from(format!("$edit-{step}"))
+                .expect("event id");
+            catch_up = catch_up.add_timeline_event(
+                f.text_msg(format!("* streamed {step}"))
+                    .edit(
+                        event_id!("$reply"),
+                        RoomMessageEventContentWithoutRelation::text_plain(format!(
+                            "streamed {step}"
+                        )),
+                    )
+                    .event_id(&edit_id)
+                    .server_ts(2_001 + step),
+            );
+        }
+        server.sync_room(&client, catch_up).await;
+        tokio::time::sleep(Duration::from_millis(600)).await;
+
+        // The bug: the room is active and the row still shows the old message.
+        let stale = row().await;
+        assert_eq!(stale.last_activity_ts, Some(1_000));
+        assert!(stale_preview_marker(&room).await.is_some());
+        assert!(
+            messages_requests(&server).await.is_empty(),
+            "the SDK's own backfill stays off"
+        );
+
+        let mut attempted = HashMap::new();
+        let batches = backfill_stale_preview(&client, room_id, &mut attempted).await;
+        assert!((1..=BACKFILL_MAX_BATCHES).contains(&batches));
+        // With the original loaded, its newest edit is the latest event.
+        wait_for_activity(2_000 + ROOM_LIST_TIMELINE_LIMIT as u64).await;
+        let fresh = row().await;
+        assert!(
+            fresh
+                .last_message_preview
+                .as_deref()
+                .is_some_and(|preview| !preview.contains("Password stays")),
+            "the preview follows the newer message, got {:?}",
+            fresh.last_message_preview
+        );
+        assert_eq!(stale_preview_marker(&room).await, None);
+
+        // Nothing newer arrived: no further requests.
+        assert_eq!(
+            backfill_stale_preview(&client, room_id, &mut attempted).await,
+            0
+        );
+        assert!(messages_requests(&server).await.len() <= BACKFILL_MAX_BATCHES);
     }
 
     #[tokio::test]
