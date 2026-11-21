@@ -128,6 +128,7 @@ final class DraftSyncTests: XCTestCase {
         XCTAssertNil(sync.prompt)
 
         // The view puts the text in the composer; its change is not an edit.
+        sync.confirmApplied(applied!)
         sync.noteChange("from desktop", replyToEventID: nil)
         await settle()
         XCTAssertTrue(service.saves.isEmpty)
@@ -137,6 +138,23 @@ final class DraftSyncTests: XCTestCase {
         _ = await sync.resolve(currentText: "from desktop", isFocused: false, fetchFresh: false)
         XCTAssertEqual(service.resolves.last?.updatedAt, 500)
         XCTAssertEqual(service.resolves.last?.dirty, false)
+    }
+
+    func testARemoteDraftTheViewDroppedIsNotCountedAsTaken() async {
+        let service = RecordingDraftSync()
+        service.decision = .apply(remote("from desktop"))
+        let sync = ComposerDraftSync(service: service)
+        sync.reset(roomID: "!room:example.org")
+
+        // The view drops this one: the composer changed while it resolved.
+        let dropped = await sync.resolve(currentText: "", isFocused: false, fetchFresh: true)
+        XCTAssertEqual(dropped?.markdown, "from desktop")
+
+        // The next resolve still compares against the local state, not the
+        // remote draft's stamp, and offers the draft again.
+        let again = await sync.resolve(currentText: "", isFocused: false, fetchFresh: false)
+        XCTAssertNil(service.resolves.last?.updatedAt)
+        XCTAssertEqual(again?.markdown, "from desktop")
     }
 
     func testTypingComposerIsPromptedAndKeepMineWritesNow() async {

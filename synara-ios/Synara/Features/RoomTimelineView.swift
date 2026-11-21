@@ -1111,6 +1111,9 @@ struct RoomTimelineView: View {
                 if let eventID = loadedTimelineItems.reversed().compactMap(\.serverEventID).first {
                     scheduleMarkFullyRead(eventID: eventID)
                 }
+                // A draft written elsewhere while the app was suspended sent
+                // no update here.
+                resolveSyncedDraft(fetchFresh: true)
             } else {
                 cancelMarkFullyRead()
                 draftSync.flushIfNeeded()
@@ -1153,6 +1156,10 @@ struct RoomTimelineView: View {
             if editSession == nil {
                 draftSync.noteChange(syncedDraftMarkdown(value), replyToEventID: replyTarget?.eventID)
             }
+        }
+        .onChange(of: editSession == nil) { ended in
+            // Updates that arrived during the edit were skipped.
+            if ended { resolveSyncedDraft(fetchFresh: false) }
         }
         .task(id: roomID) {
             for await changedRoomID in environment.draftSync.updates() {
@@ -2154,7 +2161,11 @@ struct RoomTimelineView: View {
         resolveSyncedDraft(fetchFresh: true)
     }
 
-    private func resolveSyncedDraft(fetchFresh: Bool) {
+    /// - Parameter retryIfStale: compare once more when the composer changed
+    ///   while the first comparison ran. One retry only: someone who keeps
+    ///   typing is asked by the next update or the next time the room opens.
+    private func resolveSyncedDraft(fetchFresh: Bool, retryIfStale: Bool = true) {
+        // An edit borrows the composer; the draft is compared when it ends.
         guard editSession == nil else { return }
         let current = draft
         let resolvingRoomID = roomID
@@ -2162,10 +2173,14 @@ struct RoomTimelineView: View {
             let remote = await draftSync.resolve(
                 currentText: syncedDraftMarkdown(current), isFocused: false, fetchFresh: fetchFresh
             )
-            // Typed or switched rooms meanwhile: the comparison is stale.
-            guard let remote, roomID == resolvingRoomID, draft == current, editSession == nil else {
+            guard let remote, roomID == resolvingRoomID else { return }
+            // Typed or started an edit meanwhile: the comparison is stale.
+            // The draft was not taken, so a later comparison offers it again.
+            guard draft == current, editSession == nil else {
+                if retryIfStale { resolveSyncedDraft(fetchFresh: false, retryIfStale: false) }
                 return
             }
+            draftSync.confirmApplied(remote)
             composerMentions = []
             draft = remote.markdown
         }
@@ -2686,6 +2701,9 @@ struct RoomTimelineView: View {
         {
             scheduleMarkFullyRead(eventID: newestEventID)
         }
+        // A resumed room keeps its composer state. A draft written elsewhere
+        // while this screen was covered may have sent its update to nobody.
+        resolveSyncedDraft(fetchFresh: true)
     }
 
     private func startTypingUpdates() {
