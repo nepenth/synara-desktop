@@ -1,0 +1,3 @@
+Synara 3.5.0 lets you tap the sender of a message, the name or the picture, to open that person's member sheet. Send message on the sheet now opens your existing direct message with them and takes you to it; before, it created a new direct message every time and stayed on the sheet.
+
+Please test: in a room, tap someone's name above their message and check the sheet opens. Tap Send message for someone you already have a direct message with and check that chat opens, with no new room in the list. Then do the same for someone you have never messaged and check one new chat is created and opened.

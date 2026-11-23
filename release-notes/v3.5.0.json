@@ -1,0 +1,9 @@
+{
+  "version": "3.5.0",
+  "headline": "Message someone from their name in a room",
+  "items": [
+    { "text": "Click a message's sender, the name or the picture, to open their profile with Message, Mention, Ignore and the member actions.", "platforms": ["desktop"] },
+    { "text": "Message on a profile opens your direct message with that person and creates it if there is none. No form to fill in.", "platforms": ["desktop"] },
+    { "text": "Tap a message's sender, the name or the picture, to open their member sheet. Send message there takes you to your chat with them.", "platforms": ["ios"] }
+  ]
+}
