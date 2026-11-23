@@ -21,8 +21,11 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useMemberPowerCompare } from '../../hooks/useMemberPowerCompare';
 import { CreatorChip } from './CreatorChip';
-import { getDirectCreatePath, withSearchParam } from '../../pages/pathUtils';
-import { DirectCreateSearchParams } from '../../pages/paths';
+import { getDirectRoomPath } from '../../pages/pathUtils';
+import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+import { useAlive } from '../../hooks/useAlive';
+import { openOrCreateDirectChat } from '../../features/create-chat/directChat';
+import { composerErrorMessage } from '../../features/room/composerSendError';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { isNativeMatrixSession } from '../../features/verification/nativeVerification';
 import { useRoomMembers } from '../../hooks/useRoomMembers';
@@ -117,12 +120,24 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
   const presence = useNativeUserPresence(userId);
   const userStatusSnapshot = useNativeUserStatus(userId);
 
+  // Message opens the direct message with this person, creating it when
+  // there is none. The person is already known, so no form asks for them.
+  const alive = useAlive();
+  const [messageState, openDirectChat] = useAsyncCallback<string, unknown, [string]>(
+    openOrCreateDirectChat
+  );
+  const openingMessage = messageState.status === AsyncStatus.Loading;
+  const messageError = messageState.status === AsyncStatus.Error ? messageState.error : undefined;
   const handleMessage = () => {
-    closeUserRoomProfile();
-    const directSearchParam: DirectCreateSearchParams = {
-      userId,
-    };
-    navigate(withSearchParam(getDirectCreatePath(), directSearchParam));
+    openDirectChat(userId).then(
+      (roomId) => {
+        if (!alive()) return;
+        closeUserRoomProfile();
+        navigate(getDirectRoomPath(roomId));
+      },
+      // Shown below the button.
+      () => undefined
+    );
   };
 
   const handleMention = () => {
@@ -159,8 +174,17 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
                   variant="Primary"
                   fill="Solid"
                   radii="300"
-                  before={<Icon size="50" src={Icons.Message} filled />}
+                  before={
+                    openingMessage ? (
+                      <Spinner variant="Primary" fill="Solid" size="50" />
+                    ) : (
+                      <Icon size="50" src={Icons.Message} filled />
+                    )
+                  }
                   onClick={handleMessage}
+                  disabled={openingMessage}
+                  aria-busy={openingMessage}
+                  data-testid="member-option-message"
                 >
                   <Text size="B300">Message</Text>
                 </Button>
@@ -175,6 +199,11 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
             {userId !== myUserId && <OptionsChip userId={userId} />}
           </Box>
         </Box>
+        {messageError !== undefined && (
+          <Text size="T200" style={{ color: color.Critical.Main }} role="alert">
+            {composerErrorMessage(messageError, 'Synara could not start the chat. Try again.')}
+          </Text>
+        )}
         {ignored && <IgnoredUserAlert />}
         {membership === Membership.Ban && (
           <UserBanAlert

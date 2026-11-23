@@ -133,7 +133,7 @@ import { nameInitials } from '../../utils/common';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { stopPropagation } from '../../utils/keyboard';
 import { formatCoreAgentApprovalPrompt } from '../../utils/agentApprovals';
-import { NativeFormattedBody } from './nativeTimelineFormattedBody';
+import { NativeFormattedBody, useNativePermalink } from './nativeTimelineFormattedBody';
 import { NativePlainMessageBody, NativeTimelineLinkUnfurl } from './nativeLinkUnfurlCard';
 import { NativeInlineGif, NativeXPostEmbed } from './nativeRichLinkEmbeds';
 import { messageInlineGif } from '../../utils/gifLinks';
@@ -1909,7 +1909,8 @@ const NativeTimelineMedia = ({
 const NativeTimelineSenderAvatar = ({ row }: { row: NativeTimelineViewRow }) => {
   const senderId = rowSenderId(row) ?? '';
   const displayName = displayNameForRow(row);
-  return (
+  const onPermalink = useNativePermalink();
+  const avatar = (
     <Avatar className={htmlCss.TimelineAvatar} size="300" radii="400">
       <UserAvatar
         userId={senderId}
@@ -1922,6 +1923,56 @@ const NativeTimelineSenderAvatar = ({ row }: { row: NativeTimelineViewRow }) => 
         )}
       />
     </Avatar>
+  );
+  if (!onPermalink || !senderId) return avatar;
+  // A pointer target only: the name beside it is the control keyboard and
+  // screen-reader users reach, and it opens the same profile.
+  return (
+    <button
+      type="button"
+      className={htmlCss.SenderAvatarButton}
+      tabIndex={-1}
+      aria-hidden="true"
+      data-native-timeline-sender-avatar={senderId}
+      onClick={(evt) => onPermalink({ kind: 'user', userId: senderId }, evt.currentTarget)}
+    >
+      {avatar}
+    </button>
+  );
+};
+
+/**
+ * The sender's name above a message. Where the timeline can open profiles
+ * (a room or thread, not a bare harness) it is a button that opens the
+ * sender's profile, with Message, Mention and the member actions.
+ */
+const NativeTimelineSenderName = ({
+  row,
+  name,
+  style,
+}: {
+  row: NativeTimelineViewRow;
+  name: string;
+  style?: React.CSSProperties;
+}) => {
+  const senderId = rowSenderId(row);
+  const onPermalink = useNativePermalink();
+  const label = (
+    <Text as="span" size="T300" className={htmlCss.SenderName} style={style}>
+      {name}
+    </Text>
+  );
+  if (!onPermalink || !senderId) return label;
+  return (
+    <button
+      type="button"
+      className={htmlCss.SenderButton}
+      aria-haspopup="dialog"
+      data-native-timeline-sender={senderId}
+      onClick={(evt) => onPermalink({ kind: 'user', userId: senderId }, evt.currentTarget)}
+    >
+      {label}
+    </button>
   );
 };
 
@@ -2636,9 +2687,11 @@ const NativeTimelineRowImpl = ({
                 <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0 }}>
                   {grouped ? null : (
                     <Box gap="200" alignItems="Baseline" className={htmlCss.Metadata}>
-                      <Text size="T300" className={htmlCss.SenderName} style={senderNameStyle}>
-                        {displayNameForRow(row)}
-                      </Text>
+                      <NativeTimelineSenderName
+                        row={row}
+                        name={displayNameForRow(row)}
+                        style={senderNameStyle}
+                      />
                       {originServerTs ? (
                         <NativeTimelineTimestamp
                           ts={originServerTs}
@@ -3044,9 +3097,11 @@ const NativeTimelineRowImpl = ({
         >
           <Box direction="Column" gap="100" className={rowClassName}>
             <Box gap="200" alignItems="Baseline" className={htmlCss.Metadata}>
-              <Text size="T300" className={htmlCss.SenderName} style={senderNameStyle}>
-                {row.event.senderName}
-              </Text>
+              <NativeTimelineSenderName
+                row={row}
+                name={row.event.senderName}
+                style={senderNameStyle}
+              />
               {originServerTs ? (
                 <NativeTimelineTimestamp
                   ts={originServerTs}

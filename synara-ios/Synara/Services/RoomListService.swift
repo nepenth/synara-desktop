@@ -778,7 +778,8 @@ enum RoomListFixtures {
                 hasHighlight: false,
                 kind: .directMessage,
                 membership: .joined,
-                lastActivityAt: now.addingTimeInterval(-300)
+                lastActivityAt: now.addingTimeInterval(-300),
+                directUserId: "@mina:matrix.org"
             )
         ]
     }

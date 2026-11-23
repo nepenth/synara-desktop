@@ -3,6 +3,49 @@ import XCTest
 import SynaraCore
 
 final class RoomMemberActionsTests: XCTestCase {
+    private func room(
+        _ id: String,
+        direct userID: String?,
+        membership: RoomSummary.Membership = .joined,
+        activity: TimeInterval
+    ) -> RoomSummary {
+        RoomSummary(
+            id: id,
+            name: id,
+            lastMessagePreview: "",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: userID == nil ? .room : .directMessage,
+            membership: membership,
+            lastActivityAt: Date(timeIntervalSince1970: activity),
+            directUserId: userID
+        )
+    }
+
+    func testSendMessageOpensTheMostRecentJoinedDirectRoom() {
+        let rooms = [
+            room("!old:matrix.org", direct: "@bob:matrix.org", activity: 100),
+            room("!new:matrix.org", direct: "@bob:matrix.org", activity: 300),
+            room("!invite:matrix.org", direct: "@bob:matrix.org", membership: .invited, activity: 900),
+            room("!carol:matrix.org", direct: "@carol:matrix.org", activity: 800),
+            room("!group:matrix.org", direct: nil, activity: 700),
+        ]
+
+        XCTAssertEqual(
+            DirectMessageLookup.existingRoom(with: "@bob:matrix.org", in: rooms)?.id,
+            "!new:matrix.org"
+        )
+    }
+
+    func testSendMessageFindsNoRoomForSomeoneNeverMessaged() {
+        let rooms = [
+            room("!carol:matrix.org", direct: "@carol:matrix.org", activity: 800),
+            room("!pending:matrix.org", direct: "@bob:matrix.org", membership: .invited, activity: 900),
+        ]
+
+        XCTAssertNil(DirectMessageLookup.existingRoom(with: "@bob:matrix.org", in: rooms))
+    }
+
     func testCreatorOutranksEveryIntegerLevel() {
         var creator = RoomPowerLevelSummary.fullPower
         creator.isCreator = true
