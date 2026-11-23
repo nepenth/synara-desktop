@@ -335,7 +335,10 @@ final class AppEnvironmentTests: XCTestCase {
     func testMockRoomManagementKicksAndBansMembers() async throws {
         let service = MockRoomManagementService()
         let details = await service.roomDetails(roomID: "!project:matrix.org")
-        XCTAssertEqual(details?.members.map(\.userID), ["@alice:matrix.org", "@bob:matrix.org", "@carol:matrix.org"])
+        XCTAssertEqual(
+            details?.members.map(\.userID),
+            ["@alice:matrix.org", "@bob:matrix.org", "@carol:matrix.org", "@mina:matrix.org"]
+        )
 
         try await service.kickUser(roomID: "!project:matrix.org", userID: "@bob:matrix.org", reason: "spam")
         try await service.banUser(roomID: "!project:matrix.org", userID: "@carol:matrix.org", reason: "abuse")
