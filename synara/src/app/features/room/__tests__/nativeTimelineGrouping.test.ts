@@ -13,7 +13,7 @@ const row = (senderId: string, originServerTs: number, kind = 'message') => ({
   originServerTs,
 });
 
-test('groups consecutive messages from one sender for up to two hours', () => {
+test('groups consecutive messages from one sender within five minutes of each other', () => {
   assert.equal(shouldGroupNativeTimelineRows(row('@a:test', 1), row('@a:test', 2)), true);
   assert.equal(
     shouldGroupNativeTimelineRows(
@@ -24,7 +24,7 @@ test('groups consecutive messages from one sender for up to two hours', () => {
   );
 });
 
-test('starts a new visual group at the two-hour boundary or on sender change', () => {
+test('starts a new visual group at the five-minute boundary or on sender change', () => {
   assert.equal(
     shouldGroupNativeTimelineRows(
       row('@a:test', 1),

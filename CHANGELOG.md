@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## [3.5.1] - 2026-11-24
+
+- Timeline (desktop and iOS): consecutive messages from one person are grouped under one name, avatar and time only when each was sent less than 5 minutes after the previous one. The limit was two hours, so someone writing now and then through a morning appeared under the time of their first message. The gap is measured from when the previous message was first sent; edits do not change it.
+- Dependencies: `cookie` 0.18.3, which fixes private cookie nonces that could repeat in a process that forks (RUSTSEC-2026-0594). It comes in through Tauri.
+
 ## [3.5.0] - 2026-11-22
 
 - Desktop: click a message's sender, the name or the avatar, to open that person's profile, with Message, Mention, Copy user ID, Ignore and the moderation actions. It is the popover the member list and mentions already open. Message opens your direct message with them and creates it (encrypted) when there is none; it no longer sends you to the new-chat form to press Create. A second click while the chat is being created does not make a second one.

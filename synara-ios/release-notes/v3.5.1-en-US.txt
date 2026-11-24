@@ -1,0 +1,3 @@
+Synara 3.5.1 changes when consecutive messages from one person are shown as a group. A message sent 5 minutes or more after that person's previous message now shows their name, picture and time again. Before, messages stayed under one name and time for up to two hours.
+
+Please test: open a room where one person sent several messages in a row over a longer time. Check that messages sent within 5 minutes of each other share one name and time, and that a message sent after a longer pause starts with the name and time again.

@@ -1,0 +1,7 @@
+{
+  "version": "3.5.1",
+  "headline": "Messages sent later get their own time",
+  "items": [
+    { "text": "A message sent 5 minutes or more after the same person's previous one now shows their name, picture and time again. It was two hours.", "platforms": ["desktop", "ios"] }
+  ]
+}
