@@ -2616,7 +2616,7 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(enrichedItem.isLocalPending)
     }
 
-    func testMessageGroupingUsesTwoHourWindowAndSenderBoundary() {
+    func testMessageGroupingUsesFiveMinuteWindowAndSenderBoundary() {
         let calendar = Calendar.current
         let baseDate = calendar.date(
             from: DateComponents(year: 2026, month: 8, day: 27, hour: 12)
@@ -2639,13 +2639,13 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(
             TimelineMessageGroupingPolicy.shouldGroup(
                 previous: first,
-                current: item(sender: "@alice:matrix.org", offset: 2 * 60 * 60 - 1)
+                current: item(sender: "@alice:matrix.org", offset: 5 * 60 - 1)
             )
         )
         XCTAssertFalse(
             TimelineMessageGroupingPolicy.shouldGroup(
                 previous: first,
-                current: item(sender: "@alice:matrix.org", offset: 2 * 60 * 60)
+                current: item(sender: "@alice:matrix.org", offset: 5 * 60)
             )
         )
         XCTAssertFalse(
@@ -2655,8 +2655,9 @@ final class TimelineServiceTests: XCTestCase {
             )
         )
 
-        let late = item(sender: "@alice:matrix.org", offset: 11.5 * 60 * 60)
-        let afterMidnight = item(sender: "@alice:matrix.org", offset: 12.5 * 60 * 60)
+        // Three minutes apart, so only the day change can split them.
+        let late = item(sender: "@alice:matrix.org", offset: 12 * 60 * 60 - 2 * 60)
+        let afterMidnight = item(sender: "@alice:matrix.org", offset: 12 * 60 * 60 + 60)
         XCTAssertFalse(
             TimelineMessageGroupingPolicy.shouldGroup(previous: late, current: afterMidnight)
         )

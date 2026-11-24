@@ -1,4 +1,4 @@
-export const NATIVE_TIMELINE_GROUP_WINDOW_MS = 2 * 60 * 60 * 1000;
+export const NATIVE_TIMELINE_GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 export type NativeTimelineGroupingRow = {
   /** Row kind from the view snapshot; only sender-attributed kinds group. */
@@ -16,9 +16,10 @@ export const nativeTimelineRowShowsSender = (kind: string | undefined): boolean 
   kind === 'message' || kind === 'sticker';
 
 /**
- * Consecutive messages from one sender share presentation metadata for up to
- * two hours. Any row that shows no sender (a date divider, a system event, a
- * hidden or unsupported event) terminates the visual group.
+ * Consecutive messages from one sender share presentation metadata while each
+ * arrives within five minutes of the one before it. Any row that shows no
+ * sender (a date divider, a system event, a hidden or unsupported event)
+ * terminates the visual group.
  */
 export const shouldGroupNativeTimelineRows = (
   previous: NativeTimelineGroupingRow | undefined,

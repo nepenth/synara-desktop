@@ -224,7 +224,7 @@ struct TimelinePinActionAvailability: Equatable {
 }
 
 enum TimelineMessageGroupingPolicy {
-    static let maximumInterval: TimeInterval = 2 * 60 * 60
+    static let maximumInterval: TimeInterval = 5 * 60
 
     static func shouldGroup(previous: TimelineItem?, current: TimelineItem) -> Bool {
         guard let previous, previous.senderID == current.senderID else {
