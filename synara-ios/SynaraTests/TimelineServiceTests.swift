@@ -964,6 +964,10 @@ final class TimelineServiceTests: XCTestCase {
         )
         let service = MockTimelineService(items: initial)
         service.olderOutcome = .failed(failure)
+        // The snapshot is a heartbeat only when it arrives after the failure.
+        // Without the delay the stream's task can deliver it first, where it
+        // is dropped as unchanged and the stream ends with nothing.
+        service.updateDelayNanoseconds = 100_000_000
         let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
         let openedFeed = await session.open(mode: .live)
         let feed = try XCTUnwrap(openedFeed)
@@ -986,6 +990,8 @@ final class TimelineServiceTests: XCTestCase {
         for latestOutcome in [TimelineLoadOutcome.failed(failure), .empty] {
             let service = MockTimelineService(items: initial)
             service.latestOutcome = latestOutcome
+            // As above: the snapshot must arrive after the failed transition.
+            service.updateDelayNanoseconds = 100_000_000
             let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
             let openedFeed = await session.open(mode: .focused(eventID: initial[5].eventID))
             let feed = try XCTUnwrap(openedFeed)
