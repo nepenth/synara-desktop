@@ -72,6 +72,14 @@ test('timeline preview uses the first formatted or plain URL and skips attachmen
     firstTimelinePreviewUrl('ignored', '<p>go <a href="https://example.org/x">here</a></p>'),
     'https://example.org/x'
   );
+  // A mention's plain body spells the user ID out; its server name is no link.
+  assert.equal(
+    firstTimelinePreviewUrl(
+      'Why am I taking strays from @puck:matrix.whyland.com',
+      'Why am I taking strays from <a href="https://matrix.to/#/@puck:matrix.whyland.com">Puck</a>'
+    ),
+    undefined
+  );
   // Mentions and permalinks are matrix.to links Synara opens itself: never previewed.
   assert.equal(isPreviewCandidateUrl('https://matrix.to/#/@puck:matrix.whyland.com'), false);
   assert.equal(

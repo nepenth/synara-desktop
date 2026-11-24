@@ -1,0 +1,7 @@
+{
+  "version": "3.5.2",
+  "headline": "No more link preview under a mention",
+  "items": [
+    { "text": "A message that mentions someone no longer shows a link preview for their server, and the server name in a user ID is no longer a link.", "platforms": ["desktop", "ios"] }
+  ]
+}

@@ -13,6 +13,13 @@ const JOINED_BEFORE = /[\p{L}\p{N}_\-./\\~]/u;
 
 const SCHEME_OR_WWW = /^(?:[a-z][a-z0-9+.-]*:|www\.)/i;
 
+/**
+ * Text that ends in a Matrix ID's sigil and localpart with its colon:
+ * `@puck:`, `#general:`, `!room:`, `$event:`, `+group:`. What follows is the
+ * ID's server name, not a web address.
+ */
+const MATRIX_ID_LOCALPART_BEFORE = /(?:^|[^\p{L}\p{N}])[@#!+$][^\s:]+:$/u;
+
 export type MessageLink = {
   start: number;
   end: number;
@@ -30,6 +37,15 @@ export type MessageLink = {
  */
 const isIntendedLink = (text: string, start: number, value: string, type: string): boolean => {
   if (type !== 'url') return true;
+  // The server name of a Matrix ID (`@puck:example.org`) is not a link. A
+  // formatted mention's plain body spells the user ID out, and its server
+  // name was linked and given a preview card.
+  if (
+    !value.includes('://') &&
+    MATRIX_ID_LOCALPART_BEFORE.test(text.slice(Math.max(0, start - 257), start))
+  ) {
+    return false;
+  }
   // Written with a scheme (`...https://example.org`), it is meant as a link.
   if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return true;
   const before = start > 0 ? text[start - 1] : '';

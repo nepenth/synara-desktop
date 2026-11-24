@@ -152,6 +152,16 @@ final class TimelinePolishTests: XCTestCase {
         XCTAssertEqual(SynaraPlainTextLinks.links(in: site).count, 2)
     }
 
+    func testTheServerNameOfAMatrixIDIsNotALink() {
+        XCTAssertTrue(SynaraPlainTextLinks.links(in: "Why am I taking strays from @puck:matrix.whyland.com").isEmpty)
+        XCTAssertTrue(SynaraPlainTextLinks.links(in: "(@puck:matrix.whyland.com) and @ada:example.org:8448, hi").isEmpty)
+        XCTAssertTrue(SynaraPlainTextLinks.links(in: "join #general:example.org or !abc:example.org").isEmpty)
+        // A link after the ID, and a colon that is not part of an ID, still link.
+        XCTAssertEqual(SynaraPlainTextLinks.links(in: "@puck:example.org see example.com").count, 1)
+        XCTAssertEqual(SynaraPlainTextLinks.links(in: "@puck: https://example.org/x").count, 1)
+        XCTAssertEqual(SynaraPlainTextLinks.links(in: "note:example.org").count, 1)
+    }
+
     func testPlainBodiesWithoutLinksStayUnlinked() {
         let attributed = SynaraPlainTextLinks.attributedText("No links here, just words.")
         XCTAssertTrue(attributed.runs.allSatisfy { $0.link == nil })

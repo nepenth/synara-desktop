@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [3.5.2] - 2026-11-24
+
+- Link previews (desktop and iOS): a message that mentions someone could show a preview card for that person's homeserver ("Synapse is running"). The mention's plain body spells the user ID out, and link detection took the server name of `@puck:example.org` as a web address when the formatted body had no link to preview. A server name that directly follows a Matrix ID's sigil and localpart (`@name:`, `#room:`, `!id:`, `$event:`, `+group:`) is no longer a link, so it is not previewed and not tappable in plain text either.
+
 ## [3.5.1] - 2026-11-24
 
 - Timeline (desktop and iOS): consecutive messages from one person are grouped under one name, avatar and time only when each was sent less than 5 minutes after the previous one. The limit was two hours, so someone writing now and then through a morning appeared under the time of their first message. The gap is measured from when the previous message was first sent; edits do not change it.
