@@ -6744,7 +6744,7 @@ dependencies = [
 
 [[package]]
 name = "synara"
-version = "3.5.1"
+version = "3.5.2"
 dependencies = [
  "block2",
  "dirs",
