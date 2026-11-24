@@ -416,10 +416,32 @@ enum SynaraPlainTextLinks {
     /// always name a file (`README.md`, `setup.py`). Desktop uses the same list.
     static let fileLikeBareTLDs: Set<String> = ["md", "py", "rs", "sh", "zip", "mov"]
 
+    /// Whether the text before `location` ends in a Matrix ID's sigil and
+    /// localpart with its colon: `@puck:`, `#general:`, `!room:`, `$event:`,
+    /// `+group:`. What follows is the ID's server name. A formatted mention's
+    /// plain body spells the user ID out, and its server name was linked and
+    /// given a preview card.
+    static func followsMatrixIdentifierLocalpart(in text: NSString, at location: Int) -> Bool {
+        guard location > 1, text.character(at: location - 1) == 0x3A else {
+            return false
+        }
+        // A localpart is at most 255 bytes; look no further back.
+        let start = max(0, location - 257)
+        let before = text.substring(with: NSRange(location: start, length: location - start))
+        return before.range(
+            of: #"(?:^|[^\p{L}\p{N}])[@#!+$][^\s:]+:$"#,
+            options: .regularExpression
+        ) != nil
+    }
+
     /// Whether a detected web address is one a reader meant: not a piece of a
     /// longer word, path or file name (`/Users/me/README_SUBMISSION.md` once
     /// linked `SUBMISSION.md`), and not a bare file name with a file-like ending.
     static func isIntendedLink(_ written: String, in text: NSString, at location: Int) -> Bool {
+        // The server name of a Matrix ID (`@puck:example.org`) is not a link.
+        if written.contains("://") == false, followsMatrixIdentifierLocalpart(in: text, at: location) {
+            return false
+        }
         // Written with a scheme (`...https://example.org`), it is meant as a link.
         if written.lowercased().range(of: "^[a-z][a-z0-9+.-]*:", options: .regularExpression) != nil {
             return true

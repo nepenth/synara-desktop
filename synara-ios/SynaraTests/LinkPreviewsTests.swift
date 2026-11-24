@@ -172,6 +172,19 @@ final class LinkPreviewsTests: XCTestCase {
         XCTAssertNil(LinkPreviewPolicy.previewURL(for: row("https://matrix.to/#/!room:example.org")))
     }
 
+    func testAMentionsUserIDInThePlainBodyIsNotPreviewed() {
+        // The formatted body holds the mention; the plain body spells the
+        // user ID out. Its server name got a card ("Synapse is running").
+        var mention = row("Why am I taking strays from @puck:matrix.whyland.com")
+        mention.html = #"Why am I taking strays from <a href="https://matrix.to/#/@puck:matrix.whyland.com">Puck</a>"#
+        XCTAssertNil(LinkPreviewPolicy.previewURL(for: mention))
+        XCTAssertNil(LinkPreviewPolicy.previewURL(for: row("ask @puck:matrix.whyland.com or #general:example.org")))
+        XCTAssertEqual(
+            LinkPreviewPolicy.previewURL(for: row("@puck:matrix.whyland.com see example.com"))?.absoluteString,
+            "https://example.com"
+        )
+    }
+
     func testFormattedMessagesPreviewTheirFirstPlainTextLink() {
         let body = "See https://example.org/first, and https://example.org/second."
         XCTAssertEqual(LinkPreviewPolicy.previewURL(for: row(body))?.absoluteString, "https://example.org/first")

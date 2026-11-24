@@ -31,6 +31,19 @@ test('real addresses still link, with or without a scheme', () => {
   assert.deepEqual(hrefs('mail ada@example.org please'), ['mailto:ada@example.org']);
 });
 
+test("the server name of a Matrix ID is not a link (a mention's plain body got a preview card)", () => {
+  assert.deepEqual(hrefs('Why am I taking strays from @puck:matrix.whyland.com'), []);
+  assert.deepEqual(hrefs('(@puck:matrix.whyland.com) and @ada:example.org:8448, hi'), []);
+  assert.deepEqual(
+    hrefs('join #general:example.org, room !abc:example.org, event $ev:example.org'),
+    []
+  );
+  // A link after the ID, and a colon that is not part of an ID, still link.
+  assert.deepEqual(hrefs('@puck:example.org see example.com'), ['http://example.com']);
+  assert.deepEqual(hrefs('@puck: https://example.org/x'), ['https://example.org/x']);
+  assert.deepEqual(hrefs('note:example.org'), ['http://example.org']);
+});
+
 test('segments keep every character and mark only the links', () => {
   const text = 'open notes/README.md or https://example.org.';
   const segments = segmentMessageLinks(text);
