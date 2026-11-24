@@ -180,8 +180,8 @@ final class LinkPreviewsTests: XCTestCase {
         XCTAssertNil(LinkPreviewPolicy.previewURL(for: mention))
         XCTAssertNil(LinkPreviewPolicy.previewURL(for: row("ask @puck:matrix.whyland.com or #general:example.org")))
         XCTAssertEqual(
-            LinkPreviewPolicy.previewURL(for: row("@puck:matrix.whyland.com see example.com"))?.absoluteString,
-            "https://example.com"
+            LinkPreviewPolicy.previewURL(for: row("@puck:matrix.whyland.com see https://example.com/x"))?.absoluteString,
+            "https://example.com/x"
         )
     }
 
